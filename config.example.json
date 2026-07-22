@@ -1,0 +1,17 @@
+{
+  "telegram": {
+    "api_id": 12345,
+    "api_hash": "your_api_hash",
+    "session_file": "session.json",
+    "database_file": "sessions.db"
+  },
+  "bot": {
+    "command_prefix": ".",
+    "plugins_dir": "plugins",
+    "owner_id": 0
+  },
+  "logger": {
+    "level": "INFO",
+    "format": "console"
+  }
+}
