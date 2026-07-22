@@ -134,6 +134,18 @@ func (m *Manager) Context() context.Context {
 	return m.ctx
 }
 
+// RunJob manually runs a job by name.
+func (m *Manager) RunJob(ctx context.Context, name string) error {
+	m.mu.RLock()
+	job, ok := m.jobs[name]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("job %s not found", name)
+	}
+	job.Fn(ctx)
+	return nil
+}
+
 // --- Built-in job registration ---
 
 // RegisterBuiltinJobs registers common built-in jobs.

@@ -79,14 +79,16 @@ func (m *AccessHashManager) GetUserPeerWithFallback(ctx context.Context, userID 
 			Limit:   200,
 		})
 		if err == nil {
-			for _, p := range participants.GetUsers() {
-				if user, ok := p.(*tg.User); ok && user.ID == userID {
-					hash := user.AccessHash
-					m.updateCache(userID, hash, "user")
-					return &tg.InputPeerUser{
-						UserID:     userID,
-						AccessHash: hash,
-					}, nil
+			if p, ok := participants.AsModified(); ok {
+				for _, u := range p.GetUsers() {
+					if user, ok := u.(*tg.User); ok && user.ID == userID {
+						hash := user.AccessHash
+						m.updateCache(userID, hash, "user")
+						return &tg.InputPeerUser{
+							UserID:     userID,
+							AccessHash: hash,
+						}, nil
+					}
 				}
 			}
 		}
@@ -119,16 +121,19 @@ func (m *AccessHashManager) GetUserPeerFromMessage(ctx context.Context, peer tg.
 
 // ResolveUsername resolves a @username to an InputPeer.
 func (m *AccessHashManager) ResolveUsername(ctx context.Context, username string) (tg.InputPeerClass, error) {
-	resolved, err := m.api.ContactsResolveUsername(ctx, username)
+	resolved, err := m.api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{
+		Username: username,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if len(resolved.Peers) > 0 {
-		switch p := resolved.Peers[0].(type) {
+	peer := resolved.GetPeer()
+	if peer != nil {
+		switch p := peer.(type) {
 		case *tg.PeerUser:
 			// Find user in resolved users
-			for _, u := range resolved.Users {
+			for _, u := range resolved.GetUsers() {
 				if user, ok := u.(*tg.User); ok && user.ID == p.UserID {
 					m.updateCache(user.ID, user.AccessHash, "user")
 					return &tg.InputPeerUser{
@@ -142,7 +147,7 @@ func (m *AccessHashManager) ResolveUsername(ctx context.Context, username string
 				ChatID: p.ChatID,
 			}, nil
 		case *tg.PeerChannel:
-			for _, c := range resolved.Chats {
+			for _, c := range resolved.GetChats() {
 				if channel, ok := c.(*tg.Channel); ok && channel.ID == p.ChannelID {
 					m.updateCache(channel.ID, channel.AccessHash, "channel")
 					return &tg.InputPeerChannel{

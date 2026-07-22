@@ -16,12 +16,12 @@ import (
 
 // TerminalAuth implements auth.UserAuthenticator for interactive login.
 type TerminalAuth struct {
-	Phone string
+	phoneNumber string
 }
 
 func (a TerminalAuth) Phone(_ context.Context) (string, error) {
-	if a.Phone != "" {
-		return a.Phone, nil
+	if a.phoneNumber != "" {
+		return a.phoneNumber, nil
 	}
 	fmt.Print("Phone (+86...): ")
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -58,7 +58,6 @@ func (a TerminalAuth) SignUp(_ context.Context) (auth.UserInfo, error) {
 	return auth.UserInfo{}, &auth.SignUpRequired{}
 }
 
-// EnsureAuth authenticates the client if not already authorized.
 func EnsureAuth(ctx context.Context, client *telegram.Client, phone string) error {
 	status, err := client.Auth().Status(ctx)
 	if err != nil {
@@ -67,6 +66,6 @@ func EnsureAuth(ctx context.Context, client *telegram.Client, phone string) erro
 	if status.Authorized {
 		return nil
 	}
-	flow := auth.NewFlow(TerminalAuth{Phone: phone}, auth.SendCodeOptions{})
+	flow := auth.NewFlow(TerminalAuth{phoneNumber: phone}, auth.SendCodeOptions{})
 	return flow.Run(ctx, client.Auth())
 }

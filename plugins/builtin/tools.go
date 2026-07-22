@@ -9,6 +9,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/core"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/gotd/td/tg"
 )
 
 // PingPlugin provides ping/pong command.
@@ -102,12 +103,10 @@ func (p *InfoPlugin) Stop(_ context.Context) error  { return nil }
 func (p *InfoPlugin) handleInfo(ctx *core.CommandContext) error {
 	msg := ctx.Message
 	var targetID int64 = msg.UserID
-	var targetName string
 
 	if ctx.ArgCount() > 0 {
 		arg := ctx.GetArg(0)
 		if len(arg) > 0 && arg[0] == '@' {
-			// Username resolution would need API call
 			return ctx.Edit("用户名解析暂未实现，请回复消息或使用 .info")
 		}
 	} else if msg.IsReply && msg.Message != nil {
@@ -155,6 +154,5 @@ func (p *ForwardPlugin) handleForward(ctx *core.CommandContext) error {
 		return ctx.Edit("用法: fwd @目标用户名")
 	}
 	target := ctx.GetArg(0)
-	// Actual forwarding would need username resolution
 	return ctx.Edit(fmt.Sprintf("转发功能待实现: %s", target))
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/core"
@@ -62,12 +61,8 @@ func (p *CronPlugin) handleCron(ctx *core.CommandContext) error {
 		schedule := ctx.GetArg(2)
 		cmdText := strings.Join(ctx.Args[3:], " ")
 
-		// Wrap command execution
-		handler := func(ctx context.Context) error {
-			// This would need access to command registry to execute
-			// For now, just log
+		handler := func(ctx context.Context) {
 			fmt.Printf("[CRON] Executing: %s\n", cmdText)
-			return nil
 		}
 
 		if err := p.mgr.AddJob(name, schedule, handler); err != nil {
@@ -76,7 +71,7 @@ func (p *CronPlugin) handleCron(ctx *core.CommandContext) error {
 		return ctx.Edit(fmt.Sprintf("✅ 定时任务已添加: %s (%s)", name, schedule))
 
 	case "list":
-		jobs := p.mgr.GetAllJobs()
+		jobs := p.mgr.GetJobs()
 		if len(jobs) == 0 {
 			return ctx.Edit("暂无定时任务")
 		}
@@ -91,12 +86,8 @@ func (p *CronPlugin) handleCron(ctx *core.CommandContext) error {
 			if !job.LastRun.IsZero() {
 				last = job.LastRun.Format("2006-01-02 15:04:05")
 			}
-			errStr := ""
-			if job.LastError != nil {
-				errStr = fmt.Sprintf(" ❌ %v", job.LastError)
-			}
-			b.WriteString(fmt.Sprintf("• %s\n  表达式: %s\n  下次: %s\n  上次: %s (运行 %d 次)%s\n",
-				name, job.Schedule, next, last, job.RunCount, errStr))
+			b.WriteString(fmt.Sprintf("• %s\n  表达式: %s\n  下次: %s\n  上次: %s\n\n",
+				name, job.Schedule, next, last))
 		}
 		return ctx.Edit(b.String())
 
