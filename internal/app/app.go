@@ -13,6 +13,7 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/config"
+	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
@@ -36,6 +37,7 @@ type App struct {
 	peers      *peer.Resolver
 	accessHash *peer.AccessHashManager
 	updates    *UpdateHandler
+	cron       *cron.Manager
 	logger     *zap.Logger
 }
 
@@ -82,6 +84,7 @@ func New(cfg *config.Config) (*App, error) {
 	cmdReg := command.NewRegistry(cfg.Bot.CommandPrefix, bus, api, resolver, cfg.Bot.OwnerID)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
+	cronMgr := cron.NewManager()
 
 	app := &App{
 		cfg:        cfg,
@@ -95,6 +98,7 @@ func New(cfg *config.Config) (*App, error) {
 		peers:      resolver,
 		accessHash: accessHash,
 		updates:    updates,
+		cron:       cronMgr,
 		logger:     log,
 	}
 	return app, nil
@@ -104,6 +108,15 @@ func (a *App) registerBuiltins() error {
 	for _, p := range []plugin.Plugin{
 		builtin.NewCore(Version),
 		builtin.NewApt(),
+		builtin.NewPing(),
+		builtin.NewUptime(),
+		builtin.NewInfo(),
+		builtin.NewForward(),
+		builtin.NewRemind(),
+		builtin.NewNote(),
+		builtin.NewFun(),
+		builtin.NewAdmin(),
+		builtin.NewCron(a.cron),
 	} {
 		if err := a.plugins.Register(p); err != nil {
 			return err
@@ -119,6 +132,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	a.parser.Start()
+	a.cron.Start()
 
 	return a.client.Run(ctx, func(ctx context.Context) error {
 		if err := EnsureAuth(ctx, a.client, ""); err != nil {
@@ -151,6 +165,7 @@ func (a *App) Run(ctx context.Context) error {
 
 func (a *App) Shutdown(ctx context.Context) error {
 	a.logger.Info("shutting down")
+	a.cron.Stop()
 	_ = a.plugins.StopAll(ctx)
 	_ = a.bus.Shutdown(ctx)
 	if a.sessions != nil {
@@ -158,4 +173,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	_ = logger.Sync()
 	return nil
+}
+
+// GetCronManager returns the cron manager for plugins.
+func (a *App) GetCronManager() *cron.Manager {
+	return a.cron
 }
