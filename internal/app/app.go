@@ -17,6 +17,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
 	"github.com/TiaraBasori/PaperValet/internal/session"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 	"github.com/TiaraBasori/PaperValet/plugins/builtin"
@@ -26,19 +27,20 @@ const Version = "0.1.0"
 
 // App is the top-level orchestrator.
 type App struct {
-	cfg        *config.Config
-	client     *telegram.Client
-	api        *tg.Client
-	bus        *eventbus.Bus
-	commands   *command.Registry
-	parser     *command.Parser
-	plugins    *plugin.Manager
-	sessions   *session.Manager
-	peers      *peer.Resolver
-	accessHash *peer.AccessHashManager
-	updates    *UpdateHandler
-	cron       *cron.Manager
-	logger     *zap.Logger
+	cfg         *config.Config
+	client      *telegram.Client
+	api         *tg.Client
+	bus         *eventbus.Bus
+	commands    *command.Registry
+	parser      *command.Parser
+	plugins     *plugin.Manager
+	pluginLoader *loader.Loader
+	sessions    *session.Manager
+	peers       *peer.Resolver
+	accessHash  *peer.AccessHashManager
+	updates     *UpdateHandler
+	cron        *cron.Manager
+	logger      *zap.Logger
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -86,20 +88,28 @@ func New(cfg *config.Config) (*App, error) {
 	pluginMgr := plugin.NewManager(cmdReg, bus)
 	cronMgr := cron.NewManager()
 
+	// External plugin loader
+	pluginsDir := cfg.Bot.PluginsDir
+	if pluginsDir == "" {
+		pluginsDir = "plugins"
+	}
+	pluginLoader := loader.NewLoader(pluginsDir, pluginMgr)
+
 	app := &App{
-		cfg:        cfg,
-		client:     client,
-		api:        api,
-		bus:        bus,
-		commands:   cmdReg,
-		parser:     parser,
-		plugins:    pluginMgr,
-		sessions:   sessMgr,
-		peers:      resolver,
-		accessHash: accessHash,
-		updates:    updates,
-		cron:       cronMgr,
-		logger:     log,
+		cfg:          cfg,
+		client:       client,
+		api:          api,
+		bus:          bus,
+		commands:     cmdReg,
+		parser:       parser,
+		plugins:      pluginMgr,
+		pluginLoader: pluginLoader,
+		sessions:     sessMgr,
+		peers:        resolver,
+		accessHash:   accessHash,
+		updates:      updates,
+		cron:         cronMgr,
+		logger:       log,
 	}
 	return app, nil
 }
@@ -157,6 +167,11 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		_ = a.bus.Emit(ctx, eventbus.EventStart, map[string]any{"version": Version, "user_id": self.ID})
 
+		// Load external plugins
+		if err := a.pluginLoader.LoadAll(ctx); err != nil {
+			a.logger.Warn("external plugin loading failed", zap.Error(err))
+		}
+
 		a.logger.Info("PaperValet ready", zap.String("version", Version), zap.String("prefix", a.cfg.Bot.CommandPrefix))
 		<-ctx.Done()
 		return ctx.Err()
@@ -178,4 +193,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 // GetCronManager returns the cron manager for plugins.
 func (a *App) GetCronManager() *cron.Manager {
 	return a.cron
+}
+
+// GetPluginLoader returns the external plugin loader.
+func (a *App) GetPluginLoader() *loader.Loader {
+	return a.pluginLoader
 }
