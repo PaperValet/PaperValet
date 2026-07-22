@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/TiaraBasori/PaperValet/internal/command"
-	"github.com/TiaraBasori/PaperValet/internal/core"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
@@ -19,7 +18,7 @@ func (p *FunPlugin) Name() string        { return "fun" }
 func (p *FunPlugin) Description() string { return "娱乐命令" }
 
 func (p *FunPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	cmds := []*command.Command{
+	cmds := []*interfaces.Command{
 		{
 			Name:        "roll",
 			Aliases:     []string{"dice"},
@@ -73,7 +72,7 @@ func (p *FunPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *FunPlugin) Start(_ context.Context) error { return nil }
 func (p *FunPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *FunPlugin) handleRoll(ctx *core.CommandContext) error {
+func (p *FunPlugin) handleRoll(ctx *interfaces.CommandContext) error {
 	max := 6
 	if ctx.ArgCount() > 0 {
 		var err error
@@ -86,7 +85,7 @@ func (p *FunPlugin) handleRoll(ctx *core.CommandContext) error {
 	return ctx.Edit(fmt.Sprintf("🎲 掷骰子 (1-%d): %d", max, result))
 }
 
-func (p *FunPlugin) handleCoin(ctx *core.CommandContext) error {
+func (p *FunPlugin) handleCoin(ctx *interfaces.CommandContext) error {
 	result := "正面"
 	if rand.Intn(2) == 0 {
 		result = "反面"
@@ -94,7 +93,7 @@ func (p *FunPlugin) handleCoin(ctx *core.CommandContext) error {
 	return ctx.Edit(fmt.Sprintf("🪙 抛硬币: %s", result))
 }
 
-func (p *FunPlugin) handleChoose(ctx *core.CommandContext) error {
+func (p *FunPlugin) handleChoose(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() < 2 {
 		return ctx.Edit("用法: choose <选项1> <选项2> ...")
 	}
@@ -102,7 +101,7 @@ func (p *FunPlugin) handleChoose(ctx *core.CommandContext) error {
 	return ctx.Edit(fmt.Sprintf("🤔 我选: %s", choice))
 }
 
-func (p *FunPlugin) handle8ball(ctx *core.CommandContext) error {
+func (p *FunPlugin) handle8ball(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
 		return ctx.Edit("用法: 8ball <问题>")
 	}
@@ -115,7 +114,7 @@ func (p *FunPlugin) handle8ball(ctx *core.CommandContext) error {
 	return ctx.Edit(fmt.Sprintf("🎱 %s", answers[rand.Intn(len(answers))]))
 }
 
-func (p *FunPlugin) handleFact(ctx *core.CommandContext) error {
+func (p *FunPlugin) handleFact(ctx *interfaces.CommandContext) error {
 	facts := []string{
 		"章鱼有三颗心脏和蓝色的血液 🐙",
 		"蜂蜜永远不会变质 🍯",

@@ -8,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TiaraBasori/PaperValet/internal/command"
-	"github.com/TiaraBasori/PaperValet/internal/core"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
@@ -29,7 +28,7 @@ func (p *CorePlugin) Description() string { return "核心命令：help / status
 
 func (p *CorePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 	p.mgr = mgr
-	_ = mgr.RegisterCommand(&command.Command{
+	_ = mgr.RegisterCommand(&interfaces.Command{
 		Name:        "help",
 		Aliases:     []string{"h", "?"},
 		Description: "显示帮助",
@@ -38,7 +37,7 @@ func (p *CorePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 		Category:    "core",
 		Handler:     p.handleHelp,
 	})
-	_ = mgr.RegisterCommand(&command.Command{
+	_ = mgr.RegisterCommand(&interfaces.Command{
 		Name:        "status",
 		Aliases:     []string{"stat"},
 		Description: "显示运行状态",
@@ -52,7 +51,7 @@ func (p *CorePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *CorePlugin) Start(_ context.Context) error { return nil }
 func (p *CorePlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *CorePlugin) handleHelp(ctx *core.CommandContext) error {
+func (p *CorePlugin) handleHelp(ctx *interfaces.CommandContext) error {
 	prefix := p.mgr.Commands().GetPrefix()
 	arg := ctx.GetArg(0)
 	if arg == "" {
@@ -98,7 +97,7 @@ func (p *CorePlugin) handleHelp(ctx *core.CommandContext) error {
 	return ctx.Edit("未找到命令或插件: " + arg)
 }
 
-func (p *CorePlugin) handleStatus(ctx *core.CommandContext) error {
+func (p *CorePlugin) handleStatus(ctx *interfaces.CommandContext) error {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	infos := p.mgr.GetAllInfo()

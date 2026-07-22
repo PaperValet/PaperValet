@@ -13,22 +13,20 @@ import (
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/tg"
-	"go.uber.org/zap"
-
-	"github.com/TiaraBasori/PaperValet/internal/core"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
 // Manager handles media upload/download operations.
 type Manager struct {
-	api        *tg.Client
-	peer       core.PeerResolver
+	api         *tg.Client
+	peer        interfaces.PeerResolver
 	downloadDir string
-	logger     *zap.Logger
+	logger      interfaces.Logger
 }
 
 // NewManager creates a media manager.
-func NewManager(api *tg.Client, resolver core.PeerResolver, downloadDir string) *Manager {
+func NewManager(api *tg.Client, resolver interfaces.PeerResolver, downloadDir string) *Manager {
 	if downloadDir == "" {
 		downloadDir = "downloads"
 	}
@@ -37,12 +35,12 @@ func NewManager(api *tg.Client, resolver core.PeerResolver, downloadDir string) 
 		api:         api,
 		peer:        resolver,
 		downloadDir: downloadDir,
-		logger:      logger.Named("media"),
+		logger:      logger.NamedLogger("media"),
 	}
 }
 
 // DownloadMedia downloads media from a message to local file.
-func (m *Manager) DownloadMedia(ctx context.Context, msg *core.MessageEvent) (string, error) {
+func (m *Manager) DownloadMedia(ctx context.Context, msg *interfaces.MessageEvent) (string, error) {
 	if msg.Media == nil {
 		return "", fmt.Errorf("no media in message")
 	}
@@ -53,7 +51,7 @@ func (m *Manager) DownloadMedia(ctx context.Context, msg *core.MessageEvent) (st
 	path := filepath.Join(m.downloadDir, filename)
 
 	// Get input peer
-	peer, err := m.peer.ResolveFromChatID(ctx, msg.ChatID)
+	p, err := m.peer.ResolveFromChatID(ctx, msg.ChatID)
 	if err != nil {
 		return "", err
 	}
@@ -74,12 +72,12 @@ func (m *Manager) DownloadMedia(ctx context.Context, msg *core.MessageEvent) (st
 	case *tg.MessageMediaPhoto:
 		photo := m.Photo
 		if p, ok := photo.(*tg.Photo); ok {
-			err = sender.DownloadMedia(ctx, peer, p, f)
+			err = sender.DownloadMedia(ctx, p, p, f)
 		}
 	case *tg.MessageMediaDocument:
 		doc := m.Document
 		if d, ok := doc.(*tg.Document); ok {
-			err = sender.DownloadMedia(ctx, peer, d, f)
+			err = sender.DownloadMedia(ctx, p, d, f)
 		}
 	default:
 		err = fmt.Errorf("unsupported media type: %T", media)
@@ -90,7 +88,7 @@ func (m *Manager) DownloadMedia(ctx context.Context, msg *core.MessageEvent) (st
 		return "", err
 	}
 
-	m.logger.Info("downloaded media", zap.String("path", path), zap.Int64("msg_id", msg.Message.ID))
+	m.logger.Info("downloaded media", "path", path, "msg_id", msg.Message.ID)
 	return path, nil
 }
 
@@ -102,13 +100,13 @@ func (m *Manager) UploadFile(ctx context.Context, chatID int64, path string) (tg
 	}
 	defer f.Close()
 
-	peer, err := m.peer.ResolveFromChatID(ctx, chatID)
+	p, err := m.peer.ResolveFromChatID(ctx, chatID)
 	if err != nil {
 		return nil, err
 	}
 
 	sender := message.NewSender(m.api)
-	
+
 	// Get file info
 	info, err := f.Stat()
 	if err != nil {
@@ -116,16 +114,16 @@ func (m *Manager) UploadFile(ctx context.Context, chatID int64, path string) (tg
 	}
 
 	// Upload as document
-	uploaded, err := sender.UploadFile(ctx, peer, f, message.UploadFileOptions{
-		FileName:    filepath.Base(path),
-		MIMEType:    mime.TypeByExtension(filepath.Ext(path)),
-		Progress:    nil,
+	uploaded, err := sender.UploadFile(ctx, p, f, message.UploadFileOptions{
+		FileName: filepath.Base(path),
+		MIMEType: mime.TypeByExtension(filepath.Ext(path)),
+		Progress: nil,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	m.logger.Info("uploaded file", zap.String("path", path), zap.Int64("size", info.Size()))
+	m.logger.Info("uploaded file", "path", path, "size", info.Size())
 	return uploaded, nil
 }
 
@@ -136,13 +134,13 @@ func (m *Manager) SendFile(ctx context.Context, chatID int64, path string, capti
 		return err
 	}
 
-	peer, err := m.peer.ResolveFromChatID(ctx, chatID)
+	p, err := m.peer.ResolveFromChatID(ctx, chatID)
 	if err != nil {
 		return err
 	}
 
 	sender := message.NewSender(m.api)
-	_, err = sender.Media(ctx, peer, media).Caption(caption).Send()
+	_, err = sender.Media(ctx, p, media).Caption(caption).Send()
 	if err != nil {
 		return err
 	}
@@ -279,7 +277,7 @@ func (m *Manager) CleanupOldDownloads(maxAge time.Duration) error {
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(m.downloadDir, entry.Name())
 			os.Remove(path)
-			m.logger.Debug("cleaned old download", zap.String("file", entry.Name()))
+			m.logger.Debug("cleaned old download", "file", entry.Name())
 		}
 	}
 	return nil
@@ -302,7 +300,7 @@ func (m *Manager) SetDownloadDir(dir string) error {
 // --- Helper for command context ---
 
 // DownloadAndReply downloads media from message and sends back as file.
-func (m *Manager) DownloadAndReply(ctx *core.CommandContext) error {
+func (m *Manager) DownloadAndReply(ctx *interfaces.CommandContext) error {
 	if ctx.Message.Media == nil {
 		return ctx.Reply("No media in message")
 	}
@@ -313,6 +311,6 @@ func (m *Manager) DownloadAndReply(ctx *core.CommandContext) error {
 	}
 
 	info := ExtractInfo(ctx.Message.Media)
-	return ctx.Reply(fmt.Sprintf("Downloaded: %s (%s, %s)", 
+	return ctx.Reply(fmt.Sprintf("Downloaded: %s (%s, %s)",
 		filepath.Base(path), info.Type, FormatSize(info.FileSize)))
 }

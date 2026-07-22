@@ -7,6 +7,8 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 )
 
 var (
@@ -15,6 +17,7 @@ var (
 	mu           sync.RWMutex
 )
 
+// Init initializes the global logger.
 func Init(level, format string) error {
 	var cfg zap.Config
 	if format == "json" {
@@ -51,6 +54,7 @@ func Init(level, format string) error {
 	return nil
 }
 
+// Get returns the global logger.
 func Get() *zap.Logger {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -61,6 +65,7 @@ func Get() *zap.Logger {
 	return globalLogger
 }
 
+// Sync flushes the global logger.
 func Sync() error {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -70,6 +75,7 @@ func Sync() error {
 	return nil
 }
 
+// SetOutput sets the output writer for the global logger.
 func SetOutput(w io.Writer) error {
 	mu.Lock()
 	defer mu.Unlock()
@@ -86,44 +92,65 @@ func SetOutput(w io.Writer) error {
 	return nil
 }
 
-// Convenience functions
-func Debug(msg string, fields ...zap.Field)   { Get().Debug(msg, fields...) }
-func Info(msg string, fields ...zap.Field)    { Get().Info(msg, fields...) }
-func Warn(msg string, fields ...zap.Field)    { Get().Warn(msg, fields...) }
-func Error(msg string, fields ...zap.Field)   { Get().Error(msg, fields...) }
-func Fatal(msg string, fields ...zap.Field)   { Get().Fatal(msg, fields...) }
-
-func Debugf(format string, args ...interface{}) { Get().Debug(msgf(format, args...)) }
-func Infof(format string, args ...interface{})  { Get().Info(msgf(format, args...)) }
-func Warnf(format string, args ...interface{})  { Get().Warn(msgf(format, args...)) }
-func Errorf(format string, args ...interface{}) { Get().Error(msgf(format, args...)) }
-func Fatalf(format string, args ...interface{}) { Get().Fatal(msgf(format, args...)) }
-
-func msgf(format string, args ...interface{}) string {
-	if len(args) == 0 {
-		return format
-	}
-	return format
+// ZapLogger adapts *zap.Logger to interfaces.Logger.
+type ZapLogger struct {
+	logger *zap.Logger
 }
 
-func With(fields ...zap.Field) *zap.Logger       { return Get().With(fields...) }
-func Named(name string) *zap.Logger              { return Get().Named(name) }
-func Level() zapcore.Level                       { return globalLevel.Level() }
-func StringToZapLevel(level string) zapcore.Level {
-	switch strings.ToUpper(level) {
-	case "DEBUG":
-		return zapcore.DebugLevel
-	case "INFO":
-		return zapcore.InfoLevel
-	case "WARN":
-		return zapcore.WarnLevel
-	case "ERROR":
-		return zapcore.ErrorLevel
-	default:
-		return zapcore.InfoLevel
-	}
+func (z *ZapLogger) Debug(msg string, keysAndValues ...any) {
+	z.logger.Debug(msg, kvToFields(keysAndValues)...)
 }
 
+func (z *ZapLogger) Info(msg string, keysAndValues ...any) {
+	z.logger.Info(msg, kvToFields(keysAndValues)...)
+}
+
+func (z *ZapLogger) Warn(msg string, keysAndValues ...any) {
+	z.logger.Warn(msg, kvToFields(keysAndValues)...)
+}
+
+func (z *ZapLogger) Error(msg string, keysAndValues ...any) {
+	z.logger.Error(msg, kvToFields(keysAndValues)...)
+}
+
+func (z *ZapLogger) With(keysAndValues ...any) interfaces.Logger {
+	return &ZapLogger{logger: z.logger.With(kvToFields(keysAndValues)...)}
+}
+
+func (z *ZapLogger) Named(name string) interfaces.Logger {
+	return &ZapLogger{logger: z.logger.Named(name)}
+}
+
+func kvToFields(kv []any) []zap.Field {
+	if len(kv) == 0 {
+		return nil
+	}
+	fields := make([]zap.Field, 0, len(kv)/2+1)
+	for i := 0; i < len(kv); i += 2 {
+		key, ok := kv[i].(string)
+		if !ok {
+			continue
+		}
+		var val any
+		if i+1 < len(kv) {
+			val = kv[i+1]
+		}
+		fields = append(fields, zap.Any(key, val))
+	}
+	return fields
+}
+
+// GlobalLogger returns an interfaces.Logger backed by the global zap logger.
+func GlobalLogger() interfaces.Logger {
+	return &ZapLogger{logger: Get()}
+}
+
+// NamedLogger creates a named interfaces.Logger from the global logger.
+func NamedLogger(name string) interfaces.Logger {
+	return &ZapLogger{logger: Get().Named(name)}
+}
+
+// StdLogWriter returns an io.Writer that logs to the global logger.
 func StdLogWriter() io.Writer {
 	return &stdLogWriter{}
 }
@@ -131,6 +158,6 @@ func StdLogWriter() io.Writer {
 type stdLogWriter struct{}
 
 func (w *stdLogWriter) Write(p []byte) (n int, err error) {
-	Info(strings.TrimSpace(string(p)))
+	Get().Info(strings.TrimSpace(string(p)))
 	return len(p), nil
 }

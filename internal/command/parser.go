@@ -4,10 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"go.uber.org/zap"
-
-	"github.com/TiaraBasori/PaperValet/internal/core"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -15,21 +13,21 @@ import (
 type Parser struct {
 	registry *Registry
 	bus      *eventbus.Bus
-	logger   *zap.Logger
+	logger   interfaces.Logger
 }
 
 func NewParser(registry *Registry, bus *eventbus.Bus) *Parser {
 	return &Parser{
 		registry: registry,
 		bus:      bus,
-		logger:   logger.Named("command_parser"),
+		logger:   logger.NamedLogger("command_parser"),
 	}
 }
 
 // Start registers the message listener (userbot: outgoing only).
 func (p *Parser) Start() {
 	p.bus.Subscribe(eventbus.EventMessage, func(ctx context.Context, event *eventbus.Event) error {
-		msg, ok := event.Data.(*core.MessageEvent)
+		msg, ok := event.Data.(*interfaces.MessageEvent)
 		if !ok || msg == nil || msg.Message == nil {
 			return nil
 		}
@@ -44,7 +42,7 @@ func (p *Parser) Start() {
 		if !isCmd {
 			return nil
 		}
-		p.logger.Debug("dispatch", zap.String("name", name), zap.Strings("args", args))
+		p.logger.Debug("dispatch", "name", name, "args", args)
 		return p.registry.ExecuteCommand(ctx, msg, name, args)
 	}, eventbus.WithPriority(100))
 }

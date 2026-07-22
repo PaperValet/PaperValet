@@ -5,9 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 )
 
 const (
@@ -42,10 +40,13 @@ type Bus struct {
 	subscribers map[string][]*Subscription
 	shutdownCh  chan struct{}
 	once        sync.Once
-	logger      *zap.Logger
+	logger      interfaces.Logger
 }
 
-func New() *Bus {
+func New(logger interfaces.Logger) *Bus {
+	if logger == nil {
+		logger = &noopLogger{}
+	}
 	return &Bus{
 		subscribers: make(map[string][]*Subscription),
 		shutdownCh:  make(chan struct{}),
@@ -132,7 +133,7 @@ func (b *Bus) emitEvent(ctx context.Context, event *Event) error {
 			continue
 		}
 		if err := sub.handler(ctx, event); err != nil {
-			b.logger.Error("handler failed", zap.String("type", event.Type), zap.Error(err))
+			b.logger.Error("handler failed", "type", event.Type, "error", err)
 		}
 	}
 	return nil
@@ -169,3 +170,12 @@ func sortByPriority(subs []*Subscription) {
 		subs[j+1] = key
 	}
 }
+
+type noopLogger struct{}
+
+func (n *noopLogger) Debug(msg string, keysAndValues ...any) {}
+func (n *noopLogger) Info(msg string, keysAndValues ...any)  {}
+func (n *noopLogger) Warn(msg string, keysAndValues ...any)  {}
+func (n *noopLogger) Error(msg string, keysAndValues ...any) {}
+func (n *noopLogger) With(keysAndValues ...any) interfaces.Logger { return n }
+func (n *noopLogger) Named(name string) interfaces.Logger      { return n }

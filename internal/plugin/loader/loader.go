@@ -8,9 +8,8 @@ import (
 	goplugin "plugin"
 	"strings"
 
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
-	"go.uber.org/zap"
-
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -19,7 +18,7 @@ type Loader struct {
 	dir     string
 	manager *plugin.Manager
 	loaded  map[string]*LoadedPlugin
-	logger  *zap.Logger
+	logger  interfaces.Logger
 }
 
 type LoadedPlugin struct {
@@ -43,7 +42,7 @@ func NewLoader(dir string, mgr *plugin.Manager) *Loader {
 		dir:     dir,
 		manager: mgr,
 		loaded:  make(map[string]*LoadedPlugin),
-		logger:  logger.Named("plugin_loader"),
+		logger:  logger.NamedLogger("plugin_loader"),
 	}
 }
 
@@ -52,7 +51,7 @@ func (l *Loader) LoadAll(ctx context.Context) error {
 	entries, err := os.ReadDir(l.dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			l.logger.Info("plugins directory does not exist, skipping", zap.String("dir", l.dir))
+			l.logger.Info("plugins directory does not exist, skipping", "dir", l.dir)
 			return nil
 		}
 		return fmt.Errorf("read plugins dir: %w", err)
@@ -65,12 +64,12 @@ func (l *Loader) LoadAll(ctx context.Context) error {
 
 		path := filepath.Join(l.dir, entry.Name())
 		if err := l.Load(ctx, path); err != nil {
-			l.logger.Error("failed to load plugin", zap.String("path", path), zap.Error(err))
+			l.logger.Error("failed to load plugin", "path", path, "error", err)
 			continue
 		}
 	}
 
-	l.logger.Info("external plugins loaded", zap.Int("count", len(l.loaded)))
+	l.logger.Info("external plugins loaded", "count", len(l.loaded))
 	return nil
 }
 
@@ -131,7 +130,7 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 	}
 	l.loaded[name] = loaded
 
-	l.logger.Info("plugin loaded", zap.String("name", name), zap.String("path", path))
+	l.logger.Info("plugin loaded", "name", name, "path", path)
 	return nil
 }
 
@@ -143,11 +142,11 @@ func (l *Loader) Unload(ctx context.Context, name string) error {
 	}
 
 	if err := loaded.Plugin.Stop(ctx); err != nil {
-		l.logger.Warn("plugin stop error", zap.String("name", name), zap.Error(err))
+		l.logger.Warn("plugin stop error", "name", name, "error", err)
 	}
 
 	delete(l.loaded, name)
-	l.logger.Info("plugin unloaded", zap.String("name", name))
+	l.logger.Info("plugin unloaded", "name", name)
 	return nil
 }
 

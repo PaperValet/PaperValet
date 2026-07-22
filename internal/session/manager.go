@@ -8,34 +8,28 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
-	"go.uber.org/zap"
-
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
-// Data represents arbitrary session data stored as JSON.
-type Data map[string]interface{}
+type Data map[string]any
 
-// Record represents a single session record.
 type Record struct {
-	UserID    int64     `json:"user_id"`
-	ChatID    int64     `json:"chat_id"`
-	State     string    `json:"state"`
-	Data      Data      `json:"data"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	UserID    int64
+	ChatID    int64
+	State     string
+	Data      Data
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// Manager handles session persistence.
-// Uses SQLite for reliable storage, with in-memory cache for hot paths.
-// Unlike TeleBox's scattered session management, this is centralized.
+// Manager manages session state with SQLite + in-memory cache.
 type Manager struct {
 	db      *sql.DB
-	cache   map[string]*Record // key: "userID:chatID"
+	cache   map[string]*Record
 	mu      sync.RWMutex
 	ttl     time.Duration
-	logger  *zap.Logger
+	logger  interfaces.Logger
 	cleanup *time.Ticker
 }
 
@@ -65,11 +59,10 @@ func NewManager(dbPath string) (*Manager, error) {
 		db:      db,
 		cache:   make(map[string]*Record),
 		ttl:     24 * time.Hour,
-		logger:  logger.Named("session_manager"),
+		logger:  logger.NamedLogger("session_manager"),
 		cleanup: time.NewTicker(1 * time.Hour),
 	}
 
-	// Start cleanup goroutine
 	go m.cleanupLoop()
 
 	return m, nil

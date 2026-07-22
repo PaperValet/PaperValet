@@ -6,10 +6,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/TiaraBasori/PaperValet/internal/command"
-	"github.com/TiaraBasori/PaperValet/internal/core"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/gotd/td/tg"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
+	"github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
 // PingPlugin provides ping/pong command.
@@ -21,7 +20,7 @@ func (p *PingPlugin) Name() string        { return "ping" }
 func (p *PingPlugin) Description() string { return "Ping/pong latency check" }
 
 func (p *PingPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "ping",
 		Description: "检查延迟",
 		Plugin:      p.Name(),
@@ -33,7 +32,7 @@ func (p *PingPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *PingPlugin) Start(_ context.Context) error { return nil }
 func (p *PingPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *PingPlugin) handlePing(ctx *core.CommandContext) error {
+func (p *PingPlugin) handlePing(ctx *interfaces.CommandContext) error {
 	start := time.Now()
 	msg := "Pong! 🏓"
 	if err := ctx.Edit(msg); err != nil {
@@ -54,7 +53,7 @@ func (p *UptimePlugin) Name() string        { return "uptime" }
 func (p *UptimePlugin) Description() string { return "显示运行时间" }
 
 func (p *UptimePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "uptime",
 		Aliases:     []string{"up"},
 		Description: "显示运行时间",
@@ -67,7 +66,7 @@ func (p *UptimePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *UptimePlugin) Start(_ context.Context) error { return nil }
 func (p *UptimePlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *UptimePlugin) handleUptime(ctx *core.CommandContext) error {
+func (p *UptimePlugin) handleUptime(ctx *interfaces.CommandContext) error {
 	uptime := time.Since(p.startTime).Truncate(time.Second)
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
@@ -86,7 +85,7 @@ func (p *InfoPlugin) Name() string        { return "info" }
 func (p *InfoPlugin) Description() string { return "显示用户/群组信息" }
 
 func (p *InfoPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "info",
 		Aliases:     []string{"id", "whois"},
 		Description: "显示用户/群组 ID 信息",
@@ -100,7 +99,7 @@ func (p *InfoPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *InfoPlugin) Start(_ context.Context) error { return nil }
 func (p *InfoPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *InfoPlugin) handleInfo(ctx *core.CommandContext) error {
+func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 	msg := ctx.Message
 	var targetID int64 = msg.UserID
 
@@ -132,7 +131,7 @@ func (p *ForwardPlugin) Name() string        { return "forward" }
 func (p *ForwardPlugin) Description() string { return "转发消息" }
 
 func (p *ForwardPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "fwd",
 		Aliases:     []string{"forward"},
 		Description: "转发回复的消息到目标",
@@ -146,7 +145,7 @@ func (p *ForwardPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *ForwardPlugin) Start(_ context.Context) error { return nil }
 func (p *ForwardPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *ForwardPlugin) handleForward(ctx *core.CommandContext) error {
+func (p *ForwardPlugin) handleForward(ctx *interfaces.CommandContext) error {
 	if !ctx.Message.IsReply {
 		return ctx.Edit("请回复一条消息")
 	}

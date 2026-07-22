@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"go.uber.org/zap"
-
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -28,7 +27,7 @@ type Manager struct {
 	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
-	logger *zap.Logger
+	logger interfaces.Logger
 }
 
 // NewManager creates a new cron manager.
@@ -39,7 +38,7 @@ func NewManager() *Manager {
 		jobs:   make(map[string]*Job),
 		ctx:    ctx,
 		cancel: cancel,
-		logger: logger.Named("cron"),
+		logger: logger.NamedLogger("cron"),
 	}
 }
 
@@ -84,7 +83,7 @@ func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) er
 		return fmt.Errorf("add job %s: %w", name, err)
 	}
 
-	m.logger.Info("job added", zap.String("name", name), zap.String("schedule", schedule))
+	m.logger.Info("job added", "name", name, "schedule", schedule)
 	return nil
 }
 
@@ -100,7 +99,7 @@ func (m *Manager) RemoveJob(name string) error {
 	// Note: robfig/cron doesn't support removal by name easily
 	// Would need to track entry IDs
 	delete(m.jobs, name)
-	m.logger.Info("job removed", zap.String("name", name))
+	m.logger.Info("job removed", "name", name)
 	return nil
 }
 

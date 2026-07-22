@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"go.uber.org/zap"
-
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -43,7 +42,7 @@ type Manager struct {
 	commandReg *command.Registry
 	bus        *eventbus.Bus
 	startOrder []string
-	logger     *zap.Logger
+	logger     interfaces.Logger
 }
 
 func NewManager(cmdReg *command.Registry, bus *eventbus.Bus) *Manager {
@@ -53,7 +52,7 @@ func NewManager(cmdReg *command.Registry, bus *eventbus.Bus) *Manager {
 		commandReg: cmdReg,
 		bus:        bus,
 		startOrder: make([]string, 0),
-		logger:     logger.Named("plugin"),
+		logger:     logger.NamedLogger("plugin"),
 	}
 }
 
@@ -70,7 +69,7 @@ func (m *Manager) Register(p Plugin) error {
 	m.plugins[name] = p
 	m.info[name] = &Info{Name: name, Description: p.Description(), Status: StatusInactive}
 	m.startOrder = append(m.startOrder, name)
-	m.logger.Info("registered", zap.String("name", name))
+	m.logger.Info("registered", "name", name)
 	return nil
 }
 
@@ -82,7 +81,7 @@ func (m *Manager) InitAll(ctx context.Context) error {
 		m.mu.RLock()
 		p := m.plugins[name]
 		m.mu.RUnlock()
-		m.logger.Info("init", zap.String("name", name))
+		m.logger.Info("init", "name", name)
 		if err := p.Init(ctx, m); err != nil {
 			m.mu.Lock()
 			m.info[name].Status = StatusError
@@ -100,7 +99,7 @@ func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.RUnlock()
 	for _, name := range order {
 		p := m.plugins[name]
-		m.logger.Info("start", zap.String("name", name))
+		m.logger.Info("start", "name", name)
 		if err := p.Start(ctx); err != nil {
 			m.mu.Lock()
 			m.info[name].Status = StatusError
@@ -122,9 +121,9 @@ func (m *Manager) StopAll(ctx context.Context) error {
 	for i := len(order) - 1; i >= 0; i-- {
 		name := order[i]
 		p := m.plugins[name]
-		m.logger.Info("stop", zap.String("name", name))
+		m.logger.Info("stop", "name", name)
 		if err := p.Stop(ctx); err != nil {
-			m.logger.Error("stop failed", zap.String("name", name), zap.Error(err))
+			m.logger.Error("stop failed", "name", name, "error", err)
 		}
 		m.commandReg.UnregisterPlugin(name)
 		m.mu.Lock()
@@ -162,6 +161,6 @@ func (m *Manager) GetAllInfo() []*Info {
 
 func (m *Manager) Bus() *eventbus.Bus             { return m.bus }
 func (m *Manager) Commands() *command.Registry     { return m.commandReg }
-func (m *Manager) RegisterCommand(cmd *command.Command) error {
+func (m *Manager) RegisterCommand(cmd *interfaces.Command) error {
 	return m.commandReg.Register(cmd)
 }

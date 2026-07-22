@@ -9,12 +9,12 @@ import (
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
-	"go.uber.org/zap"
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -27,27 +27,27 @@ const Version = "0.1.0"
 
 // App is the top-level orchestrator.
 type App struct {
-	cfg         *config.Config
-	client      *telegram.Client
-	api         *tg.Client
-	bus         *eventbus.Bus
-	commands    *command.Registry
-	parser      *command.Parser
-	plugins     *plugin.Manager
+	cfg          *config.Config
+	client       *telegram.Client
+	api          *tg.Client
+	bus          *eventbus.Bus
+	commands     *command.Registry
+	parser       *command.Parser
+	plugins      *plugin.Manager
 	pluginLoader *loader.Loader
-	sessions    *session.Manager
-	peers       *peer.Resolver
-	accessHash  *peer.AccessHashManager
-	updates     *UpdateHandler
-	cron        *cron.Manager
-	logger      *zap.Logger
+	sessions     *session.Manager
+	peers        *peer.Resolver
+	accessHash   *peer.AccessHashManager
+	updates      *UpdateHandler
+	cron         *cron.Manager
+	logger       interfaces.Logger
 }
 
 func New(cfg *config.Config) (*App, error) {
 	if err := logger.Init(cfg.Logger.Level, cfg.Logger.Format); err != nil {
 		return nil, fmt.Errorf("logger: %w", err)
 	}
-	log := logger.Named("app")
+	log := logger.NamedLogger("app")
 
 	if err := os.MkdirAll(filepath.Dir(cfg.Telegram.Database), 0o755); err != nil && filepath.Dir(cfg.Telegram.Database) != "." {
 		return nil, fmt.Errorf("database dir: %w", err)
@@ -61,7 +61,7 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("session manager: %w", err)
 	}
 
-	bus := eventbus.New()
+	bus := eventbus.New(log)
 	updates := NewUpdateHandler(bus)
 
 	client := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
@@ -157,7 +157,7 @@ func (a *App) Run(ctx context.Context) error {
 		if a.cfg.Bot.OwnerID == 0 {
 			a.cfg.Bot.OwnerID = self.ID
 		}
-		a.logger.Info("authenticated", zap.Int64("user_id", self.ID), zap.String("username", self.Username))
+		a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 
 		if err := a.plugins.InitAll(ctx); err != nil {
 			return fmt.Errorf("plugin init: %w", err)
@@ -169,10 +169,10 @@ func (a *App) Run(ctx context.Context) error {
 
 		// Load external plugins
 		if err := a.pluginLoader.LoadAll(ctx); err != nil {
-			a.logger.Warn("external plugin loading failed", zap.Error(err))
+			a.logger.Warn("external plugin loading failed", "error", err)
 		}
 
-		a.logger.Info("PaperValet ready", zap.String("version", Version), zap.String("prefix", a.cfg.Bot.CommandPrefix))
+		a.logger.Info("PaperValet ready", "version", Version, "prefix", a.cfg.Bot.CommandPrefix)
 		<-ctx.Done()
 		return ctx.Err()
 	})

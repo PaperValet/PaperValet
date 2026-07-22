@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
-	"go.uber.org/zap"
-
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -19,7 +18,7 @@ type AccessHashManager struct {
 	db     *sqliteDB
 	mu     sync.RWMutex
 	cache  map[int64]*peerCacheEntry
-	logger *zap.Logger
+	logger interfaces.Logger
 }
 
 type peerCacheEntry struct {
@@ -38,7 +37,7 @@ func NewAccessHashManager(api *tg.Client) *AccessHashManager {
 	return &AccessHashManager{
 		api:    api,
 		cache:  make(map[int64]*peerCacheEntry),
-		logger: logger.Named("peer_manager"),
+		logger: logger.NamedLogger("peer_manager"),
 	}
 }
 

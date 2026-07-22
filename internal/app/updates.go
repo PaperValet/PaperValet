@@ -4,28 +4,23 @@ import (
 	"context"
 
 	"github.com/gotd/td/tg"
-	"go.uber.org/zap"
-
-	"github.com/TiaraBasori/PaperValet/internal/core"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
-	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 )
 
-// UpdateHandler implements telegram.UpdateHandler and fans out to the event bus.
+// UpdateHandler processes Telegram updates and emits events.
 type UpdateHandler struct {
 	bus        *eventbus.Bus
 	selfUserID int64
-	logger     *zap.Logger
 }
 
 func NewUpdateHandler(bus *eventbus.Bus) *UpdateHandler {
-	return &UpdateHandler{
-		bus:    bus,
-		logger: logger.Named("updates"),
-	}
+	return &UpdateHandler{bus: bus}
 }
 
-func (h *UpdateHandler) SetSelfUserID(id int64) { h.selfUserID = id }
+func (h *UpdateHandler) SetSelfUserID(id int64) {
+	h.selfUserID = id
+}
 
 func (h *UpdateHandler) Handle(ctx context.Context, u tg.UpdatesClass) error {
 	_ = h.bus.Emit(ctx, eventbus.EventRawUpdate, u)
@@ -34,13 +29,13 @@ func (h *UpdateHandler) Handle(ctx context.Context, u tg.UpdatesClass) error {
 	case *tg.Updates:
 		for _, upd := range updates.Updates {
 			if err := h.handleOne(ctx, upd, updates); err != nil {
-				h.logger.Error("update failed", zap.Error(err))
+				h.bus.Emit(ctx, eventbus.EventError, err)
 			}
 		}
 	case *tg.UpdatesCombined:
 		for _, upd := range updates.Updates {
 			if err := h.handleOne(ctx, upd, updates); err != nil {
-				h.logger.Error("update failed", zap.Error(err))
+				h.bus.Emit(ctx, eventbus.EventError, err)
 			}
 		}
 	case *tg.UpdateShort:
@@ -88,18 +83,18 @@ func (h *UpdateHandler) dispatchMessage(ctx context.Context, msg *tg.Message, ra
 		userID = h.selfUserID
 	}
 
-	ev := &core.MessageEvent{
-		Update:   raw,
-		Message:  msg,
-		Text:     msg.Message,
-		UserID:   userID,
-		ChatID:   extractChatID(msg),
-		IsOut:    msg.Out,
-		Entities: msg.Entities,
-		Media:    msg.Media,
-		Date:     msg.Date,
-		PeerID:   msg.PeerID,
-		Raw:      msg,
+	ev := &interfaces.MessageEvent{
+		Update:    raw,
+		Message:   msg,
+		Text:      msg.Message,
+		UserID:    userID,
+		ChatID:    extractChatID(msg),
+		IsOut:     msg.Out,
+		Entities:  msg.Entities,
+		Media:     msg.Media,
+		Date:      msg.Date,
+		PeerID:    msg.PeerID,
+		Raw:       msg,
 	}
 	if reply, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		ev.IsReply = true

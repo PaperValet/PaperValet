@@ -6,8 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TiaraBasori/PaperValet/internal/command"
-	"github.com/TiaraBasori/PaperValet/internal/core"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
@@ -33,7 +32,7 @@ func (p *RemindPlugin) Name() string        { return "remind" }
 func (p *RemindPlugin) Description() string { return "定时提醒" }
 
 func (p *RemindPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "remind",
 		Aliases:     []string{"remindme"},
 		Description: "设置提醒",
@@ -69,13 +68,12 @@ func (p *RemindPlugin) checkReminders(ctx context.Context) {
 	for id, r := range p.reminders {
 		if now.After(r.TriggerAt) {
 			// In a real implementation, we'd send via API
-			// For now just log
 			delete(p.reminders, id)
 		}
 	}
 }
 
-func (p *RemindPlugin) handleRemind(ctx *core.CommandContext) error {
+func (p *RemindPlugin) handleRemind(ctx *interfaces.CommandContext) error {
 	sub := strings.ToLower(ctx.GetArg(0))
 	switch sub {
 	case "", "help":
@@ -101,14 +99,11 @@ func (p *RemindPlugin) handleRemind(ctx *core.CommandContext) error {
 		}
 		return ctx.Edit("未找到: " + id)
 	default:
-		// Parse time and message
-		// Simple: remind 5m 喝水
 		duration := sub
 		text := strings.Join(ctx.Args[1:], " ")
 		if text == "" {
 			return ctx.Edit("提醒内容不能为空")
 		}
-		// Parse duration (simplified)
 		d, err := time.ParseDuration(duration)
 		if err != nil {
 			return ctx.Edit("时间格式错误，如: 5m, 1h, 30s")
@@ -137,7 +132,7 @@ func (p *NotePlugin) Name() string        { return "note" }
 func (p *NotePlugin) Description() string { return "笔记管理" }
 
 func (p *NotePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
-	return mgr.RegisterCommand(&command.Command{
+	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "note",
 		Aliases:     []string{"n"},
 		Description: "笔记管理",
@@ -151,7 +146,7 @@ func (p *NotePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 func (p *NotePlugin) Start(_ context.Context) error { return nil }
 func (p *NotePlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *NotePlugin) handleNote(ctx *core.CommandContext) error {
+func (p *NotePlugin) handleNote(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
 		return ctx.Edit("用法: note set <name> <内容> | note get <name> | note del <name> | note list")
 	}

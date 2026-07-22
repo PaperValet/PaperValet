@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/TiaraBasori/PaperValet/internal/command"
-	"github.com/TiaraBasori/PaperValet/internal/core"
+	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
-// AptPlugin manages plugin enable/disable/list.
+// AptPlugin manages other plugins.
 type AptPlugin struct {
 	mgr *plugin.Manager
 }
@@ -18,50 +17,70 @@ type AptPlugin struct {
 func NewApt() *AptPlugin { return &AptPlugin{} }
 
 func (p *AptPlugin) Name() string        { return "apt" }
-func (p *AptPlugin) Description() string { return "插件管理：list / enable / disable" }
+func (p *AptPlugin) Description() string { return "插件管理器" }
 
 func (p *AptPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
 	p.mgr = mgr
-	return mgr.RegisterCommand(&command.Command{
+	_ = mgr.RegisterCommand(&interfaces.Command{
 		Name:        "apt",
+		Aliases:     []string{"plugin", "plugins"},
 		Description: "插件管理",
-		Usage:       "apt <list|enable|disable> [插件名]",
+		Usage:       "apt list | apt enable <name> | apt disable <name> | apt reload <name>",
 		Plugin:      p.Name(),
 		Category:    "core",
-		Handler:     p.handle,
+		Handler:     p.handleApt,
 	})
+	return nil
 }
 
 func (p *AptPlugin) Start(_ context.Context) error { return nil }
 func (p *AptPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *AptPlugin) handle(ctx *core.CommandContext) error {
-	sub := strings.ToLower(ctx.GetArg(0))
-	switch sub {
-	case "", "list", "ls":
-		return p.list(ctx)
-	case "enable", "on":
-		return ctx.Edit("运行时启用需重启；当前插件均为内置编译进二进制。")
-	case "disable", "off":
-		return ctx.Edit("运行时禁用需重启；当前插件均为内置编译进二进制。")
-	default:
-		return ctx.Edit("用法: apt list | apt enable <名> | apt disable <名>")
+func (p *AptPlugin) handleApt(ctx *interfaces.CommandContext) error {
+	if ctx.ArgCount() == 0 {
+		return ctx.Edit("用法: apt list | apt enable <name> | apt disable <name> | apt reload <name>")
 	}
-}
+	sub := ctx.GetArg(0)
 
-func (p *AptPlugin) list(ctx *core.CommandContext) error {
-	infos := p.mgr.GetAllInfo()
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("已注册插件 (%d)\n", len(infos)))
-	for _, info := range infos {
-		status := "停用"
-		switch info.Status {
-		case plugin.StatusActive:
-			status = "运行中"
-		case plugin.StatusError:
-			status = "错误"
+	switch sub {
+	case "list":
+		infos := p.mgr.GetAllInfo()
+		if len(infos) == 0 {
+			return ctx.Edit("无已加载插件")
 		}
-		b.WriteString(fmt.Sprintf("• %s [%s] — %s\n", info.Name, status, info.Description))
+		var b strings.Builder
+		b.WriteString("📦 插件列表:\n")
+		for _, info := range infos {
+			status := "⏸️"
+			if info.Status == plugin.StatusActive {
+				status = "✅"
+			}
+			b.WriteString(fmt.Sprintf("%s %s — %s\n", status, info.Name, info.Description))
+		}
+		return ctx.Edit(b.String())
+
+	case "enable":
+		if ctx.ArgCount() < 2 {
+			return ctx.Edit("用法: apt enable <name>")
+		}
+		name := ctx.GetArg(1)
+		return ctx.Edit(fmt.Sprintf("启用 %s: 需外部插件加载器支持", name))
+
+	case "disable":
+		if ctx.ArgCount() < 2 {
+			return ctx.Edit("用法: apt disable <name>")
+		}
+		name := ctx.GetArg(1)
+		return ctx.Edit(fmt.Sprintf("禁用 %s: 需外部插件加载器支持", name))
+
+	case "reload":
+		if ctx.ArgCount() < 2 {
+			return ctx.Edit("用法: apt reload <name>")
+		}
+		name := ctx.GetArg(1)
+		return ctx.Edit(fmt.Sprintf("重载 %s: 需外部插件加载器支持", name))
+
+	default:
+		return ctx.Edit("未知子命令: " + sub)
 	}
-	return ctx.Edit(b.String())
 }
