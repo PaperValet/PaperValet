@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // CorePlugin provides .help and .status.
 type CorePlugin struct {
-	mgr       *plugin.Manager
+	mgr       plugin.Manager
 	startTime time.Time
 	version   string
 }
@@ -26,7 +26,7 @@ func NewCore(version string) *CorePlugin {
 func (p *CorePlugin) Name() string        { return "core" }
 func (p *CorePlugin) Description() string { return "核心命令：help / status" }
 
-func (p *CorePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	_ = mgr.RegisterCommand(&interfaces.Command{
 		Name:        "help",

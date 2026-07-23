@@ -8,7 +8,7 @@ import (
 
 	"github.com/gotd/td/tg"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // PingPlugin provides ping/pong command.
@@ -19,7 +19,7 @@ func NewPing() *PingPlugin { return &PingPlugin{} }
 func (p *PingPlugin) Name() string        { return "ping" }
 func (p *PingPlugin) Description() string { return "Ping/pong latency check" }
 
-func (p *PingPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *PingPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "ping",
 		Description: "检查延迟",
@@ -52,7 +52,7 @@ func NewUptime() *UptimePlugin { return &UptimePlugin{startTime: time.Now()} }
 func (p *UptimePlugin) Name() string        { return "uptime" }
 func (p *UptimePlugin) Description() string { return "显示运行时间" }
 
-func (p *UptimePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *UptimePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "uptime",
 		Aliases:     []string{"up"},
@@ -84,7 +84,7 @@ func NewInfo() *InfoPlugin { return &InfoPlugin{} }
 func (p *InfoPlugin) Name() string        { return "info" }
 func (p *InfoPlugin) Description() string { return "显示用户/群组信息" }
 
-func (p *InfoPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *InfoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "info",
 		Aliases:     []string{"id", "whois"},
@@ -130,7 +130,7 @@ func NewForward() *ForwardPlugin { return &ForwardPlugin{} }
 func (p *ForwardPlugin) Name() string        { return "forward" }
 func (p *ForwardPlugin) Description() string { return "转发消息" }
 
-func (p *ForwardPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *ForwardPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "fwd",
 		Aliases:     []string{"forward"},

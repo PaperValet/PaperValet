@@ -7,160 +7,147 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
-	"github.com/TiaraBasori/PaperValet/internal/interfaces"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
-type Status int
-
-const (
-	StatusInactive Status = iota
-	StatusActive
-	StatusError
-)
-
-// Plugin is the minimal interface every plugin implements.
-type Plugin interface {
-	Name() string
-	Description() string
-	Init(ctx context.Context, mgr *Manager) error
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
-}
-
-type Info struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Status      Status `json:"status"`
-	Error       string `json:"error,omitempty"`
-}
-
+// Manager implements the plugin.Manager interface for internal use.
 type Manager struct {
-	mu         sync.RWMutex
-	plugins    map[string]Plugin
-	info       map[string]*Info
-	commandReg *command.Registry
-	bus        *eventbus.Bus
-	startOrder []string
-	logger     interfaces.Logger
+	mu       sync.RWMutex
+	plugins  map[string]plugin.Plugin
+	infos    map[string]plugin.PluginInfo
+	commands *command.Registry
+	bus      *eventbus.Bus
+	loaded   bool
 }
 
-func NewManager(cmdReg *command.Registry, bus *eventbus.Bus) *Manager {
+// NewManager creates a new plugin manager.
+func NewManager(commands *command.Registry, bus *eventbus.Bus) *Manager {
 	return &Manager{
-		plugins:    make(map[string]Plugin),
-		info:       make(map[string]*Info),
-		commandReg: cmdReg,
-		bus:        bus,
-		startOrder: make([]string, 0),
-		logger:     logger.NamedLogger("plugin"),
+		plugins:  make(map[string]plugin.Plugin),
+		infos:    make(map[string]plugin.PluginInfo),
+		commands: commands,
+		bus:      bus,
 	}
 }
 
-func (m *Manager) Register(p Plugin) error {
+// RegisterPlugin registers a plugin with the manager.
+func (m *Manager) RegisterPlugin(p plugin.Plugin) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	name := p.Name()
-	if name == "" {
-		return fmt.Errorf("plugin name is required")
-	}
 	if _, exists := m.plugins[name]; exists {
 		return fmt.Errorf("plugin %s already registered", name)
 	}
 	m.plugins[name] = p
-	m.info[name] = &Info{Name: name, Description: p.Description(), Status: StatusInactive}
-	m.startOrder = append(m.startOrder, name)
-	m.logger.Info("registered", "name", name)
+	m.infos[name] = plugin.PluginInfo{
+		Name:        name,
+		Description: p.Description(),
+		Status:      plugin.StatusInactive,
+	}
 	return nil
 }
 
+// RegisterCommand registers a command via the command registry.
+func (m *Manager) RegisterCommand(cmd *plugin.Command) error {
+	return m.commands.Register(cmd)
+}
+
+// UnregisterCommand removes a command.
+func (m *Manager) UnregisterCommand(name string) {
+	m.commands.Unregister(name)
+}
+
+// UnregisterPlugin removes a plugin and its commands.
+func (m *Manager) UnregisterPlugin(name string) {
+	m.commands.UnregisterPlugin(name)
+	m.mu.Lock()
+	delete(m.plugins, name)
+	delete(m.infos, name)
+	m.mu.Unlock()
+}
+
+// Commands returns the registry provider.
+func (m *Manager) Commands() plugin.RegistryProvider {
+	return m.commands
+}
+
+// GetInfo returns plugin info.
+func (m *Manager) GetInfo(name string) (plugin.PluginInfo, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	info, ok := m.infos[name]
+	return info, ok
+}
+
+// GetAllInfo returns info for all plugins.
+func (m *Manager) GetAllInfo() []plugin.PluginInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	infos := make([]plugin.PluginInfo, 0, len(m.infos))
+	for _, info := range m.infos {
+		infos = append(infos, info)
+	}
+	return infos
+}
+
+// Emit sends an event through the event bus.
+func (m *Manager) Emit(ctx context.Context, eventType string, data any) error {
+	return m.bus.Emit(ctx, eventType, data)
+}
+
+// InitAll calls Init on all registered plugins.
 func (m *Manager) InitAll(ctx context.Context) error {
 	m.mu.RLock()
-	order := append([]string(nil), m.startOrder...)
-	m.mu.RUnlock()
-	for _, name := range order {
-		m.mu.RLock()
-		p := m.plugins[name]
-		m.mu.RUnlock()
-		m.logger.Info("init", "name", name)
+	defer m.mu.RUnlock()
+	for name, p := range m.plugins {
 		if err := p.Init(ctx, m); err != nil {
-			m.mu.Lock()
-			m.info[name].Status = StatusError
-			m.info[name].Error = err.Error()
-			m.mu.Unlock()
+			m.infos[name] = plugin.PluginInfo{
+				Name:        name,
+				Description: p.Description(),
+				Status:      plugin.StatusError,
+			}
 			return fmt.Errorf("plugin %s init: %w", name, err)
 		}
 	}
 	return nil
 }
 
+// StartAll calls Start on all registered plugins.
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.RLock()
-	order := append([]string(nil), m.startOrder...)
-	m.mu.RUnlock()
-	for _, name := range order {
-		p := m.plugins[name]
-		m.logger.Info("start", "name", name)
+	defer m.mu.RUnlock()
+	for name, p := range m.plugins {
 		if err := p.Start(ctx); err != nil {
-			m.mu.Lock()
-			m.info[name].Status = StatusError
-			m.info[name].Error = err.Error()
-			m.mu.Unlock()
+			m.infos[name] = plugin.PluginInfo{
+				Name:        name,
+				Description: p.Description(),
+				Status:      plugin.StatusError,
+			}
 			return fmt.Errorf("plugin %s start: %w", name, err)
 		}
-		m.mu.Lock()
-		m.info[name].Status = StatusActive
-		m.mu.Unlock()
+		m.infos[name] = plugin.PluginInfo{
+			Name:        name,
+			Description: p.Description(),
+			Status:      plugin.StatusActive,
+		}
 	}
 	return nil
 }
 
+// StopAll calls Stop on all registered plugins.
 func (m *Manager) StopAll(ctx context.Context) error {
 	m.mu.RLock()
-	order := append([]string(nil), m.startOrder...)
-	m.mu.RUnlock()
-	for i := len(order) - 1; i >= 0; i-- {
-		name := order[i]
-		p := m.plugins[name]
-		m.logger.Info("stop", "name", name)
+	defer m.mu.RUnlock()
+	for name, p := range m.plugins {
 		if err := p.Stop(ctx); err != nil {
-			m.logger.Error("stop failed", "name", name, "error", err)
+			logger.NamedLogger("plugin").Error("plugin stop error", "name", name, "error", err)
 		}
-		m.commandReg.UnregisterPlugin(name)
-		m.mu.Lock()
-		m.info[name].Status = StatusInactive
-		m.mu.Unlock()
+		m.infos[name] = plugin.PluginInfo{
+			Name:        name,
+			Description: p.Description(),
+			Status:      plugin.StatusInactive,
+		}
 	}
 	return nil
-}
-
-func (m *Manager) GetPlugin(name string) (Plugin, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	p, ok := m.plugins[name]
-	return p, ok
-}
-
-func (m *Manager) GetInfo(name string) (*Info, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	i, ok := m.info[name]
-	return i, ok
-}
-
-func (m *Manager) GetAllInfo() []*Info {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	out := make([]*Info, 0, len(m.info))
-	for _, name := range m.startOrder {
-		if i, ok := m.info[name]; ok {
-			out = append(out, i)
-		}
-	}
-	return out
-}
-
-func (m *Manager) Bus() *eventbus.Bus             { return m.bus }
-func (m *Manager) Commands() *command.Registry     { return m.commandReg }
-func (m *Manager) RegisterCommand(cmd *interfaces.Command) error {
-	return m.commandReg.Register(cmd)
 }

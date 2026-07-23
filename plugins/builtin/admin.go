@@ -9,7 +9,7 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // AdminPlugin provides owner-only commands.
@@ -22,7 +22,7 @@ func NewAdmin() *AdminPlugin { return &AdminPlugin{startTime: time.Now()} }
 func (p *AdminPlugin) Name() string        { return "admin" }
 func (p *AdminPlugin) Description() string { return "管理员命令" }
 
-func (p *AdminPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *AdminPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*interfaces.Command{
 		{
 			Name:        "restart",
@@ -100,7 +100,7 @@ func NewCron(cronMgr *cron.Manager) *CronPlugin {
 func (p *CronPlugin) Name() string        { return "cron" }
 func (p *CronPlugin) Description() string { return "定时任务管理" }
 
-func (p *CronPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *CronPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "cron",
 		Aliases:     []string{"schedule"},

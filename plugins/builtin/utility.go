@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // RemindPlugin provides reminder functionality.
@@ -31,7 +31,7 @@ func NewRemind() *RemindPlugin {
 func (p *RemindPlugin) Name() string        { return "remind" }
 func (p *RemindPlugin) Description() string { return "定时提醒" }
 
-func (p *RemindPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *RemindPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "remind",
 		Aliases:     []string{"remindme"},
@@ -131,7 +131,7 @@ func NewNote() *NotePlugin {
 func (p *NotePlugin) Name() string        { return "note" }
 func (p *NotePlugin) Description() string { return "笔记管理" }
 
-func (p *NotePlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *NotePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "note",
 		Aliases:     []string{"n"},

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  papervalet:
+    image: ghcr.io/papervalet/papervalet:latest
+    container_name: papervalet
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - PAPERVALET_CONFIG=/app/config/config.json
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./plugins:/app/plugins:ro
+    healthcheck:
+      test: ["CMD", "papervalet", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # For development, uncomment below:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+
+networks:
+  default:
+    name: papervalet-network

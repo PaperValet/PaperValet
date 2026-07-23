@@ -6,7 +6,7 @@ import (
 	"math/rand"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // FunPlugin provides entertainment commands.
@@ -17,7 +17,7 @@ func NewFun() *FunPlugin { return &FunPlugin{} }
 func (p *FunPlugin) Name() string        { return "fun" }
 func (p *FunPlugin) Description() string { return "娱乐命令" }
 
-func (p *FunPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *FunPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*interfaces.Command{
 		{
 			Name:        "roll",

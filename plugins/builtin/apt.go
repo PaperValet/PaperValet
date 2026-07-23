@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // AptPlugin manages other plugins.
 type AptPlugin struct {
-	mgr *plugin.Manager
+	mgr plugin.Manager
 }
 
 func NewApt() *AptPlugin { return &AptPlugin{} }
@@ -19,7 +19,7 @@ func NewApt() *AptPlugin { return &AptPlugin{} }
 func (p *AptPlugin) Name() string        { return "apt" }
 func (p *AptPlugin) Description() string { return "插件管理器" }
 
-func (p *AptPlugin) Init(_ context.Context, mgr *plugin.Manager) error {
+func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	_ = mgr.RegisterCommand(&interfaces.Command{
 		Name:        "apt",

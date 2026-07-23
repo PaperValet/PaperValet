@@ -8,21 +8,20 @@ import (
 	goplugin "plugin"
 	"strings"
 
-	"github.com/TiaraBasori/PaperValet/internal/interfaces"
-	"github.com/TiaraBasori/PaperValet/internal/plugin"
+	pkgplugin "github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
 // Loader loads external plugins from .so files.
 type Loader struct {
 	dir     string
-	manager *plugin.Manager
+	manager pkgplugin.Manager
 	loaded  map[string]*LoadedPlugin
-	logger  interfaces.Logger
+	logger  pkgplugin.Logger
 }
 
 type LoadedPlugin struct {
-	Plugin   plugin.Plugin
+	Plugin   pkgplugin.Plugin
 	Handle   *goplugin.Plugin
 	Path     string
 	Metadata *PluginMetadata
@@ -37,7 +36,7 @@ type PluginMetadata struct {
 }
 
 // NewLoader creates a new plugin loader.
-func NewLoader(dir string, mgr *plugin.Manager) *Loader {
+func NewLoader(dir string, mgr pkgplugin.Manager) *Loader {
 	return &Loader{
 		dir:     dir,
 		manager: mgr,
@@ -98,7 +97,7 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 
 	instance := newFunc()
 
-	plug, ok := instance.(plugin.Plugin)
+	plug, ok := instance.(pkgplugin.Plugin)
 	if !ok {
 		return fmt.Errorf("plugin does not implement plugin.Plugin interface")
 	}
@@ -110,7 +109,7 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		}
 	}
 
-	if err := l.manager.Register(plug); err != nil {
+	if err := l.manager.RegisterPlugin(plug); err != nil {
 		return fmt.Errorf("register plugin: %w", err)
 	}
 

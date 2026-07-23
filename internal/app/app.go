@@ -14,12 +14,12 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
-	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
 	"github.com/TiaraBasori/PaperValet/internal/session"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	pkgplugin "github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/plugins/builtin"
 )
 
@@ -33,14 +33,14 @@ type App struct {
 	bus          *eventbus.Bus
 	commands     *command.Registry
 	parser       *command.Parser
-	plugins      *plugin.Manager
+	plugins      pkgplugin.Manager
 	pluginLoader *loader.Loader
 	sessions     *session.Manager
 	peers        *peer.Resolver
 	accessHash   *peer.AccessHashManager
 	updates      *UpdateHandler
 	cron         *cron.Manager
-	logger       interfaces.Logger
+	logger       pkgplugin.Logger
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -115,7 +115,7 @@ func New(cfg *config.Config) (*App, error) {
 }
 
 func (a *App) registerBuiltins() error {
-	for _, p := range []plugin.Plugin{
+	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
 		builtin.NewApt(),
 		builtin.NewPing(),
@@ -128,7 +128,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewAdmin(),
 		builtin.NewCron(a.cron),
 	} {
-		if err := a.plugins.Register(p); err != nil {
+		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err
 		}
 	}
