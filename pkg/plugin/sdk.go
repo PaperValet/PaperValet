@@ -74,6 +74,7 @@ type RegistryProvider interface {
 	GetAll() map[string]*Command
 	GetByPlugin(plugin string) map[string]*Command
 	GetPrefix() string
+	GetPrefixes() []string
 }
 
 // ============================================================
@@ -237,7 +238,7 @@ func (c *CommandContext) Context() context.Context {
 	return context.Background()
 }
 
-func (c *CommandContext) resolvePeer() (tg.InputPeerClass, error) {
+func (c *CommandContext) ResolvePeer() (tg.InputPeerClass, error) {
 	if c.Message == nil || c.PeerResolver == nil {
 		return nil, ErrNoMessage
 	}
@@ -248,7 +249,7 @@ func (c *CommandContext) Reply(text string) error {
 	if c.Message == nil || c.API == nil || c.Message.Message == nil {
 		return ErrNoMessage
 	}
-	peer, err := c.resolvePeer()
+	peer, err := c.ResolvePeer()
 	if err != nil {
 		return err
 	}
@@ -265,7 +266,7 @@ func (c *CommandContext) Edit(text string) error {
 	if c.Message == nil || c.API == nil || c.Message.Message == nil {
 		return ErrNoMessage
 	}
-	peer, err := c.resolvePeer()
+	peer, err := c.ResolvePeer()
 	if err != nil {
 		return err
 	}
@@ -292,7 +293,7 @@ func (c *CommandContext) Typing() error {
 	if c.Message == nil || c.API == nil {
 		return ErrNoMessage
 	}
-	peer, err := c.resolvePeer()
+	peer, err := c.ResolvePeer()
 	if err != nil {
 		return err
 	}

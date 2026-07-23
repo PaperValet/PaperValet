@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        plugin: [ping, help, admin, status, exec, bf, qrcode, re, sendlog]
+        plugin: [ping, help, admin, status, exec, bf, qrcode, re, sendlog, debug, alias, prefix, reload, sudo, leech, tpm]
         include:
           - plugin: ping
             path: plugins-external/ping
@@ -36,6 +36,20 @@ jobs:
             path: plugins-external/re
           - plugin: sendlog
             path: plugins-external/sendlog
+          - plugin: debug
+            path: plugins-external/debug
+          - plugin: alias
+            path: plugins-external/alias
+          - plugin: prefix
+            path: plugins-external/prefix
+          - plugin: reload
+            path: plugins-external/reload
+          - plugin: sudo
+            path: plugins-external/sudo
+          - plugin: leech
+            path: plugins-external/leech
+          - plugin: tpm
+            path: plugins-external/tpm
     steps:
       - uses: actions/checkout@v4
       

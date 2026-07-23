@@ -127,6 +127,15 @@ func (a *App) registerBuiltins() error {
 		builtin.NewFun(),
 		builtin.NewAdmin(),
 		builtin.NewCron(a.cron),
+		builtin.NewAlias(),
+		builtin.NewDebug(),
+		builtin.NewExec(),
+		builtin.NewSudo(),
+		builtin.NewLog(),
+		builtin.NewReload(a.pluginLoader),
+		builtin.NewPrefix(),
+		builtin.NewHelp(),
+		builtin.NewStatus(Version),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err

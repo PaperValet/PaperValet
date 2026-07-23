@@ -137,6 +137,8 @@ func (r *Registry) GetByPlugin(plugin string) map[string]*interfaces.Command {
 
 func (r *Registry) GetPrefix() string { return r.prefix }
 
+func (r *Registry) GetPrefixes() []string { return []string{r.prefix} }
+
 func (r *Registry) SetPrefix(prefix string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
