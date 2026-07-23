@@ -71,7 +71,7 @@ func (p *AliasPlugin) save() {
 }
 
 func (p *AliasPlugin) handleAlias(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return p.listAliases(ctx)
 	}

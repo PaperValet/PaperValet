@@ -41,7 +41,7 @@ func (p *ReloadPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *ReloadPlugin) handleReload(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit("用法: reload <插件名|all|list>")
 	}

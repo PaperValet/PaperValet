@@ -44,7 +44,7 @@ func (p *QRCodePlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *QRCodePlugin) handleQRCode(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit("用法: qrcode <内容> [大小]\n示例: qrcode https://github.com 256")
 	}

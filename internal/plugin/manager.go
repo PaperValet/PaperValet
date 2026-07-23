@@ -68,6 +68,76 @@ func (m *Manager) UnregisterPlugin(name string) {
 	m.mu.Unlock()
 }
 
+// InitPlugin initializes a single registered plugin.
+func (m *Manager) InitPlugin(ctx context.Context, name string) error {
+	m.mu.RLock()
+	p, ok := m.plugins[name]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", name)
+	}
+	if err := p.Init(ctx, m); err != nil {
+		m.mu.Lock()
+		m.infos[name] = plugin.PluginInfo{
+			Name:        name,
+			Description: p.Description(),
+			Status:      plugin.StatusError,
+		}
+		m.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+// StartPlugin starts a single plugin.
+func (m *Manager) StartPlugin(ctx context.Context, name string) error {
+	m.mu.RLock()
+	p, ok := m.plugins[name]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", name)
+	}
+	if err := p.Start(ctx); err != nil {
+		m.mu.Lock()
+		m.infos[name] = plugin.PluginInfo{
+			Name:        name,
+			Description: p.Description(),
+			Status:      plugin.StatusError,
+		}
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Lock()
+	m.infos[name] = plugin.PluginInfo{
+		Name:        name,
+		Description: p.Description(),
+		Status:      plugin.StatusActive,
+	}
+	m.mu.Unlock()
+	return nil
+}
+
+// StopPlugin stops a single plugin.
+func (m *Manager) StopPlugin(ctx context.Context, name string) error {
+	m.mu.RLock()
+	p, ok := m.plugins[name]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", name)
+	}
+	if err := p.Stop(ctx); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.infos[name] = plugin.PluginInfo{
+		Name:        name,
+		Description: p.Description(),
+		Status:      plugin.StatusInactive,
+	}
+	m.mu.Unlock()
+	return nil
+}
+
 // Commands returns the registry provider.
 func (m *Manager) Commands() plugin.RegistryProvider {
 	return m.commands

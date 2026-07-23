@@ -117,7 +117,7 @@ func New(cfg *config.Config) (*App, error) {
 func (a *App) registerBuiltins() error {
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
-		builtin.NewApt(),
+		builtin.NewPPM(a.pluginLoader),
 		builtin.NewPing(),
 		builtin.NewUptime(),
 		builtin.NewInfo(),
@@ -136,6 +136,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
+		builtin.NewBF(),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err

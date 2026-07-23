@@ -56,7 +56,7 @@ func (p *LeechPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *LeechPlugin) handleLeech(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit(`📥 <b>Leech 下载工具</b>
 

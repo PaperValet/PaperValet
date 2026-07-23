@@ -56,7 +56,7 @@ func (p *HelpPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *HelpPlugin) handleHelp(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	prefix := ctx.Prefix()
 
 	if len(args) == 0 {

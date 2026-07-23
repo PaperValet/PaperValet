@@ -57,7 +57,7 @@ func (p *SudoPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *SudoPlugin) handleSudo(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit("用法: sudo <命令> [参数...]")
 	}
@@ -78,7 +78,7 @@ func (p *SudoPlugin) handleSudo(ctx *plugin.CommandContext) error {
 }
 
 func (p *SudoPlugin) handleSu(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) < 2 {
 		return ctx.Edit("用法: su <用户ID> <命令>")
 	}

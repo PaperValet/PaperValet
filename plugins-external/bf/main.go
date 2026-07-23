@@ -37,7 +37,7 @@ func (p *BFPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *BFPlugin) handleBF(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit(`🧠 <b>Brainfuck解释器</b>
 

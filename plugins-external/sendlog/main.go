@@ -40,7 +40,7 @@ func (p *SendLogPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *SendLogPlugin) handleSendLog(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	lines := 100
 	if len(args) > 0 {
 		if n, err := strconv.Atoi(args[0]); err == nil && n > 0 && n <= 1000 {

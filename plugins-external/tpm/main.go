@@ -48,7 +48,7 @@ func (p *TPMPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *TPMPlugin) handleTPM(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return p.showHelp(ctx)
 	}

@@ -41,7 +41,7 @@ func (p *ExecPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *ExecPlugin) handleExec(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit("用法: exec <命令> [参数...]")
 	}

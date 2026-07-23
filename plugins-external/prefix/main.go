@@ -42,7 +42,7 @@ func (p *PrefixPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *PrefixPlugin) handlePrefix(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit(fmt.Sprintf("当前前缀: <code>%s</code>\n\n用法: prefix [get|set|add|del|list] [前缀]", p.manager.Commands().GetPrefix()))
 	}

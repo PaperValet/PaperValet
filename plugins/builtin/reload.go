@@ -28,7 +28,7 @@ func (p *ReloadPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "reload",
 		Aliases:     []string{"rl"},
-		Description: "重载外部插件",
+		Description: "重载外部插件（别名: rl）",
 		Usage:       "reload <插件名|all|list>",
 		Plugin:      p.Name(),
 		Category:    "admin",
@@ -72,7 +72,7 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 				results = append(results, fmt.Sprintf("❌ %s 卸载失败: %v", name, err))
 				continue
 			}
-			if err := p.loader.Load(ctx.Context(), name); err != nil {
+			if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
 				results = append(results, fmt.Sprintf("❌ %s 重载失败: %v", name, err))
 			} else {
 				results = append(results, fmt.Sprintf("✅ %s", name))
@@ -82,15 +82,12 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 
 	default:
 		// Reload single plugin
-		if err := p.loader.Unload(ctx.Context(), target); err != nil {
-			// Not loaded, try to load directly
-			if err := p.loader.Load(ctx.Context(), target); err != nil {
-				return ctx.Edit(fmt.Sprintf("❌ 加载失败: %v", err))
+		if p.loader.IsLoaded(target) {
+			if err := p.loader.Unload(ctx.Context(), target); err != nil {
+				return ctx.Edit(fmt.Sprintf("❌ 卸载失败: %v", err))
 			}
-			return ctx.Edit(fmt.Sprintf("✅ 已加载: %s", target))
 		}
-
-		if err := p.loader.Load(ctx.Context(), target); err != nil {
+		if err := p.loader.LoadByName(ctx.Context(), target); err != nil {
 			return ctx.Edit(fmt.Sprintf("❌ 重载失败: %v", err))
 		}
 		return ctx.Edit(fmt.Sprintf("🔄 已重载: %s", target))

@@ -235,11 +235,11 @@ func (p *DebugPlugin) handleMemStats(ctx *interfaces.CommandContext) error {
 	}
 
 	for _, f := range fields {
-		b.WriteString(fmt.Sprintf("%s: %s\n", f.name, formatBytes(f.val)))
+		b.WriteString(fmt.Sprintf("%s: %s\n", f.name, formatBytesUint64(f.val)))
 	}
 
 	b.WriteString(fmt.Sprintf("LastGC: %s\n", time.Unix(0, int64(mem.LastGC)).Format("15:04:05")))
-	b.WriteString(fmt.Sprintf("PauseTotalNs: %s\n", formatDuration(mem.PauseTotalNs)))
+	b.WriteString(fmt.Sprintf("PauseTotalNs: %s\n", formatDurationNs(mem.PauseTotalNs)))
 	b.WriteString(fmt.Sprintf("NumGC: %d\n", mem.NumGC))
 	b.WriteString(fmt.Sprintf("NumForcedGC: %d\n", mem.NumForcedGC))
 	b.WriteString(fmt.Sprintf("GCCPUFraction: %.4f%%\n", mem.GCCPUFraction*100))
@@ -247,7 +247,7 @@ func (p *DebugPlugin) handleMemStats(ctx *interfaces.CommandContext) error {
 	return ctx.Edit(b.String())
 }
 
-func formatBytes(b uint64) string {
+func formatBytesUint64(b uint64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
@@ -260,7 +260,7 @@ func formatBytes(b uint64) string {
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func formatDuration(ns uint64) string {
+func formatDurationNs(ns uint64) string {
 	ms := float64(ns) / 1e6
 	if ms < 1000 {
 		return fmt.Sprintf("%.2f ms", ms)

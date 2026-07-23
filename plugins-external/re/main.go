@@ -48,7 +48,7 @@ func (p *RePlugin) handleRe(ctx *plugin.CommandContext) error {
 		return ctx.Edit("❌ 你必须回复一条消息才能复读")
 	}
 
-	args := ctx.Args()
+	args := ctx.Args
 	count := 1
 	repeat := 1
 

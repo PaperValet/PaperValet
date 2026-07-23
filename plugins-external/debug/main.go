@@ -114,7 +114,7 @@ func (p *DebugPlugin) handleStack(ctx *plugin.CommandContext) error {
 }
 
 func (p *DebugPlugin) handleProfile(ctx *plugin.CommandContext) error {
-	args := ctx.Args()
+	args := ctx.Args
 	if len(args) == 0 {
 		return ctx.Edit("用法: profile <cpu|mem|block|mutex> [秒]")
 	}
