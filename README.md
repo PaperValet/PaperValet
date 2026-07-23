@@ -1,5 +1,7 @@
 # PaperValet
 
+**English** | [中文](README_zh.md)
+
 A production-grade Telegram Userbot built with [gotd/td](https://github.com/gotd/td).
 
 Clean, modular architecture — no "TeleBox legacy" spaghetti.
@@ -29,19 +31,29 @@ Clean, modular architecture — no "TeleBox legacy" spaghetti.
 
 ## Quick Start
 
+### 1. Clone & build
+
 ```bash
-# 1. Clone & build
 git clone https://github.com/TiaraBasori/PaperValet
 cd PaperValet
 go build -o papervalet ./cmd/papervalet
+```
 
-# 2. Configure
+### 2. Configure
+
+```bash
 cp config.example.json config.json
-# Edit config.json with your api_id/api_hash from my.telegram.org
+```
 
-# 3. Run (first run: interactive login)
+Edit `config.json` with your `api_id` / `api_hash` from [my.telegram.org](https://my.telegram.org).
+
+### 3. Run
+
+```bash
 ./papervalet -config config.json
 ```
+
+First run uses interactive login (phone, code, 2FA if enabled).
 
 ## Configuration
 
@@ -75,53 +87,76 @@ cp config.example.json config.json
 
 ## Usage
 
-```bash
-# Run with config
-./papervalet -config config.json
+### Run with config
 
-# Or default config.json in cwd
+```bash
+./papervalet -config config.json
+```
+
+### Run with default config.json in cwd
+
+```bash
 ./papervalet
 ```
 
 First run: enter phone (+86...), then code, then 2FA password if enabled.
 
-Commands (prefix `.`):
-```
-.help           # List all commands
-.help <cmd>     # Command detail
-.status         # Bot status
-.ping           # Latency check
-.uptime         # Uptime + memory
-.info           # Chat/user IDs
-.apt list       # List plugins
-.remind 5m drink water
-.cron add daily 0 0 9 * * * .status
-.note set todo "Buy milk"
-.roll 20
-.coin
-.choose pizza burger sushi
-.8ball Will it rain?
-.fact
-```
+### Commands
+
+Prefix is `.` by default.
+
+| Command | Description |
+|---------|-------------|
+| `.help` | List all commands |
+| `.help <cmd>` | Command detail |
+| `.status` | Bot status |
+| `.ping` | Latency check |
+| `.uptime` | Uptime + memory |
+| `.info` | Chat/user IDs |
+| `.apt list` | List plugins |
+| `.remind 5m drink water` | Set a reminder |
+| `.cron add daily 0 0 9 * * * .status` | Scheduled task |
+| `.note set todo "Buy milk"` | Personal note |
+| `.roll 20` | Dice roll |
+| `.coin` | Coin flip |
+| `.choose pizza burger sushi` | Random choice |
+| `.8ball Will it rain?` | Magic 8-ball |
+| `.fact` | Random fact |
 
 ## Architecture
 
 ```
-cmd/papervalet/main.go          # Entry point
+cmd/papervalet/main.go
 internal/
-  app/                          # App orchestrator + auth + update handler
-  command/                      # Parser, registry, middleware
-  config/                       # JSON config with defaults
-  core/                         # Types: MessageEvent, CommandContext, interfaces
-  cron/                         # Scheduled jobs (robfig/cron)
-  eventbus/                     # Priority pub/sub
-  media/                        # Download/upload helpers
-  peer/                         # AccessHashManager + Resolver
-  plugin/                       # Manager + Plugin interface
-  session/                      # SQLite session store
-plugins/builtin/                # Compiled-in plugins
-pkg/logger/                     # Zap wrapper
+  app/
+  command/
+  config/
+  core/
+  cron/
+  eventbus/
+  media/
+  peer/
+  plugin/
+  session/
+plugins/builtin/
+pkg/logger/
 ```
+
+| Path | Role |
+|------|------|
+| `cmd/papervalet/main.go` | Entry point |
+| `internal/app/` | App orchestrator + auth + update handler |
+| `internal/command/` | Parser, registry, middleware |
+| `internal/config/` | JSON config with defaults |
+| `internal/core/` | Types: MessageEvent, CommandContext, interfaces |
+| `internal/cron/` | Scheduled jobs (robfig/cron) |
+| `internal/eventbus/` | Priority pub/sub |
+| `internal/media/` | Download/upload helpers |
+| `internal/peer/` | AccessHashManager + Resolver |
+| `internal/plugin/` | Manager + Plugin interface |
+| `internal/session/` | SQLite session store |
+| `plugins/builtin/` | Compiled-in plugins |
+| `pkg/logger/` | Zap wrapper |
 
 ### Key Design Decisions
 
@@ -135,25 +170,36 @@ pkg/logger/                     # Zap wrapper
 
 ## Development
 
+### Add dependency
+
 ```bash
-# Add dependency
 go get github.com/some/pkg
+```
 
-# Build
+### Build
+
+```bash
 go build -o papervalet ./cmd/papervalet
+```
 
-# Run tests
+### Run tests
+
+```bash
 go test ./...
+```
 
-# Lint
+### Lint
+
+```bash
 go vet ./...
 golangci-lint run
 ```
 
 ### Adding a Plugin
 
+Create `plugins/myplugin/myplugin.go`:
+
 ```go
-// plugins/myplugin/myplugin.go
 package myplugin
 
 import (
@@ -183,13 +229,16 @@ func (p *MyPlugin) hello(ctx *core.CommandContext) error {
 ```
 
 Register in `internal/app/app.go`:
+
 ```go
 import _ "github.com/TiaraBasori/PaperValet/plugins/myplugin"
 ```
 
-## External Plugins (Planned)
+## External Plugins
 
-The `plugins` directory will support loading `.so` plugins dynamically.
+The `plugins` directory supports loading external `.so` plugins dynamically. See the [Plugin SDK](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md).
+
+Example TeleBox-style plugins live under `plugins-external/` (e.g. `ping`, `help`, `tpm`, `alias`, `sudo`).
 
 ## License
 
