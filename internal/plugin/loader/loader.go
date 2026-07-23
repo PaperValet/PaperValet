@@ -90,15 +90,26 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		return fmt.Errorf("plugin missing New function: %w", err)
 	}
 
-	newFunc, ok := newSymbol.(func() interface{})
-	if !ok {
+	var instance interface{}
+	var plug pkgplugin.Plugin
+
+	// Try New() (plugin.Plugin, error) signature first
+	if newFunc, ok := newSymbol.(func() (pkgplugin.Plugin, error)); ok {
+		var err error
+		instance, err = newFunc()
+		if err != nil {
+			return fmt.Errorf("plugin New failed: %w", err)
+		}
+		plug, _ = instance.(pkgplugin.Plugin)
+	} else if newFunc, ok := newSymbol.(func() interface{}); ok {
+		// Fallback to New() interface{} signature
+		instance = newFunc()
+		plug, _ = instance.(pkgplugin.Plugin)
+	} else {
 		return fmt.Errorf("New symbol has wrong type")
 	}
 
-	instance := newFunc()
-
-	plug, ok := instance.(pkgplugin.Plugin)
-	if !ok {
+	if plug == nil {
 		return fmt.Errorf("plugin does not implement plugin.Plugin interface")
 	}
 
