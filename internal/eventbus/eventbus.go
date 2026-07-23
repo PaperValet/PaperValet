@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -16,6 +17,9 @@ const (
 	EventStart     = "start"
 	EventError     = "error"
 )
+
+// ErrHandlerTimeout is returned when a handler exceeds its execution deadline.
+var ErrHandlerTimeout = errors.New("eventbus: handler timed out")
 
 type Event struct {
 	Type      string
@@ -40,6 +44,7 @@ type Bus struct {
 	subscribers map[string][]*Subscription
 	shutdownCh  chan struct{}
 	once        sync.Once
+	wg          sync.WaitGroup // tracks active async emissions
 	logger      interfaces.Logger
 }
 
@@ -122,6 +127,7 @@ func (b *Bus) emitEvent(ctx context.Context, event *Event) error {
 	b.mu.RUnlock()
 
 	for _, sub := range subs {
+		// Respect shutdown and caller context before each handler
 		select {
 		case <-b.shutdownCh:
 			return context.Canceled
@@ -129,10 +135,16 @@ func (b *Bus) emitEvent(ctx context.Context, event *Event) error {
 			return ctx.Err()
 		default:
 		}
+
 		if sub.filter != nil && !sub.filter(event) {
 			continue
 		}
-		if err := sub.handler(ctx, event); err != nil {
+
+		// Run each handler with a per-handler timeout (30s) derived from the parent ctx
+		handlerCtx, cancel := context.WithTimeoutCause(ctx, 30*time.Second, ErrHandlerTimeout)
+		err := sub.handler(handlerCtx, event)
+		cancel()
+		if err != nil {
 			b.logger.Error("handler failed", "type", event.Type, "error", err)
 		}
 	}
@@ -140,7 +152,14 @@ func (b *Bus) emitEvent(ctx context.Context, event *Event) error {
 }
 
 func (b *Bus) EmitAsync(ctx context.Context, eventType string, data any) {
+	b.wg.Add(1)
 	go func() {
+		defer b.wg.Done()
+		defer func() {
+			if rec := recover(); rec != nil {
+				b.logger.Error("async emit panic", "type", eventType, "panic", rec)
+			}
+		}()
 		_ = b.Emit(ctx, eventType, data)
 	}()
 }
@@ -148,10 +167,24 @@ func (b *Bus) EmitAsync(ctx context.Context, eventType string, data any) {
 func (b *Bus) Shutdown(ctx context.Context) error {
 	b.once.Do(func() {
 		close(b.shutdownCh)
-		b.mu.Lock()
-		b.subscribers = make(map[string][]*Subscription)
-		b.mu.Unlock()
 	})
+
+	// Wait for all async emissions to complete (with timeout)
+	done := make(chan struct{})
+	go func() {
+		b.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	b.mu.Lock()
+	b.subscribers = make(map[string][]*Subscription)
+	b.mu.Unlock()
 	return nil
 }
 

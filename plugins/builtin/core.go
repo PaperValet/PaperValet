@@ -12,7 +12,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// CorePlugin provides core system commands: help, status, restart, shutdown, gc, version.
+// CorePlugin provides .help and .status.
 type CorePlugin struct {
 	mgr       plugin.Manager
 	startTime time.Time
@@ -24,68 +24,27 @@ func NewCore(version string) *CorePlugin {
 }
 
 func (p *CorePlugin) Name() string        { return "core" }
-func (p *CorePlugin) Description() string { return "核心系统命令" }
+func (p *CorePlugin) Description() string { return "核心命令：help / status" }
 
 func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
-
-	cmds := []*interfaces.Command{
-		{
-			Name:        "help",
-			Aliases:     []string{"h", "?"},
-			Description: "显示帮助",
-			Usage:       "help [命令|插件]",
-			Plugin:      p.Name(),
-			Category:    "core",
-			Handler:     p.handleHelp,
-		},
-		{
-			Name:        "status",
-			Aliases:     []string{"stat", "st"},
-			Description: "显示运行状态",
-			Plugin:      p.Name(),
-			Category:    "core",
-			Handler:     p.handleStatus,
-		},
-		{
-			Name:        "restart",
-			Description: "重启机器人 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleRestart,
-		},
-		{
-			Name:        "shutdown",
-			Description: "关闭机器人 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleShutdown,
-		},
-		{
-			Name:        "gc",
-			Description: "强制 GC (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleGC,
-		},
-		{
-			Name:        "version",
-			Description: "显示版本信息 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleVersion,
-		},
-	}
-
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
+	_ = mgr.RegisterCommand(&interfaces.Command{
+		Name:        "help",
+		Aliases:     []string{"h", "?"},
+		Description: "显示帮助",
+		Usage:       "help [命令|插件]",
+		Plugin:      p.Name(),
+		Category:    "core",
+		Handler:     p.handleHelp,
+	})
+	_ = mgr.RegisterCommand(&interfaces.Command{
+		Name:        "status",
+		Aliases:     []string{"stat"},
+		Description: "显示运行状态",
+		Plugin:      p.Name(),
+		Category:    "core",
+		Handler:     p.handleStatus,
+	})
 	return nil
 }
 
@@ -97,7 +56,6 @@ func (p *CorePlugin) handleHelp(ctx *interfaces.CommandContext) error {
 	arg := ctx.GetArg(0)
 	if arg == "" {
 		cmds := p.mgr.Commands().GetAll()
-
 		names := make([]string, 0, len(cmds))
 		for name, cmd := range cmds {
 			if !cmd.Hidden {
@@ -141,7 +99,6 @@ func (p *CorePlugin) handleHelp(ctx *interfaces.CommandContext) error {
 
 func (p *CorePlugin) handleStatus(ctx *interfaces.CommandContext) error {
 	var mem runtime.MemStats
-
 	runtime.ReadMemStats(&mem)
 	infos := p.mgr.GetAllInfo()
 	active := 0
@@ -160,24 +117,4 @@ func (p *CorePlugin) handleStatus(ctx *interfaces.CommandContext) error {
 		float64(mem.Alloc)/1024/1024,
 	)
 	return ctx.Edit(text)
-}
-
-func (p *CorePlugin) handleRestart(ctx *interfaces.CommandContext) error {
-	return ctx.Edit("🔄 重启功能需要外部进程管理器 (systemd/PM2) 支持")
-}
-
-func (p *CorePlugin) handleShutdown(ctx *interfaces.CommandContext) error {
-	return ctx.Edit("🛑 关闭功能需要外部进程管理器支持")
-}
-
-func (p *CorePlugin) handleGC(ctx *interfaces.CommandContext) error {
-	var mem runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&mem)
-	return ctx.Edit(fmt.Sprintf("🗑 GC 完成\n内存: %.1f MB", float64(mem.Alloc)/1024/1024))
-}
-
-func (p *CorePlugin) handleVersion(ctx *interfaces.CommandContext) error {
-	uptime := time.Since(p.startTime).Truncate(time.Second)
-	return ctx.Edit(fmt.Sprintf("PaperValet %s\n运行时间: %s", p.version, uptime))
 }

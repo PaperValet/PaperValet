@@ -117,9 +117,15 @@ func New(cfg *config.Config) (*App, error) {
 func (a *App) registerBuiltins() error {
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
-		builtin.NewPPM(a.pluginLoader, a.cfg.Bot.PluginsDir),
-		builtin.NewTools(),
+		builtin.NewApt(),
+		builtin.NewPing(),
+		builtin.NewUptime(),
+		builtin.NewInfo(),
+		builtin.NewForward(),
+		builtin.NewRemind(),
+		builtin.NewNote(),
 		builtin.NewFun(),
+		builtin.NewAdmin(),
 		builtin.NewCron(a.cron),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
@@ -149,9 +155,10 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		a.updates.SetSelfUserID(self.ID)
 		if a.cfg.Bot.OwnerID == 0 {
-			a.cfg.Bot.OwnerID = self.ID
-		}
-		a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
+				a.cfg.Bot.OwnerID = self.ID
+			}
+			a.commands.SetOwnerID(a.cfg.Bot.OwnerID)
+a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 
 		if err := a.plugins.InitAll(ctx); err != nil {
 			return fmt.Errorf("plugin init: %w", err)

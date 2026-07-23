@@ -18,6 +18,7 @@ type Job struct {
 	Fn       func(ctx context.Context)
 	NextRun  time.Time
 	LastRun  time.Time
+	entryID  cron.EntryID // internal cron entry ID for removal
 }
 
 // Manager handles scheduled jobs using robfig/cron.
@@ -59,7 +60,7 @@ func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) er
 	}
 	m.jobs[name] = job
 
-	_, err := m.cron.AddFunc(schedule, func() {
+	eid, err := m.cron.AddFunc(schedule, func() {
 		m.mu.Lock()
 		job.LastRun = time.Now()
 		// Calculate next run
@@ -83,6 +84,7 @@ func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) er
 		return fmt.Errorf("add job %s: %w", name, err)
 	}
 
+	job.entryID = eid
 	m.logger.Info("job added", "name", name, "schedule", schedule)
 	return nil
 }
@@ -92,12 +94,12 @@ func (m *Manager) RemoveJob(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.jobs[name]; !exists {
+	job, exists := m.jobs[name]
+	if !exists {
 		return fmt.Errorf("job %s not found", name)
 	}
 
-	// Note: robfig/cron doesn't support removal by name easily
-	// Would need to track entry IDs
+	m.cron.Remove(job.entryID)
 	delete(m.jobs, name)
 	m.logger.Info("job removed", "name", name)
 	return nil

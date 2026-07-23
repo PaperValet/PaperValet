@@ -2,19 +2,19 @@
 
 [English](README.md) | **中文**
 
-基于 [gotd/td](https://github.com/gotd/td) 构建的生产级 Telegram Userbot。
+基于 [gotd/td](https://github.com/gotd/td) 构建的生产级 Telegram 用户机器人。
 
-架构清晰、模块化 —— 没有「TeleBox 遗留」意大利面代码。
+架构清晰、模块化 —— 告别 TeleBox 式的混乱代码。
 
 ## 功能特性
 
 - **现代 gotd/td 技术栈** — 纯 Go MTProto，无需 CGO
-- **插件系统** — 支持热加载、类型化指令与中间件
-- **事件总线** — 基于优先级的发布/订阅
-- **Peer 解析** — Access Hash 缓存 + 回退链
+- **插件系统** — 热加载、强类型指令与中间件
+- **事件总线** — 带优先级的发布订阅
+- **账号解析** — Access Hash 缓存 + 多级回退
 - **会话管理** — SQLite + 内存缓存
-- **结构化日志** — 基于 Zap，支持控制台 / JSON 输出
-- **终端鉴权** — 交互式登录（手机号、验证码、二步验证）
+- **结构化日志** — 基于 Zap，支持控制台和 JSON 输出
+- **终端鉴权** — 交互式登录（手机号、验证码、两步验证）
 
 ## 内置插件
 
@@ -23,7 +23,7 @@
 | `core` | `.help`、`.status` | 机器人核心管理 |
 | `apt` | `.apt list/enable/disable` | 插件管理器 |
 | `tools` | `.ping`、`.uptime`、`.info`、`.fwd` | 实用工具指令 |
-| `remind` | `.remind` | 提醒（内存） |
+| `remind` | `.remind` | 提醒功能（仅内存） |
 | `cron` | `.cron` | 定时任务 |
 | `note` | `.note` | 个人笔记 |
 | `fun` | `.roll`、`.coin`、`.choose`、`.8ball`、`.fact` | 娱乐指令 |
@@ -53,7 +53,7 @@ cp config.example.json config.json
 ./papervalet -config config.json
 ```
 
-首次运行会进入交互式登录（手机号、验证码、若开启则还需二步验证密码）。
+首次运行会进入交互式登录（依次填写手机号、验证码、以及两步验证密码）。
 
 ## 配置说明
 
@@ -80,10 +80,10 @@ cp config.example.json config.json
 ```
 
 - `api_id` / `api_hash` — 从 https://my.telegram.org 获取
-- `command_prefix` — 指令前缀（默认：`.`）
-- `owner_id` — 所有者 Telegram 用户 ID（仅所有者指令可用；`0` = 首次登录用户）
-- `logger.level` — DEBUG、INFO、WARN、ERROR
-- `logger.format` — `console`（彩色）或 `json`
+- `command_prefix` — 指令前缀（默认为 `.`）
+- `owner_id` — 所有者的用户 ID（仅所有者指令需要；设为 `0` 则自动以首个登录用户为所有者）
+- `logger.level` — 日志级别：DEBUG、INFO、WARN、ERROR
+- `logger.format` — 输出格式：`console`（彩色）或 `json`
 
 ## 使用方式
 
@@ -99,7 +99,7 @@ cp config.example.json config.json
 ./papervalet
 ```
 
-首次运行：输入手机号（+86...），再输入验证码，若开启了二步验证则输入密码。
+首次运行：输入手机号（格式如 +86...），然后输入验证码，若开启了两步验证还需输入密码。
 
 ### 指令
 
@@ -111,8 +111,8 @@ cp config.example.json config.json
 | `.help <cmd>` | 指令详情 |
 | `.status` | 机器人状态 |
 | `.ping` | 延迟检测 |
-| `.uptime` | 运行时长 + 内存 |
-| `.info` | 会话/用户 ID |
+| `.uptime` | 运行时长和内存 |
+| `.info` | 对话和用户 ID |
 | `.apt list` | 列出插件 |
 | `.remind 5m 喝水` | 设置提醒 |
 | `.cron add daily 0 0 9 * * * .status` | 定时任务 |
@@ -148,25 +148,25 @@ pkg/logger/
 | `internal/app/` | 应用编排 + 鉴权 + 更新处理 |
 | `internal/command/` | 解析器、注册表、中间件 |
 | `internal/config/` | JSON 配置与默认值 |
-| `internal/core/` | 类型：MessageEvent、CommandContext、接口 |
-| `internal/cron/` | 定时任务（robfig/cron） |
-| `internal/eventbus/` | 优先级发布/订阅 |
-| `internal/media/` | 下载/上传辅助 |
-| `internal/peer/` | AccessHashManager + Resolver |
-| `internal/plugin/` | Manager + Plugin 接口 |
+| `internal/core/` | 核心类型定义 |
+| `internal/cron/` | 定时任务（基于 robfig/cron） |
+| `internal/eventbus/` | 带优先级的事件总线 |
+| `internal/media/` | 文件下载与上传 |
+| `internal/peer/` | AccessHash 管理器与解析器 |
+| `internal/plugin/` | 插件管理器与接口定义 |
 | `internal/session/` | SQLite 会话存储 |
-| `plugins/builtin/` | 内置编译插件 |
-| `pkg/logger/` | Zap 封装 |
+| `plugins/builtin/` | 内置插件（编译进主程序） |
+| `pkg/logger/` | Zap 日志封装 |
 
 ### 关键设计决策
 
 | 关注点 | 方案 |
 |--------|------|
-| 指令 | 类型化 `CommandContext`，提供 `Reply` / `Edit` / `Delete` 辅助方法 |
-| 插件 | 最小接口：`Init/Start/Stop` + `RegisterCommand` |
-| 事件 | 带优先级、过滤器、异步发射的 `EventBus` |
-| Peer | 缓存优先 `AccessHashManager` → API → ID 模式回退 |
-| 会话 | SQLite（WAL）+ 内存 LRU，TTL 清理 |
+| 指令 | 强类型 `CommandContext`，内置 `Reply`/`Edit`/`Delete` 等便捷方法 |
+| 插件 | 精简接口：`Init/Start/Stop` + `RegisterCommand` |
+| 事件 | 带优先级、过滤器和异步发送的 `EventBus` |
+| 账号解析 | 缓存优先 `AccessHashManager` → API 查询 → ID 模式回退 |
+| 会话 | SQLite（WAL 模式）+ 内存 LRU 缓存，自动 TTL 清理 |
 
 ## 开发
 
@@ -188,7 +188,7 @@ go build -o papervalet ./cmd/papervalet
 go test ./...
 ```
 
-### 静态检查
+### 代码检查
 
 ```bash
 go vet ./...
@@ -236,9 +236,9 @@ import _ "github.com/TiaraBasori/PaperValet/plugins/myplugin"
 
 ## 外部插件
 
-项目支持通过 `plugins` 目录动态加载外部 `.so` 插件。完整说明见 [插件 SDK 文档](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md)。
+项目支持通过 `plugins` 目录动态加载外部 `.so` 插件。详见 [插件 SDK 文档](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md)。
 
-`plugins-external/` 目录中提供了多个 TeleBox 风格外部插件示例（如 `ping`、`help`、`tpm`、`alias`、`sudo` 等）。
+`plugins-external/` 目录提供了多个 TeleBox 风格的外部插件示例（包括 `ping`、`help`、`tpm`、`alias`、`sudo` 等）。
 
 ## 许可证
 

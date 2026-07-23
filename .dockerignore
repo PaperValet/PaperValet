@@ -1,0 +1,32 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Documentation
+docs/
+README*.md
+
+# Binary (built in multi-stage build)
+papervalet
+papervalet*
+
+# Build artifacts
+build/
+tmp/
+dist/
+
+# Source-level config files (prod config mounted as volume)
+config.json
+config.example.json
+
+# Plugin source (not needed for core image)
+plugins-external/
+examples/
+
+# OS metadata
+.DS_Store
+Thumbs.db

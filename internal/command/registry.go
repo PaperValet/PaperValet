@@ -42,7 +42,15 @@ func NewRegistry(prefix string, emitter interfaces.Emitter, api *tg.Client, reso
 	r.Use(r.recoveryMiddleware)
 	r.Use(r.loggingMiddleware)
 	r.Use(r.rateLimitMiddleware)
+	go r.rateLimitCleanup()
 	return r
+}
+
+// SetOwnerID updates the owner ID after initial resolution.
+func (r *Registry) SetOwnerID(id int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ownerID = id
 }
 
 func (r *Registry) Use(mw interfaces.Middleware) {
@@ -228,5 +236,22 @@ func (r *Registry) rateLimitMiddleware(next interfaces.Handler) interfaces.Handl
 		r.rateLimits[key] = time.Now()
 		r.mu.Unlock()
 		return next(ctx)
+	}
+}
+
+// rateLimitCleanup periodically removes stale rate limit entries to prevent
+// unbounded map growth. Runs until the context is done.
+func (r *Registry) rateLimitCleanup() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		r.mu.Lock()
+		now := time.Now()
+		for key, last := range r.rateLimits {
+			if now.Sub(last) > 10*time.Minute {
+				delete(r.rateLimits, key)
+			}
+		}
+		r.mu.Unlock()
 	}
 }

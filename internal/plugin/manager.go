@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
@@ -96,10 +97,12 @@ func (m *Manager) Emit(ctx context.Context, eventType string, data any) error {
 	return m.bus.Emit(ctx, eventType, data)
 }
 
-// InitAll calls Init on all registered plugins.
+// InitAll calls Init on all registered plugins. Collects errors from all
+// plugins instead of aborting on the first failure.
 func (m *Manager) InitAll(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	var errs []string
 	for name, p := range m.plugins {
 		if err := p.Init(ctx, m); err != nil {
 			m.infos[name] = plugin.PluginInfo{
@@ -107,16 +110,22 @@ func (m *Manager) InitAll(ctx context.Context) error {
 				Description: p.Description(),
 				Status:      plugin.StatusError,
 			}
-			return fmt.Errorf("plugin %s init: %w", name, err)
+			errs = append(errs, fmt.Sprintf("plugin %s init: %s", name, err))
+			continue
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("plugin init errors:\n  %s", strings.Join(errs, "\n  "))
 	}
 	return nil
 }
 
-// StartAll calls Start on all registered plugins.
+// StartAll calls Start on all registered plugins. Collects errors from all
+// plugins instead of aborting on the first failure.
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	var errs []string
 	for name, p := range m.plugins {
 		if err := p.Start(ctx); err != nil {
 			m.infos[name] = plugin.PluginInfo{
@@ -124,13 +133,17 @@ func (m *Manager) StartAll(ctx context.Context) error {
 				Description: p.Description(),
 				Status:      plugin.StatusError,
 			}
-			return fmt.Errorf("plugin %s start: %w", name, err)
+			errs = append(errs, fmt.Sprintf("plugin %s start: %s", name, err))
+			continue
 		}
 		m.infos[name] = plugin.PluginInfo{
 			Name:        name,
 			Description: p.Description(),
 			Status:      plugin.StatusActive,
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("plugin start errors:\n  %s", strings.Join(errs, "\n  "))
 	}
 	return nil
 }

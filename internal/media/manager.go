@@ -73,24 +73,18 @@ func (m *Manager) DownloadMedia(ctx context.Context, msg *interfaces.MessageEven
 func (m *Manager) resolveFileLocation(media tg.MessageMediaClass) (tg.InputFileLocationClass, error) {
 	switch m := media.(type) {
 	case *tg.MessageMediaPhoto:
-		if p, ok := m.Photo.(*tg.Photo); ok {
-			// Find largest size
-			var largest *tg.PhotoSize
-			for _, s := range p.Sizes {
-				if s2, ok := s.(*tg.PhotoSize); ok {
-					if largest == nil || s2.W*s2.H > largest.W*largest.H {
-						largest = s2
-					}
-				}
-			}
-			if largest != nil {
-				return &tg.InputPhotoFileLocation{
-					ID:            p.ID,
-					AccessHash:    p.AccessHash,
-					FileReference: p.FileReference,
-					ThumbSize:     largest.Type,
-				}, nil
-			}
+		photo, ok := m.Photo.(*tg.Photo)
+		if !ok {
+			return nil, fmt.Errorf("unexpected photo type: %T", m.Photo)
+		}
+		largest := largestPhotoSize(photo.Sizes)
+		if largest != nil {
+			return &tg.InputPhotoFileLocation{
+				ID:            photo.ID,
+				AccessHash:    photo.AccessHash,
+				FileReference: photo.FileReference,
+				ThumbSize:     largest.Type,
+			}, nil
 		}
 	case *tg.MessageMediaDocument:
 		if d, ok := m.Document.(*tg.Document); ok {
@@ -241,21 +235,13 @@ func ExtractInfo(media tg.MessageMediaClass) *MediaInfo {
 	switch m := media.(type) {
 	case *tg.MessageMediaPhoto:
 		info.Type = "photo"
-		if p, ok := m.Photo.(*tg.Photo); ok {
-			if len(p.Sizes) > 0 {
-				var largest *tg.PhotoSize
-				for _, s := range p.Sizes {
-					if s2, ok := s.(*tg.PhotoSize); ok {
-						if largest == nil || s2.W*s2.H > largest.W*largest.H {
-							largest = s2
-						}
-					}
-				}
-				if largest != nil {
-					info.FileSize = int64(largest.W * largest.H) // approximate
-					info.Width = largest.W
-					info.Height = largest.H
-				}
+		photo, ok := m.Photo.(*tg.Photo)
+		if ok && len(photo.Sizes) > 0 {
+			largest := largestPhotoSize(photo.Sizes)
+			if largest != nil {
+				info.FileSize = int64(largest.W * largest.H) // approximate
+				info.Width = largest.W
+				info.Height = largest.H
 			}
 		}
 	case *tg.MessageMediaDocument:
@@ -291,6 +277,20 @@ func ExtractInfo(media tg.MessageMediaClass) *MediaInfo {
 	}
 
 	return info
+}
+
+// largestPhotoSize finds the largest PhotoSize by area from a slice of photo sizes.
+// Returns nil if no PhotoSize entries are found.
+func largestPhotoSize(sizes []tg.PhotoSizeClass) *tg.PhotoSize {
+	var largest *tg.PhotoSize
+	for _, s := range sizes {
+		if s2, ok := s.(*tg.PhotoSize); ok {
+			if largest == nil || s2.W*s2.H > largest.W*largest.H {
+				largest = s2
+			}
+		}
+	}
+	return largest
 }
 
 // FormatSize formats bytes to human readable string.

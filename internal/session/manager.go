@@ -31,6 +31,7 @@ type Manager struct {
 	ttl     time.Duration
 	logger  interfaces.Logger
 	cleanup *time.Ticker
+	done    chan struct{}
 }
 
 // NewManager creates a new session manager.
@@ -61,6 +62,7 @@ func NewManager(dbPath string) (*Manager, error) {
 		ttl:     24 * time.Hour,
 		logger:  logger.NamedLogger("session_manager"),
 		cleanup: time.NewTicker(1 * time.Hour),
+		done:    make(chan struct{}),
 	}
 
 	go m.cleanupLoop()
@@ -139,6 +141,7 @@ func (m *Manager) GetDB() *sql.DB {
 // Close closes the session manager.
 func (m *Manager) Close() error {
 	m.cleanup.Stop()
+	close(m.done)
 
 	m.mu.Lock()
 	m.cache = nil
@@ -206,13 +209,22 @@ func (m *Manager) updateDB(ctx context.Context, record *Record) error {
 }
 
 func (m *Manager) cleanupLoop() {
-	for range m.cleanup.C {
-		m.mu.Lock()
-		for key, record := range m.cache {
-			if time.Since(record.UpdatedAt) > m.ttl {
-				delete(m.cache, key)
+	for {
+		select {
+		case <-m.done:
+			return
+		case <-m.cleanup.C:
+			m.mu.Lock()
+			if m.cache == nil {
+				m.mu.Unlock()
+				return
 			}
+			for key, record := range m.cache {
+				if time.Since(record.UpdatedAt) > m.ttl {
+					delete(m.cache, key)
+				}
+			}
+			m.mu.Unlock()
 		}
-		m.mu.Unlock()
 	}
 }
