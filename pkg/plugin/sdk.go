@@ -49,6 +49,17 @@ const (
 	StatusError
 )
 
+func (s PluginStatus) String() string {
+	switch s {
+	case StatusActive:
+		return "Active"
+	case StatusError:
+		return "Error"
+	default:
+		return "Inactive"
+	}
+}
+
 // ============================================================
 // Manager interface
 // ============================================================
