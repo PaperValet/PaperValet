@@ -24,15 +24,7 @@ type LoadedPlugin struct {
 	Plugin   pkgplugin.Plugin
 	Handle   *goplugin.Plugin
 	Path     string
-	Metadata *PluginMetadata
-}
-
-type PluginMetadata struct {
-	Name        string
-	Description string
-	Version     string
-	Author      string
-	MinVersion  string
+	Metadata *pkgplugin.PluginMetadata
 }
 
 // NewLoader creates a new plugin loader.
@@ -113,9 +105,9 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		return fmt.Errorf("plugin does not implement plugin.Plugin interface")
 	}
 
-	var meta *PluginMetadata
+	var meta *pkgplugin.PluginMetadata
 	if metaSym, err := p.Lookup("Metadata"); err == nil {
-		if m, ok := metaSym.(*PluginMetadata); ok {
+		if m, ok := metaSym.(*pkgplugin.PluginMetadata); ok {
 			meta = m
 		}
 	}

@@ -10,6 +10,16 @@ import (
 	"github.com/gotd/td/tg"
 )
 
+// PluginMetadata holds plugin metadata for external .so plugins.
+// External plugins export this as `var Metadata *PluginMetadata`.
+type PluginMetadata struct {
+	Name        string
+	Description string
+	Version     string
+	Author      string
+	MinVersion  string
+}
+
 // ============================================================
 // Plugin lifecycle
 // ============================================================

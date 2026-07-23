@@ -1,0 +1,25 @@
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - typecheck
+    - gosimple
+  disable-all: false
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+    - path: plugins-external/
+      linters:
+        - errcheck
+    - path: plugins/builtin/
+      linters:
+        - staticcheck
+        - unused
+run:
+  timeout: 5m
+  modules-download-mode: readonly
