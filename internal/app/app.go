@@ -117,15 +117,9 @@ func New(cfg *config.Config) (*App, error) {
 func (a *App) registerBuiltins() error {
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
-		builtin.NewApt(),
-		builtin.NewPing(),
-		builtin.NewUptime(),
-		builtin.NewInfo(),
-		builtin.NewForward(),
-		builtin.NewRemind(),
-		builtin.NewNote(),
+		builtin.NewPPM(a.pluginLoader, a.cfg.Bot.PluginsDir),
+		builtin.NewTools(),
 		builtin.NewFun(),
-		builtin.NewAdmin(),
 		builtin.NewCron(a.cron),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {

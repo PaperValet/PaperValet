@@ -3,90 +3,12 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
-	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
-
-// AdminPlugin provides owner-only commands.
-type AdminPlugin struct {
-	startTime time.Time
-}
-
-func NewAdmin() *AdminPlugin { return &AdminPlugin{startTime: time.Now()} }
-
-func (p *AdminPlugin) Name() string        { return "admin" }
-func (p *AdminPlugin) Description() string { return "管理员命令" }
-
-func (p *AdminPlugin) Init(_ context.Context, mgr plugin.Manager) error {
-	cmds := []*interfaces.Command{
-		{
-			Name:        "restart",
-			Description: "重启机器人 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleRestart,
-		},
-		{
-			Name:        "shutdown",
-			Description: "关闭机器人 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleShutdown,
-		},
-		{
-			Name:        "gc",
-			Description: "强制 GC (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleGC,
-		},
-		{
-			Name:        "version",
-			Description: "显示版本信息 (仅拥有者)",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleVersion,
-		},
-	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (p *AdminPlugin) Start(_ context.Context) error { return nil }
-func (p *AdminPlugin) Stop(_ context.Context) error  { return nil }
-
-func (p *AdminPlugin) handleRestart(ctx *interfaces.CommandContext) error {
-	return ctx.Edit("🔄 重启功能需要外部进程管理器 (systemd/PM2) 支持")
-}
-
-func (p *AdminPlugin) handleShutdown(ctx *interfaces.CommandContext) error {
-	return ctx.Edit("🛑 关闭功能需要外部进程管理器支持")
-}
-
-func (p *AdminPlugin) handleGC(ctx *interfaces.CommandContext) error {
-	var mem runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&mem)
-	return ctx.Edit(fmt.Sprintf("🗑 GC 完成\n内存: %.1f MB", float64(mem.Alloc)/1024/1024))
-}
-
-func (p *AdminPlugin) handleVersion(ctx *interfaces.CommandContext) error {
-	uptime := time.Since(p.startTime).Truncate(time.Second)
-	return ctx.Edit(fmt.Sprintf("PaperValet %s\n运行时间: %s", "0.1.0", uptime))
-}
 
 // CronPlugin provides cron management commands.
 type CronPlugin struct {
@@ -117,7 +39,7 @@ func (p *CronPlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *CronPlugin) handleCron(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
-		return ctx.Edit("用法: cron add <名称> <表达式> <命令> | cron list | cron del <名称> | cron run <名称>")
+		return ctx.Edit("用法: cron add <名称> <表达式> <命令...> | cron list | cron del <名称> | cron run <名称>")
 	}
 	sub := ctx.GetArg(0)
 
