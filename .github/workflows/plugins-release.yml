@@ -1,0 +1,85 @@
+name: Build and Release External Plugins
+
+on:
+  push:
+    tags:
+      - 'plugins/**'
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: 'Plugin to build (or "all")'
+        required: true
+        default: 'all'
+
+jobs:
+  build-plugins:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        plugin: [ping, help, admin, status, exec, debug, alias, prefix, reload, sudo, leech, tpm]
+        include:
+          - plugin: ping
+            path: plugins-external/ping
+          - plugin: help
+            path: plugins-external/help
+          - plugin: admin
+            path: plugins-external/admin
+          - plugin: status
+            path: plugins-external/status
+          - plugin: exec
+            path: plugins-external/exec
+          - plugin: debug
+            path: plugins-external/debug
+          - plugin: alias
+            path: plugins-external/alias
+          - plugin: prefix
+            path: plugins-external/prefix
+          - plugin: reload
+            path: plugins-external/reload
+          - plugin: sudo
+            path: plugins-external/sudo
+          - plugin: leech
+            path: plugins-external/leech
+          - plugin: tpm
+            path: plugins-external/tpm
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          
+      - name: Build plugin
+        run: |
+          cd ${{ matrix.path }}
+          go mod tidy
+          go build -buildmode=plugin -o ../../build/plugins/${{ matrix.plugin }}.so .
+          
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}-plugin
+          path: build/plugins/${{ matrix.plugin }}.so
+          retention-days: 30
+
+  release:
+    needs: build-plugins
+    if: startsWith(github.ref, 'refs/tags/plugins/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: build/plugins
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/plugins/**/*.so
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
