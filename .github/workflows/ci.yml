@@ -76,9 +76,14 @@ jobs:
 
       - name: Verify binary
         run: |
-          if [ '${{ matrix.goos }}' = 'windows' ]; then
-            # Windows binary can't run on Linux; inspect via go version
-            go version -m papervalet.exe
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64) GOARCH=amd64 ;;
+            aarch64) GOARCH=arm64 ;;
+          esac
+          if [ '${{ matrix.goos }}' != 'linux' ] || [ '${{ matrix.goarch }}' != "$GOARCH" ]; then
+            # Cross-compiled binary can't run on this runner; inspect via go version
+            go version -m papervalet${{ matrix.goos == 'windows' && '.exe' || '' }}
           else
             ./papervalet --version
           fi
