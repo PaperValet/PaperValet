@@ -120,6 +120,7 @@ type PeerResolver interface {
 	ResolveFromChatID(ctx context.Context, chatID int64) (tg.InputPeerClass, error)
 	ResolveUserInChannel(ctx context.Context, channelPeer tg.InputChannelClass, userID int64) (tg.InputPeerClass, error)
 	ResolveUserFromMessage(ctx context.Context, peer tg.InputPeerClass, msgID int, userID int64) (tg.InputPeerClass, error)
+	ResolveUsername(ctx context.Context, username string) (tg.InputPeerClass, error)
 }
 
 // ============================================================

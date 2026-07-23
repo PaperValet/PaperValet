@@ -10,7 +10,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// HelpPlugin provides help and plugin discovery commands.
+// HelpPlugin provides help and command discovery.
 // This is the primary user-facing help system and MUST be built-in.
 type HelpPlugin struct {
 	mgr plugin.Manager
@@ -23,31 +23,15 @@ func (p *HelpPlugin) Description() string { return "帮助与命令发现" }
 
 func (p *HelpPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
-	cmds := []*interfaces.Command{
-		{
-			Name:        "help",
-			Aliases:     []string{"h", "?"},
-			Description: "显示帮助信息",
-			Usage:       "help [命令|插件]",
-			Plugin:      p.Name(),
-			Category:    "core",
-			Handler:     p.handleHelp,
-		},
-		{
-			Name:        "plugins",
-			Aliases:     []string{"plugin", "ppm"},
-			Description: "列出所有已加载插件",
-			Plugin:      p.Name(),
-			Category:    "core",
-			Handler:     p.handlePlugins,
-		},
-	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+	return mgr.RegisterCommand(&interfaces.Command{
+		Name:        "help",
+		Aliases:     []string{"h", "?"},
+		Description: "显示帮助信息（按分类）",
+		Usage:       "help [命令名|插件名]",
+		Plugin:      p.Name(),
+		Category:    "core",
+		Handler:     p.handleHelp,
+	})
 }
 
 func (p *HelpPlugin) Start(_ context.Context) error { return nil }
@@ -137,8 +121,8 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 		b.WriteString("\n")
 	}
 
-	b.WriteString(fmt.Sprintf("使用 <code>%shelp <命令></code> 查看详情\n", prefix))
-	b.WriteString(fmt.Sprintf("使用 <code>%splugins</code> 查看插件列表", prefix))
+	b.WriteString(fmt.Sprintf("使用 <code>%shelp &lt;命令&gt;</code> 查看详情\n", prefix))
+	b.WriteString(fmt.Sprintf("使用 <code>%sppm list</code> 查看插件列表", prefix))
 	return ctx.Edit(b.String())
 }
 
@@ -148,7 +132,7 @@ func (p *HelpPlugin) showCommandHelp(ctx *interfaces.CommandContext, prefix stri
 	b.WriteString(fmt.Sprintf("%s\n", cmd.Description))
 
 	if cmd.Usage != "" {
-		b.WriteString(fmt.Sprintf("\n<b>用法:</b> <code>%s%s</code>\n", prefix, cmd.Usage))
+		b.WriteString(fmt.Sprintf("\n<b>用法:</b> <code>%s</code>\n", prefix+cmd.Usage))
 	}
 
 	if len(cmd.Aliases) > 0 {
@@ -172,7 +156,15 @@ func (p *HelpPlugin) showPluginHelp(ctx *interfaces.CommandContext, prefix strin
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("📦 <b>%s</b>\n", info.Name))
 	b.WriteString(fmt.Sprintf("%s\n", info.Description))
-	b.WriteString(fmt.Sprintf("状态: %s\n\n", info.Status))
+
+	statusStr := "⏸️ 未激活"
+	switch info.Status {
+	case plugin.StatusActive:
+		statusStr = "✅ 活跃"
+	case plugin.StatusError:
+		statusStr = "❌ 错误"
+	}
+	b.WriteString(fmt.Sprintf("状态: %s\n\n", statusStr))
 
 	if len(cmds) == 0 {
 		b.WriteString("无命令")
@@ -188,27 +180,5 @@ func (p *HelpPlugin) showPluginHelp(ctx *interfaces.CommandContext, prefix strin
 			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, name, cmd.Description))
 		}
 	}
-	return ctx.Edit(b.String())
-}
-
-func (p *HelpPlugin) handlePlugins(ctx *interfaces.CommandContext) error {
-	infos := p.mgr.GetAllInfo()
-	if len(infos) == 0 {
-		return ctx.Edit("无已加载插件")
-	}
-
-	var b strings.Builder
-	b.WriteString("📦 <b>已加载插件</b>\n\n")
-
-	for _, info := range infos {
-		status := "⏸️"
-		if info.Status == plugin.StatusActive {
-			status = "✅"
-		}
-		b.WriteString(fmt.Sprintf("%s <b>%s</b>\n", status, info.Name))
-		b.WriteString(fmt.Sprintf("   %s\n", info.Description))
-		b.WriteString(fmt.Sprintf("   命令: %d 个\n\n", len(p.mgr.Commands().GetByPlugin(info.Name))))
-	}
-
 	return ctx.Edit(b.String())
 }

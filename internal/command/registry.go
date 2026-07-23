@@ -12,6 +12,8 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
+// Registry manages command registration, lookup, and middleware execution.
+// Supports multi-prefix command parsing.
 type Registry struct {
 	mu         sync.RWMutex
 	commands   map[string]*interfaces.Command
@@ -21,12 +23,15 @@ type Registry struct {
 	resolver   interfaces.PeerResolver
 	api        *tg.Client
 	ownerID    int64
-	prefix     string
+	prefixes   []string // all supported command prefixes (main first)
 	rateLimits map[string]time.Time
 	logger     interfaces.Logger
 }
 
-func NewRegistry(prefix string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64) *Registry {
+func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64) *Registry {
+	if len(prefixes) == 0 {
+		prefixes = []string{"."}
+	}
 	r := &Registry{
 		commands:   make(map[string]*interfaces.Command),
 		aliases:    make(map[string]string),
@@ -35,7 +40,7 @@ func NewRegistry(prefix string, emitter interfaces.Emitter, api *tg.Client, reso
 		resolver:   resolver,
 		api:        api,
 		ownerID:    ownerID,
-		prefix:     prefix,
+		prefixes:   prefixes,
 		rateLimits: make(map[string]time.Time),
 		logger:     logger.NamedLogger("command"),
 	}
@@ -135,29 +140,95 @@ func (r *Registry) GetByPlugin(plugin string) map[string]*interfaces.Command {
 	return out
 }
 
-func (r *Registry) GetPrefix() string { return r.prefix }
+func (r *Registry) GetPrefix() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.prefixes[0]
+}
 
-func (r *Registry) GetPrefixes() []string { return []string{r.prefix} }
+func (r *Registry) GetPrefixes() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]string, len(r.prefixes))
+	copy(out, r.prefixes)
+	return out
+}
 
 func (r *Registry) SetPrefix(prefix string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.prefix = prefix
+	r.prefixes = []string{prefix}
 }
 
+// SetPrefixes replaces all prefixes.
+func (r *Registry) SetPrefixes(prefixes []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(prefixes) == 0 {
+		prefixes = []string{"."}
+	}
+	r.prefixes = prefixes
+}
+
+// AddPrefix adds a prefix without removing existing ones.
+func (r *Registry) AddPrefix(prefix string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range r.prefixes {
+		if p == prefix {
+			return
+		}
+	}
+	r.prefixes = append(r.prefixes, prefix)
+}
+
+// RemovePrefix removes a prefix (keeps at least one).
+func (r *Registry) RemovePrefix(prefix string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.prefixes) <= 1 {
+		return false
+	}
+	for i, p := range r.prefixes {
+		if p == prefix {
+			r.prefixes = append(r.prefixes[:i], r.prefixes[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// IsCommand checks if text starts with any registered prefix.
 func (r *Registry) IsCommand(text string) bool {
-	return strings.HasPrefix(text, r.prefix)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, p := range r.prefixes {
+		if strings.HasPrefix(text, p) {
+			return true
+		}
+	}
+	return false
 }
 
+// ParseCommand parses a command from text, trying all registered prefixes.
+// Returns the first match across all prefixes.
 func (r *Registry) ParseCommand(text string) (name string, args []string, ok bool) {
-	if !strings.HasPrefix(text, r.prefix) {
-		return "", nil, false
+	r.mu.RLock()
+	prefixes := r.prefixes
+	r.mu.RUnlock()
+
+	for _, p := range prefixes {
+		if !strings.HasPrefix(text, p) {
+			continue
+		}
+		trimmed := strings.TrimPrefix(text, p)
+		parts := strings.Fields(trimmed)
+		if len(parts) == 0 {
+			return "", nil, false
+		}
+		return parts[0], parts[1:], true
 	}
-	parts := strings.Fields(strings.TrimPrefix(text, r.prefix))
-	if len(parts) == 0 {
-		return "", nil, false
-	}
-	return parts[0], parts[1:], true
+	return "", nil, false
 }
 
 func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEvent, name string, args []string) error {
@@ -241,8 +312,7 @@ func (r *Registry) rateLimitMiddleware(next interfaces.Handler) interfaces.Handl
 	}
 }
 
-// rateLimitCleanup periodically removes stale rate limit entries to prevent
-// unbounded map growth. Runs until the context is done.
+// rateLimitCleanup periodically removes stale rate limit entries.
 func (r *Registry) rateLimitCleanup() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()

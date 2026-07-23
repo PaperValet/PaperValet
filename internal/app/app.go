@@ -83,7 +83,7 @@ func New(cfg *config.Config) (*App, error) {
 	accessHash := peer.NewAccessHashManager(api)
 	resolver := peer.NewResolver(accessHash)
 
-	cmdReg := command.NewRegistry(cfg.Bot.CommandPrefix, bus, api, resolver, cfg.Bot.OwnerID)
+	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
 	cronMgr := cron.NewManager()
@@ -94,6 +94,7 @@ func New(cfg *config.Config) (*App, error) {
 		pluginsDir = "plugins"
 	}
 	pluginLoader := loader.NewLoader(pluginsDir, pluginMgr)
+	pluginLoader.SetRepoURL(cfg.Bot.PluginRepo)
 
 	app := &App{
 		cfg:          cfg,
@@ -118,10 +119,7 @@ func (a *App) registerBuiltins() error {
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
 		builtin.NewPPM(a.pluginLoader),
-		builtin.NewPing(),
-		builtin.NewUptime(),
 		builtin.NewInfo(),
-		builtin.NewForward(),
 		builtin.NewRemind(),
 		builtin.NewNote(),
 		builtin.NewFun(),
