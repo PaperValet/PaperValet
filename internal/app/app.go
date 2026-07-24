@@ -135,6 +135,13 @@ func (a *App) registerBuiltins() error {
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
 		builtin.NewBF(),
+		builtin.NewKitt(),
+		builtin.NewHealth(),
+		builtin.NewAutofix(),
+		builtin.NewLogLevel(),
+		builtin.NewSendLog(),
+		builtin.NewSave(),
+		builtin.NewLeech(),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err
