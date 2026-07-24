@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -66,21 +65,19 @@ func (p *AdminPlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *AdminPlugin) handleRestart(ctx *interfaces.CommandContext) error {
 	_ = ctx.Edit("🔄 正在重启...")
-	proc, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 重启失败: %v", err))
-	}
-	proc.Signal(syscall.SIGUSR1)
+	go func() {
+		time.Sleep(1 * time.Second)
+		os.Exit(0)
+	}()
 	return nil
 }
 
 func (p *AdminPlugin) handleShutdown(ctx *interfaces.CommandContext) error {
 	_ = ctx.Edit("🛑 正在关闭...")
-	proc, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 关闭失败: %v", err))
-	}
-	proc.Signal(syscall.SIGTERM)
+	go func() {
+		time.Sleep(1 * time.Second)
+		os.Exit(0)
+	}()
 	return nil
 }
 
