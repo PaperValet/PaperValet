@@ -350,6 +350,8 @@ func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 		{"gt", "谷歌翻译", "1.0.0"},
 		{"bizhi", "随机壁纸", "1.0.0"},
 		{"weather", "天气查询", "1.0.0"},
+		{"speedtest", "网络速度测试", "1.0.0"},
+		{"duckduckgo", "DuckDuckGo 搜索", "1.0.0"},
 	}
 
 	installed, _ := p.loader.GetInstalled()
