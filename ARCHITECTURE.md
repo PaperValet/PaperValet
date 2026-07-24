@@ -64,11 +64,10 @@ github.com/TiaraBasori/PaperValet/
         ├── qrcode/
         ├── leech/
         ├── ping/             # Advanced ping (DC, ICMP, HTTP)
-        ├── alias/
-        ├── re/
-        ├── bf/
-        ├── sendlog/
-        └── ...
+        ├── bf/               # Brainfuck interpreter
+        ├── re/               # Message repeater
+        ├── sendlog/          # Log sender
+        └── tpm/              # Legacy plugin manager
 ```
 
 ---
@@ -360,34 +359,59 @@ func (e *CommandError) Unwrap() error { return e.Err }
 
 ---
 
-## Built-in Plugins (15 total)
+## Built-in Plugins (16 total)
 
 | Plugin | Commands | Category | Notes |
 |--------|----------|----------|-------|
-| **core** | help, status, restart, shutdown, gc, version | core | Essential system commands |
-| **ppm** | ppm install/remove/update/list/enable/disable/reload/search/info/repo | admin | Plugin Package Manager |
-| **tools** | ping, uptime, info, fwd, remind, note, calc, base64, hash, uuid, time, rand, qr | tools | Daily utilities |
-| **fun** | roll, coin, choose, 8ball, fact, ascii, emoji | fun | Entertainment |
-| **cron** | cron add/list/remove/run/enable/disable | tools | Scheduled tasks |
-| **alias** | alias set/del/list | tools | Command aliases (persisted) |
+| **core** | version, uptime, ping | core | Minimal core (help/status/ppm are separate) |
+| **help** | help [cmd\|plugin] | core | Help & command discovery |
+| **status** | status, sysinfo, memory | core | Detailed system status |
+| **ppm** | ppm install/remove/load/unload/reload/list/info/search | core | Plugin Package Manager |
+| **prefix** | prefix list/add/del/set | admin | Multi-prefix management (JSON persisted) |
+| **admin** | restart, shutdown, gc | admin | Owner-only system commands |
+| **cron** | cron list/add/del/run | tools | Scheduled tasks |
+| **tools** | info, fwd | tools | User info & message forwarding |
+| **fun** | roll, coin, choose, 8ball, fact | fun | Entertainment |
+| **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
 | **debug** | goroutines, heap, stack, profile | debug | Profiling (owner) |
 | **exec** | exec/shell | admin | Shell commands (owner) |
 | **sudo** | sudo | admin | Root commands (owner) |
-| **log** | log show/clear/level/target/on/off/max | admin | Log capture (owner) |
-| **re** | re [count] [repeat] | tools | Repeat messages |
-| **bf** | bf <code> [input] | fun | Brainfuck interpreter |
-| **prefix** | prefix get/set/list | core | Command prefix |
-| **help** | help [cmd\|plugin], plugins | core | Help system |
-| **status** | status, sysinfo, memory | core | Detailed status |
+| **log** | log show/clear/level/target | admin | Log capture & delivery (owner) |
+| **re** | re [count] [text] | tools | Message repeater |
+| **bf** | bf backup/list/restore/clean/info | tools | Backup plugin |
 
 ---
 
 ## External Plugin System
 
-- **Build**: `go build -buildmode=plugin -o plugins/<name>.so ./plugins-external/<name>`
-- **Load**: `PluginLoader.LoadAll(ctx)` scans `plugins/` directory
-- **Metadata**: External plugin exports `var Metadata *plugin.PluginMetadata`
-- **Dependencies**: External plugins import ONLY `github.com/TiaraBasori/PaperValet/pkg/plugin`
+External plugins are built independently as `.so` files and published to GitHub Releases by the
+[PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repo.
+
+**Available external plugins (7 total):**
+
+| Plugin | Description | Category |
+|--------|-------------|----------|
+| **ping** | 网络延迟测试 (TCP/HTTP/ICMP/DC) | tools |
+| **leech** | 媒体下载 (yt-dlp) | tools |
+| **qrcode** | 二维码生成与解码 | tools |
+| **bf** | Brainfuck 解释器 | fun |
+| **re** | 消息复读机 | tools |
+| **sendlog** | 日志发送工具 | admin |
+| **tpm** | Telegram 插件管理器 (旧版) | admin |
+
+**Installation flow:**
+1. `ppm install ping` → downloads `ping.so` from `https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download/ping.so`
+2. `ppm load ping` → opens `.so`, registers plugin, initializes, starts
+3. `ppm unload ping` → stops plugin, unregisters commands
+4. `ppm remove ping` → deletes `.so` file
+
+**Build:**
+```bash
+go build -buildmode=plugin -o plugins/ping.so ./plugins-external/ping
+```
+
+**Metadata:** External plugin exports `var Metadata *plugin.PluginMetadata`
+**Dependencies:** External plugins import ONLY `github.com/TiaraBasori/PaperValet/pkg/plugin`
 
 ---
 
@@ -428,17 +452,16 @@ const (
   },
   "bot": {
     "command_prefix": ".",
+    "command_prefixes": [".", "!", "/"],
     "owner_id": 123456789,
-    "sudoers": [987654321],
-    "plugins_dir": "plugins"
+    "plugins_dir": "plugins",
+    "plugin_repo": "https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download",
+    "max_message_len": 4000,
+    "rate_limit": 3
   },
   "logger": {
     "level": "info",
     "format": "console"
-  },
-  "ppm": {
-    "repo_url": "https://github.com/TiaraBasori/PaperValet-Plugins",
-    "auto_update": false
   }
 }
 ```

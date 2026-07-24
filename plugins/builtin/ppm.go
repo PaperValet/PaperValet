@@ -324,28 +324,19 @@ func (p *PPMPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) erro
 func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string) error {
 	_ = ctx.Edit("⏳ 正在查询插件注册表...")
 
-	// For now, list known plugins from the PaperValet-Plugins ecosystem
+	// Real external plugins available from PaperValet-Plugins registry
 	knownPlugins := []struct {
 		name        string
 		description string
 		version     string
 	}{
-		{"ping", "网络延迟测试工具", "1.0.0"},
+		{"ping", "网络延迟测试工具 (TCP/HTTP/ICMP/DC)", "1.0.0"},
 		{"leech", "媒体下载工具 (yt-dlp)", "1.0.0"},
-		{"qrcode", "二维码生成/解码", "1.0.0"},
-		{"tpm", "Telegram 消息分析", "1.0.0"},
-		{"admin", "群组管理工具", "1.0.0"},
-		{"exec", "系统命令执行", "1.0.0"},
-		{"sudo", "Root 权限命令执行", "1.0.0"},
+		{"qrcode", "二维码生成与解码", "1.0.0"},
 		{"bf", "Brainfuck 解释器", "1.0.0"},
 		{"re", "消息复读机", "1.0.0"},
 		{"sendlog", "日志发送工具", "1.0.0"},
-		{"help", "帮助系统", "1.0.0"},
-		{"status", "系统状态监控", "1.0.0"},
-		{"debug", "调试与性能分析", "1.0.0"},
-		{"alias", "命令别名管理", "1.0.0"},
-		{"prefix", "命令前缀管理", "1.0.0"},
-		{"reload", "插件热重载", "1.0.0"},
+		{"tpm", "Telegram 插件管理器 (旧版)", "1.0.0"},
 	}
 
 	installed, _ := p.loader.GetInstalled()

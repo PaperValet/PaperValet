@@ -16,58 +16,48 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        plugin: [ping, help, admin, status, exec, bf, qrcode, re, sendlog, debug, alias, prefix, reload, sudo, leech, tpm]
+        plugin:
+          - ping
+          - leech
+          - qrcode
+          - bf
+          - re
+          - sendlog
+          - tpm
         include:
           - plugin: ping
             path: plugins-external/ping
-          - plugin: help
-            path: plugins-external/help
-          - plugin: admin
-            path: plugins-external/admin
-          - plugin: status
-            path: plugins-external/status
-          - plugin: exec
-            path: plugins-external/exec
-          - plugin: bf
-            path: plugins-external/bf
+          - plugin: leech
+            path: plugins-external/leech
           - plugin: qrcode
             path: plugins-external/qrcode
+          - plugin: bf
+            path: plugins-external/bf
           - plugin: re
             path: plugins-external/re
           - plugin: sendlog
             path: plugins-external/sendlog
-          - plugin: debug
-            path: plugins-external/debug
-          - plugin: alias
-            path: plugins-external/alias
-          - plugin: prefix
-            path: plugins-external/prefix
-          - plugin: reload
-            path: plugins-external/reload
-          - plugin: sudo
-            path: plugins-external/sudo
-          - plugin: leech
-            path: plugins-external/leech
           - plugin: tpm
             path: plugins-external/tpm
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-         
-      - name: Build main module first
-        run: go build -o /dev/null ./cmd/papervalet
-         
+
+      - name: Install PaperValet dependency
+        run: |
+          go mod download github.com/TiaraBasori/PaperValet
+
       - name: Build plugin
         run: |
           cd ${{ matrix.path }}
-          go mod edit -replace github.com/TiaraBasori/PaperValet=../../
+          go mod edit -replace github.com/TiaraBasori/PaperValet=${{ github.workspace }}
           go mod tidy
           go build -buildmode=plugin -o ../../build/plugins/${{ matrix.plugin }}.so .
-         
+
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
@@ -85,7 +75,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: build/plugins
-          
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
