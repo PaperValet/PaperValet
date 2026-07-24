@@ -191,7 +191,7 @@ func (p *SavePlugin) setUserConfig(userID string, config UserConfig) {
 }
 
 func (p *SavePlugin) setTarget(ctx *interfaces.CommandContext, target string) error {
-	userID := fmt.Sprintf("%d", ctx.UserID)
+	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
 	config.Target = target
 	p.setUserConfig(userID, config)
@@ -206,13 +206,13 @@ func (p *SavePlugin) setTarget(ctx *interfaces.CommandContext, target string) er
 }
 
 func (p *SavePlugin) showTarget(ctx *interfaces.CommandContext) error {
-	userID := fmt.Sprintf("%d", ctx.UserID)
+	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
 	return ctx.Edit(fmt.Sprintf("📍 当前默认目标: <code>%s</code>\n\n使用 <code>save to <目标></code> 修改", config.Target))
 }
 
 func (p *SavePlugin) setSource(ctx *interfaces.CommandContext, value string) error {
-	userID := fmt.Sprintf("%d", ctx.UserID)
+	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
 	switch strings.ToLower(value) {
 	case "on", "true", "1", "yes":
@@ -227,7 +227,7 @@ func (p *SavePlugin) setSource(ctx *interfaces.CommandContext, value string) err
 }
 
 func (p *SavePlugin) showSource(ctx *interfaces.CommandContext) error {
-	userID := fmt.Sprintf("%d", ctx.UserID)
+	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
 	return ctx.Edit(fmt.Sprintf("🔗 来源链接显示: %s\n\n使用 <code>save source on|off</code> 修改", map[bool]string{true: "开启", false: "关闭"}[config.ShowSource]))
 }

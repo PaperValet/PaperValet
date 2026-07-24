@@ -1,7 +1,7 @@
-module github.com/PaperValet/plugin-sendlog
+module github.com/TiaraBasori/PaperValet-Plugins/plugins-external/sendlog
 
-go 1.25.0
+go 1.25
 
 require github.com/TiaraBasori/PaperValet v0.1.0
 
-replace github.com/TiaraBasori/PaperValet => /root/PaperValet
+replace github.com/TiaraBasori/PaperValet => ../../../..

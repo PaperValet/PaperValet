@@ -89,8 +89,8 @@ func (p *AutofixPlugin) handleAutofix(ctx *interfaces.CommandContext) error {
 
 	// Step 3: Persist state and restart
 	state := autofixState{
-		ChatID:    ctx.ChatID,
-		MessageID: ctx.MessageID,
+		ChatID:    ctx.Message.ChatID,
+		MessageID: ctx.Message.Message.ID,
 		StartTime: time.Now(),
 		Removed:   removed,
 	}

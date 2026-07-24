@@ -337,6 +337,19 @@ func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 		{"re", "消息复读机", "1.0.0"},
 		{"sendlog", "日志发送工具", "1.0.0"},
 		{"tpm", "Telegram 插件管理器 (旧版)", "1.0.0"},
+		// New plugins from TeleBox-Plugins migration
+		{"atadmins", "一键艾特全部管理员", "1.0.0"},
+		{"ids", "显示用户/群组/消息 ID 及跳转链接", "1.0.0"},
+		{"isalive", "活了么 - 检测 bot 是否在线", "1.0.0"},
+		{"calc", "计算器 - 支持基本数学运算", "1.0.0"},
+		{"encode", "编码/解码工具 (base64/url/hex)", "1.0.0"},
+		{"hitokoto", "获取随机一言", "1.0.0"},
+		{"qr", "二维码生成", "1.0.0"},
+		{"rev", "反转消息内容", "1.0.0"},
+		{"sendat", "定时消息发送", "1.0.0"},
+		{"gt", "谷歌翻译", "1.0.0"},
+		{"bizhi", "随机壁纸", "1.0.0"},
+		{"weather", "天气查询", "1.0.0"},
 	}
 
 	installed, _ := p.loader.GetInstalled()
@@ -355,7 +368,7 @@ func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 		b.WriteString(fmt.Sprintf("🔍 <b>搜索: %s</b>\n\n", query))
 	} else {
 		b.WriteString("📦 <b>插件注册表</b>\n\n")
-		b.WriteString("使用 <code>ppm install &lt;name&gt;</code> 安装\n\n")
+		b.WriteString("使用 <code>ppm install <name></code> 安装\n\n")
 	}
 
 	var found int

@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"

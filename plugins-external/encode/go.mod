@@ -1,4 +1,4 @@
-module github.com/TiaraBasori/PaperValet-Plugins/plugins-external/ping
+module github.com/TiaraBasori/PaperValet-Plugins/plugins-external/encode
 
 go 1.25
 
