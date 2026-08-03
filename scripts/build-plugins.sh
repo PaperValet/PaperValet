@@ -1,35 +1,70 @@
 #!/bin/bash
-# Build all external plugins as .so files
+# Build all external plugins as .so files.
+#
+# Environment variables:
+#   PAPERVALET_BUILD_DIR  - output directory for .so files (required)
+#   GOOS / GOARCH         - cross-compilation targets (optional)
+#
+# The script auto-discovers every immediate subdirectory of `plugins-external/`
+# that contains a `main.go`, so new plugins are picked up without editing this file.
 
 set -e
 
-PLUGINS_DIR="/root/PaperValet/plugins-external"
-BUILD_DIR="/root/PaperValet/build/plugins"
-mkdir -p "$BUILD_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PLUGINS_DIR="$ROOT_DIR/plugins-external"
 
-PLUGINS=("ping" "help" "admin" "status" "exec" "debug" "alias" "prefix" "reload" "sudo" "leech" "tpm")
+if [ -z "${PAPERVALET_BUILD_DIR:-}" ]; then
+    echo "❌ PAPERVALET_BUILD_DIR is not set" >&2
+    exit 1
+fi
+
+mkdir -p "$PAPERVALET_BUILD_DIR"
+
+if [ ! -d "$PLUGINS_DIR" ]; then
+    echo "⚠ plugins-external directory not found at $PLUGINS_DIR, skipping"
+    exit 0
+fi
 
 echo "Building external plugins..."
-for plugin in "${PLUGINS[@]}"; do
-    PLUGIN_DIR="$PLUGINS_DIR/$plugin"
-    if [ -d "$PLUGIN_DIR" ]; then
-        echo "Building $plugin..."
-        cd "$PLUGIN_DIR"
-        if [ -f go.mod ]; then
-            go mod tidy 2>/dev/null || true
-            if go build -buildmode=plugin -o "$BUILD_DIR/$plugin.so" . 2>/dev/null; then
-                echo "  ✓ $plugin.so built successfully"
-            else
-                echo "  ✗ $plugin failed to build"
-            fi
-        else
-            echo "  ⚠ $plugin has no go.mod, skipping"
-        fi
-    else
-        echo "  ⚠ $plugin directory not found, skipping"
+echo "  root:   $ROOT_DIR"
+echo "  output: $PAPERVALET_BUILD_DIR"
+echo "  goos:   ${GOOS:-<host>}  goarch: ${GOARCH:-<host>}"
+echo ""
+
+FAILED=()
+BUILT=0
+
+for plugin_path in "$PLUGINS_DIR"/*/; do
+    [ -d "$plugin_path" ] || continue
+    plugin="$(basename "$plugin_path")"
+
+    # 只构建包含 main.go 目录（真正的可构建插件）
+    if [ ! -f "$plugin_path/main.go" ]; then
+        echo "⚠ $plugin: no main.go, skipping"
+        continue
     fi
+
+    echo "🔨 $plugin ..."
+    (
+        cd "$plugin_path"
+        # tidy 失败不阻断（网络或缓存问题），构建阶段会暴露真实错误
+        go mod tidy 2>/dev/null || true
+        if go build -buildmode=plugin -o "$PAPERVALET_BUILD_DIR/$plugin.so" . ; then
+            echo "  ✓ $plugin.so"
+        else
+            echo "  ✗ $plugin FAILED"
+            exit 1
+        fi
+    ) && BUILT=$((BUILT+1)) || FAILED+=("$plugin")
 done
 
 echo ""
-echo "Built plugins in $BUILD_DIR:"
-ls -la "$BUILD_DIR"/*.so 2>/dev/null || echo "  (none)"
+echo "Built $BUILT plugin(s) in $PAPERVALET_BUILD_DIR"
+ls -la "$PAPERVALET_BUILD_DIR"/*.so 2>/dev/null || true
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+    echo ""
+    echo "❌ failed plugins: ${FAILED[*]}" >&2
+    exit 1
+fi

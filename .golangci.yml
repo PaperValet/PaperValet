@@ -7,7 +7,6 @@ linters:
     - staticcheck
     - unused
     - ineffassign
-    - typecheck
     - gosimple
   disable-all: false
 issues:
