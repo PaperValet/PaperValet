@@ -8,7 +8,6 @@ linters:
     - unused
     - ineffassign
     - gosimple
-issues:
   exclude-rules:
     - path: _test\.go
       linters:
@@ -22,4 +21,3 @@ issues:
         - unused
 run:
   timeout: 5m
-  modules-download-mode: readonly
