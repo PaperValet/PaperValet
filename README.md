@@ -31,29 +31,75 @@ Clean, modular architecture — no "TeleBox legacy" spaghetti.
 
 ## Quick Start
 
-### 1. Clone & build
+### One-line Install (recommended)
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.sh | bash
+
+# Windows (PowerShell)
+iwr -useb https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.ps1 | iex
+```
+
+The script downloads the matching `papervalet-<os>-<arch>.{tar.gz|zip}` from the
+latest GitHub Release, unpacks it to `~/.papervalet/`, writes a starter
+`config.json` from `config.example.json`, and prints next steps.
+
+You can also pass `--api-id` / `--api-hash` / `--phone` to skip the manual
+editing. See `./scripts/install.sh --help` for the full flag list.
+
+### Manual Download
+
+Grab a bundle from [GitHub Releases](https://github.com/PaperValet/PaperValet/releases/latest),
+unpack it, edit `config.json`, run `./run.sh` (or `run.cmd` on Windows).
+
+### Docker
+
+```bash
+docker run -d --name papervalet \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/data:/app/data" \
+  --restart unless-stopped \
+  ghcr.io/papervalet/papervalet:latest
+```
+
+The image ships with all built-in plugins and prebuilt `.so` plugins.
+
+### Build from source
+
+If you prefer to compile yourself or hack on the code:
 
 ```bash
 git clone https://github.com/TiaraBasori/PaperValet
 cd PaperValet
 go build -o papervalet ./cmd/papervalet
-```
-
-### 2. Configure
-
-```bash
 cp config.example.json config.json
-```
-
-Edit `config.json` with your `api_id` / `api_hash` from [my.telegram.org](https://my.telegram.org).
-
-### 3. Run
-
-```bash
+# edit config.json: fill api_id / api_hash from https://my.telegram.org
 ./papervalet -config config.json
 ```
 
 First run uses interactive login (phone, code, 2FA if enabled).
+
+### Headless / Container Login
+
+Set these environment variables to skip the TTY prompts:
+
+| Variable | Purpose |
+|----------|---------|
+| `PAPERVALET_PHONE` | E.164 phone number, e.g. `+8613800138000` |
+| `PAPERVALET_CODE` | One-time login code sent by Telegram |
+| `PAPERVALET_2FA_PASSWORD` | Cloud 2FA password |
+| `PAPERVALET_NONINTERACTIVE` | Set to `1`/`true` to fail fast if any of the above is missing (otherwise the script will fall through to stdin prompts) |
+
+### Architecture Note (arm64)
+
+GitHub Actions currently ships prebuilt `.so` plugins only for `amd64` (Go's
+`buildmode=plugin` on arm64 is not officially supported). On an Apple Silicon
+or arm64 Linux host the bundle's main binary is native `arm64`, but the
+`plugins/*.so` files inside the archive are `amd64`. Two options:
+
+1. Use a Rosetta/x86-compatible runtime to load the `amd64` `.so` files.
+2. Build `.so` yourself: `cd plugins-external/<name> && go build -buildmode=plugin -o ../<name>.so .`
 
 ## Configuration
 
