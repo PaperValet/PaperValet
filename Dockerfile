@@ -6,8 +6,9 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache git make gcc musl-dev sqlite-dev
+# Install build dependencies.
+# 仅需 git 与 make；不依赖 CGO（modernc.org/sqlite 走 pure-Go）。
+RUN apk add --no-cache git make
 
 # Copy go.mod and go.sum first for better caching
 COPY go.mod go.sum ./
@@ -22,11 +23,11 @@ RUN make build
 # ===== Runtime stage =====
 FROM alpine:3.20 AS runtime
 
-# Install runtime dependencies
+# Install runtime dependencies.
+# 无需 sqlite-libs：modernc.org/sqlite 是纯 Go 实现，不链接 libsqlite。
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
-    sqlite-libs \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user
