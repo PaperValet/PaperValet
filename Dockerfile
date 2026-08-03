@@ -19,6 +19,13 @@ COPY . .
 # Build binary with version info
 RUN make build
 
+# Build external plugins (.so) so the runtime image ships a working plugins dir.
+# Linux/amd64 only here; cross-arch plugin artifacts are produced by CI bundles.
+RUN mkdir -p /app/build/plugins && \
+    PAPERVALET_PLUGINS_DIR=/app/plugins-external \
+    PAPERVALET_BUILD_DIR=/app/build/plugins \
+    bash scripts/build-plugins.sh
+
 # ===== Runtime stage =====
 FROM alpine:3.20 AS runtime
 
@@ -38,8 +45,12 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/papervalet /usr/local/bin/papervalet
 
-# Create directories for config and data
-RUN mkdir -p /app/config /app/data /app/plugins && \
+# Copy prebuilt .so plugins; loader's default plugins_dir is "plugins" relative
+# to the working directory (config.json's bot.plugins_dir).
+COPY --from=builder /app/build/plugins /app/plugins
+
+# Create remaining runtime directories (config / data).
+RUN mkdir -p /app/config /app/data && \
     chown -R papervalet:papervalet /app
 
 # Switch to non-root user

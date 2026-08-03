@@ -6,52 +6,65 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'  # daily build for deps
+    - cron: '0 3 * * *'  # daily deps check
 
 env:
   GO_VERSION: '1.25'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  # ===== L1：基础校验 =====
   vet:
     name: Go Vet
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: Run go vet
-        run: go vet ./...
+      - run: go vet ./...
 
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - run: go test ./...
 
-      - name: Run tests
-        run: go test ./...
+  lint:
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # 首次引入不阻塞主流程，后续逐步收紧
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61.0
+          args: --timeout=5m
 
+  # ===== L2：主程序矩阵构建 =====
   build:
-    name: Build (${{ matrix.goos }}, ${{ matrix.goarch }})
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     needs: [vet, test]
     strategy:
+      fail-fast: false
       matrix:
         goos: [linux, darwin, windows]
         goarch: [amd64, arm64]
@@ -59,90 +72,218 @@ jobs:
           - goos: windows
             goarch: arm64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -ldflags "-X main.version=${{ github.ref_name }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.gitCommit=$(git rev-parse --short HEAD)" \
-          -o papervalet${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/papervalet
+          ext=$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")
+          mkdir -p dist
+          go build \
+            -ldflags "-X main.version=${{ github.ref_name }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.gitCommit=${GITHUB_SHA::8}" \
+            -o "dist/papervalet-$GOOS-$GOARCH$ext" \
+            ./cmd/papervalet
 
-      - name: Verify binary
-        run: |
-          ARCH=$(uname -m)
-          case "$ARCH" in
-            x86_64) GOARCH=amd64 ;;
-            aarch64) GOARCH=arm64 ;;
-          esac
-          if [ '${{ matrix.goos }}' != 'linux' ] || [ '${{ matrix.goarch }}' != "$GOARCH" ]; then
-            # Cross-compiled binary can't run on this runner; inspect via go version
-            go version -m papervalet${{ matrix.goos == 'windows' && '.exe' || '' }}
-          else
-            ./papervalet --version
-          fi
+      - name: Smoke (native only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: ./dist/papervalet-linux-amd64 --version
+
+      - name: Inspect (cross-compiled)
+        if: matrix.goos != 'linux' || matrix.goarch != 'amd64'
+        run: go version -m "dist/papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: papervalet-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: papervalet${{ matrix.goos == 'windows' && '.exe' || '' }}
-          retention-days: 7
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          retention-days: 14
 
-  build-matrix:
-    name: Build Matrix
+  # ===== L2：插件 .so 矩阵构建（仅 amd64 受官方支持；arm64 暂跳过）=====
+  build-plugins:
+    name: Build Plugins (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     needs: [vet, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Build all
-        run: make build-multiarch
+      - name: Build all plugins
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p build/plugins dist/$GOOS-$GOARCH
+          PAPERVALET_BUILD_DIR="$(pwd)/build/plugins" \
+            bash scripts/build-plugins.sh
+          if ls build/plugins/*.so >/dev/null 2>&1; then
+            cp build/plugins/*.so dist/$GOOS-$GOARCH/
+          else
+            echo "no .so produced for $GOOS-$GOARCH" >&2
+            exit 1
+          fi
 
-      - name: Upload binaries
+      - name: Upload plugins
         uses: actions/upload-artifact@v4
         with:
-          name: papervalet-all
-          path: papervalet-*
-          retention-days: 7
+          name: plugins-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ matrix.goos }}-${{ matrix.goarch }}/*.so
+          retention-days: 14
 
-  docker:
-    name: Docker Build & Push (multi-arch)
+  # ===== L3：bundle（合并二进制 + .so + 配置 + run 脚本）=====
+  bundle:
+    name: Bundle (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-plugins]
+    if: needs.build.result == 'success' && needs.build-plugins.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: stage/bin/
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-${{ matrix.goos }}-amd64
+          path: stage/so/
+
+      - name: Compose bundle layout
+        run: |
+          set -e
+          os="${{ matrix.goos }}"
+          arch="${{ matrix.goarch }}"
+          ext=""
+          [ "$os" = "windows" ] && ext=".exe"
+          root="stage/papervalet-$os-$arch"
+          mkdir -p "$root/bin" "$root/plugins"
+          if [ -f "stage/bin/papervalet-$os-$arch$ext" ]; then
+            cp "stage/bin/papervalet-$os-$arch$ext" "$root/bin/papervalet$ext"
+            chmod +x "$root/bin/papervalet$ext" || true
+          else
+            echo "missing binary: stage/bin/papervalet-$os-$arch$ext" >&2
+            exit 1
+          fi
+          # 仅 amd64 插件；arm64 用户按 README 提示使用 amd64 二进制+ .so
+          cp stage/so/*.so "$root/plugins/" 2>/dev/null || true
+          cp config.example.json "$root/config.example.json"
+          if [ "$os" = "windows" ]; then
+            cp scripts/run.cmd "$root/run.cmd"
+          else
+            cp scripts/run.sh "$root/run.sh"
+            chmod +x "$root/run.sh"
+          fi
+          cat > "$root/README.txt" <<EOF
+          PaperValet $os/$arch
+          ============================
+          1. 编辑 config.example.json 填入 api_id / api_hash（从 https://my.telegram.org 申请）
+          2. 重命名为 config.json
+          3. 运行 ./run.sh（macOS/Linux）或 run.cmd（Windows）
+
+          详见仓库 README 与 docs/plugin-sdk*.md。
+          EOF
+
+      - name: Archive
+        run: |
+          os="${{ matrix.goos }}"
+          arch="${{ matrix.goarch }}"
+          cd stage
+          if [ "$os" = "windows" ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq zip
+            zip -r "../papervalet-$os-$arch.zip" "papervalet-$os-$arch"
+          else
+            tar -czf "../papervalet-$os-$arch.tar.gz" "papervalet-$os-$arch"
+          fi
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: papervalet-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.goos == 'windows' && 'zip' || 'tar.gz' }}
+          retention-days: 14
+
+  # ===== L4：Release（仅 tag）=====
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [bundle]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS
+          ls -la
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          files: |
+            dist/papervalet-*.tar.gz
+            dist/papervalet-*.zip
+            dist/SHA256SUMS
+
+  # ===== L4：Docker 多架构镜像（push 到 main / tag）=====
+  docker:
+    name: Docker (multi-arch)
+    runs-on: ubuntu-latest
+    needs: [build]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
+      - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -153,8 +294,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -164,44 +304,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: [build, docker]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - name: Download all binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: papervalet-all
-          path: dist/
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/papervalet-*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-
-  # Daily dependency update check
+  # ===== 每日依赖巡检（schedule）=====
   deps-check:
     name: Dependency Check
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: Check for updates
-        run: |
-          go list -u -m -json all | jq -r 'select(.Update != null) | "\(.Path) \(.Version) -> \(.Update.Version)"'
-          # Create issue if updates available
+      - run: |
+          go list -u -m -json all 2>/dev/null \
+            | jq -r 'select(.Update != null) | "\(.Path) \(.Version) -> \(.Update.Version)"' \
+            | tee updates.txt
+          [ -s updates.txt ] && echo "updates available" || echo "no updates"
