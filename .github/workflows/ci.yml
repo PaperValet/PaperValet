@@ -108,7 +108,8 @@ jobs:
           path: dist/papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
           retention-days: 14
 
-  # ===== L2：插件 .so 矩阵构建（仅 amd64 受官方支持；arm64 暂跳过）=====
+  # ===== L2：插件 .so 矩阵构建 =====
+  # -buildmode=plugin 仅在 linux/macOS 受官方支持，windows 不支持。
   build-plugins:
     name: Build Plugins (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
@@ -116,7 +117,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goos: [linux, darwin, windows]
+        goos: [linux, darwin]
         goarch: [amd64]
     steps:
       - uses: actions/checkout@v4
