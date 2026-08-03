@@ -41,12 +41,33 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/
 iwr -useb https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.ps1 | iex
 ```
 
-The script downloads the matching `papervalet-<os>-<arch>.{tar.gz|zip}` from the
-latest GitHub Release, unpacks it to `~/.papervalet/`, writes a starter
-`config.json` from `config.example.json`, and prints next steps.
+By default the scripts launch an **interactive menu** with the following options:
 
-You can also pass `--api-id` / `--api-hash` / `--phone` to skip the manual
-editing. See `./scripts/install.sh --help` for the full flag list.
+| # | Action | Purpose |
+|---|--------|---------|
+| 1 | `install` | First-time install to `~/.papervalet` |
+| 2 | `reinstall` | Overwrite install; preserves `config.json` by default |
+| 3 | `upgrade` | Upgrade to the selected version; preserves `config.json` + `session.json` + `sessions.db` |
+| 4 | `uninstall` | Remove the install (with prompts to keep config / data) |
+| 5 | `status` | Show install path, version, binary SHA256, `.so` count |
+| 6 | `latest` | List the most recent GitHub release and its bundles |
+| 7 | `set-phone` | Persist `PAPERVALET_PHONE` (and optional `PAPERVALET_CODE` / `PAPERVALET_2FA_PASSWORD`) into `~/.papervalet.env` |
+| 8 | `run` | Launch the bot in the foreground |
+| 9 | `doctor` | Self-check (curl / jq / disk / arch / GitHub reachability) |
+| 0 | `exit` | Quit |
+| v | — | Switch version (latest / vX.Y.Z) |
+| h | — | Switch install directory |
+
+If you pass `--non-interactive` (or any of `--phone`, `--api-id`, `--api-hash`)
+the script skips the menu and runs `install` directly — useful for CI.
+
+CLI flags: `--version <tag>`, `--home <dir>`, `--phone`, `--api-id`, `--api-hash`,
+`--no-config`, `--keep-config`, `--keep-data`, `--repo owner/repo`.
+Full list via `--help`.
+
+Re-running the same `curl | bash` line at any time drops you back into the
+menu so you can upgrade, uninstall, or change settings without remembering
+command syntax.
 
 ### Manual Download
 
