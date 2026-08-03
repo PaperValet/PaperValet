@@ -31,29 +31,74 @@
 
 ## 快速开始
 
-### 1. 克隆并编译
+### 一键安装（推荐）
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.sh | bash
+
+# Windows (PowerShell)
+iwr -useb https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.ps1 | iex
+```
+
+脚本会从最新 GitHub Release 下载与系统匹配的 `papervalet-<os>-<arch>.{tar.gz|zip}`，
+解压到 `~/.papervalet/`，并基于 `config.example.json` 生成初始 `config.json`，
+最后打印后续操作提示。
+
+也可通过 `--api-id` / `--api-hash` / `--phone` 参数跳过手动编辑；
+完整参数见 `./scripts/install.sh --help`。
+
+### 手动下载
+
+到 [GitHub Releases](https://github.com/PaperValet/PaperValet/releases/latest) 拉取
+与系统匹配的压缩包，解压后编辑 `config.json`，执行 `./run.sh`（Windows 为 `run.cmd`）。
+
+### Docker
+
+```bash
+docker run -d --name papervalet \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/data:/app/data" \
+  --restart unless-stopped \
+  ghcr.io/papervalet/papervalet:latest
+```
+
+镜像已包含全部内建插件与预编译的 `.so` 外部插件。
+
+### 从源码构建
+
+适合想改代码或参与开发的用户：
 
 ```bash
 git clone https://github.com/TiaraBasori/PaperValet
 cd PaperValet
 go build -o papervalet ./cmd/papervalet
-```
-
-### 2. 配置
-
-```bash
 cp config.example.json config.json
-```
-
-编辑 `config.json`，填入 [my.telegram.org](https://my.telegram.org) 获取的 `api_id` / `api_hash`。
-
-### 3. 运行
-
-```bash
+# 编辑 config.json，填入 https://my.telegram.org 申请的 api_id / api_hash
 ./papervalet -config config.json
 ```
 
 首次运行会进入交互式登录（依次填写手机号、验证码、以及两步验证密码）。
+
+### 无 TTY / 容器场景登录
+
+通过下列环境变量跳过 stdin 提示，便于容器 / systemd / CI 中自动化登录：
+
+| 环境变量 | 用途 |
+|----------|------|
+| `PAPERVALET_PHONE` | E.164 格式手机号，例如 `+8613800138000` |
+| `PAPERVALET_CODE` | Telegram 一次性登录验证码 |
+| `PAPERVALET_2FA_PASSWORD` | 云端两步验证密码 |
+| `PAPERVALET_NONINTERACTIVE` | 设为 `1`/`true` 时，若上述任一变量缺失则直接报错；未设时缺失会回退到 stdin |
+
+### arm64 注意事项
+
+GitHub Actions 当前只产出 `amd64` 的 `.so`（Go 的 `buildmode=plugin` 在 arm64 上
+未受官方支持）。Apple Silicon 或 arm64 Linux 用户拿到的 bundle：主二进制是原生
+`arm64`，但 `plugins/*.so` 是 `amd64`。两种处理方式：
+
+1. 借助 Rosetta / x86 兼容运行时加载 `amd64` 的 `.so`。
+2. 自己本地编：`cd plugins-external/<name> && go build -buildmode=plugin -o ../<name>.so .`
 
 ## 配置说明
 
