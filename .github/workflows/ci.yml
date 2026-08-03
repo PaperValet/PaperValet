@@ -53,11 +53,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      # 固定到 v1.64.x：用 Go 1.24+ 编译，兼容 Go 1.25 目标版本。
-      # v1.61.0 用 go1.23 编译，golangci-lint 会报 "Go version lower than target"。
-      - uses: golangci/golangci-lint-action@v6
+      # 固定到 v2.12.x：go.mod 声明 go 1.25.0（用 Go 1.25 编译），兼容项目目标版本。
+      # v1.61/v1.64 用 go1.23/go1.24 编译，golangci-lint 会报 "Go version lower than target"。
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.64.8
+          version: v2.12.2
           args: --timeout=5m
 
   # ===== L2：主程序矩阵构建 =====
