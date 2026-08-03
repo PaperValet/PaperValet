@@ -15,7 +15,7 @@ package main
 
 import (
     "context"
-    "github.com/PaperValet/PaperValet/internal/plugin"
+    "github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
 // Plugin 是所有插件必须实现的接口
@@ -53,8 +53,8 @@ import (
     "fmt"
     "strings"
 
-    "github.com/PaperValet/PaperValet/internal/interfaces"
-    "github.com/PaperValet/PaperValet/internal/plugin"
+    "github.com/TiaraBasori/PaperValet/internal/interfaces"
+    "github.com/TiaraBasori/PaperValet/internal/plugin"
 )
 
 // MyPlugin 实现 plugin.Plugin
@@ -153,7 +153,7 @@ module github.com/yourname/myplugin
 
 go 1.25
 
-require github.com/PaperValet/PaperValet v0.1.0
+require github.com/TiaraBasori/PaperValet v0.1.0
 ```
 
 ```bash
