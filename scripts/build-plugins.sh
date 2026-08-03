@@ -7,12 +7,18 @@
 #
 # The script auto-discovers every immediate subdirectory of `plugins-external/`
 # that contains a `main.go`, so new plugins are picked up without editing this file.
+#
+# 构建通过 go.work（仓库根目录）走 workspace 模式，避免 replace ../../../.. 在
+# PR 合成 merge ref 下路径解析失败的问题。
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGINS_DIR="$ROOT_DIR/plugins-external"
+
+# workspace 模式：go.work 位于仓库根目录，包含主模块与所有插件
+export GOWORK="${ROOT_DIR}/go.work"
 
 if [ -z "${PAPERVALET_BUILD_DIR:-}" ]; then
     echo "❌ PAPERVALET_BUILD_DIR is not set" >&2
@@ -29,6 +35,7 @@ fi
 echo "Building external plugins..."
 echo "  root:   $ROOT_DIR"
 echo "  output: $PAPERVALET_BUILD_DIR"
+echo "  gowork: $GOWORK"
 echo "  goos:   ${GOOS:-<host>}  goarch: ${GOARCH:-<host>}"
 echo ""
 
@@ -48,8 +55,7 @@ for plugin_path in "$PLUGINS_DIR"/*/; do
     echo "🔨 $plugin ..."
     (
         cd "$plugin_path"
-        # tidy 失败不阻断（网络或缓存问题），构建阶段会暴露真实错误
-        go mod tidy 2>/dev/null || true
+        # tidy 在 workspace 模式下不需要（go.work 已提供映射），跳过避免污染
         if go build -buildmode=plugin -o "$PAPERVALET_BUILD_DIR/$plugin.so" . ; then
             echo "  ✓ $plugin.so"
         else

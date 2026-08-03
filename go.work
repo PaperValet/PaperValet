@@ -1,0 +1,26 @@
+go 1.25.0
+
+use (
+    .
+    ./plugins-external/atadmins
+    ./plugins-external/bf
+    ./plugins-external/bizhi
+    ./plugins-external/calc
+    ./plugins-external/duckduckgo
+    ./plugins-external/encode
+    ./plugins-external/gt
+    ./plugins-external/hitokoto
+    ./plugins-external/ids
+    ./plugins-external/isalive
+    ./plugins-external/leech
+    ./plugins-external/ping
+    ./plugins-external/qr
+    ./plugins-external/qrcode
+    ./plugins-external/re
+    ./plugins-external/rev
+    ./plugins-external/sendat
+    ./plugins-external/sendlog
+    ./plugins-external/speedtest
+    ./plugins-external/tpm
+    ./plugins-external/weather
+)
