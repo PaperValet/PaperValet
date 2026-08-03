@@ -1,39 +1,86 @@
-# Binary
+# ===== PaperValet .gitignore =====
+
+# ---------- 主程序产物 ----------
+# 主程序二进制与构建副产物
 papervalet
 papervalet.exe
+papervalet-*-amd64
+papervalet-*-arm64
+papervalet-*-amd64.exe
+papervalet-*.tar.gz
+papervalet-*.zip
 
-# Config
-config.json
+# Go 测试产物（go test -c / go test ./...）
+*.test
+*.out
 
-# Session
-*.session.json
-session.json
+# 代码覆盖率
+coverage.out
+coverage.html
+*.coverprofile
 
-# Database
-*.db
-*.db-wal
-*.db-shm
+# ---------- 外部插件构建副产物 ----------
+# go build -buildmode=plugin 产物（仓库内联调试用，最终由 CI 发布）
+plugins/*.so
+plugins/*.dll
+plugins/*.dylib
 
-# Build & plugin artifacts
+# plugins-external/* 单独 build 时可能产生的 vendor / build
+plugins-external/*/vendor/
+plugins-external/*/build/
+
+# ---------- 构建 / Bundle / 临时目录 ----------
 build/
 tmp/
 dist/
+bundle/
+downloads/
+/tmp/
+out/
 
-# Media downloads
+# ---------- 用户运行时产物（切勿上传） ----------
+# 配置
+config.json
+*.local.json
+
+# 登录会话与凭据（gotd 的 FileSessionStorage）
+session.json
+*.session.json
+*.session
+
+# SQLite（WAL 模式产物一并）
+*.db
+*.db-wal
+*.db-shm
+sessions.db
+
+# Telegram 下载缓存
 downloads/
 
-# IDE
+# ---------- 本地环境变量（避免误传密钥） ----------
+.env
+.env.*
+!.env.example
+papervalet.env
+papervalet.env.ps1
+
+# ---------- IDE / 编辑器 ----------
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS
+*~
+*.bak
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Go vendor (if used)
+# ---------- CI 缓存 ----------
+# GitHub Actions 缓存目录（runner 临时，不该入仓）
+.github/actions/
+
+# ---------- Go vendor ----------
 vendor/
 
-# Temp
-/tmp/
+# ---------- Claude / AI 助手本地状态 ----------
+.claude/
