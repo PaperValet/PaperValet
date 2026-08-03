@@ -41,12 +41,32 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/
 iwr -useb https://raw.githubusercontent.com/PaperValet/PaperValet/main/scripts/install.ps1 | iex
 ```
 
-脚本会从最新 GitHub Release 下载与系统匹配的 `papervalet-<os>-<arch>.{tar.gz|zip}`，
-解压到 `~/.papervalet/`，并基于 `config.example.json` 生成初始 `config.json`，
-最后打印后续操作提示。
+默认进入**交互菜单**，可选项：
 
-也可通过 `--api-id` / `--api-hash` / `--phone` 参数跳过手动编辑；
-完整参数见 `./scripts/install.sh --help`。
+| 序号 | 动作 | 用途 |
+|------|------|------|
+| 1 | `install` | 首次安装到 `~/.papervalet` |
+| 2 | `reinstall` | 覆盖重装；默认保留 `config.json` |
+| 3 | `upgrade` | 升级到指定版本；保留 `config.json` / `session.json` / `sessions.db` |
+| 4 | `uninstall` | 卸载（可保留 config / data） |
+| 5 | `status` | 查看安装路径、版本、二进制 SHA256、`.so` 数量 |
+| 6 | `latest` | 列出 GitHub 最新 release 与其 bundle |
+| 7 | `set-phone` | 持久化 `PAPERVALET_PHONE`（以及可选的 `PAPERVALET_CODE` / `PAPERVALET_2FA_PASSWORD`）到 `~/.papervalet.env` |
+| 8 | `run` | 前台启动 bot |
+| 9 | `doctor` | 自检（curl / jq / 磁盘 / 架构 / GitHub 可达性） |
+| 0 | `exit` | 退出 |
+| v | — | 切换版本（latest / vX.Y.Z） |
+| h | — | 切换安装目录 |
+
+若传 `--non-interactive` 或任一 `--phone` / `--api-id` / `--api-hash`，脚本跳过菜单
+直接 install，便于 CI 使用。
+
+命令行参数：`--version <tag>`、`--home <dir>`、`--phone`、`--api-id`、`--api-hash`、
+`--no-config`、`--keep-config`、`--keep-data`、`--repo owner/repo`。完整列表见
+`--help`。
+
+任何时候重跑同一行 `curl | bash` 都会再次进入菜单，可升级、卸载、改设置，不必
+记命令行。
 
 ### 手动下载
 
