@@ -3,11 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"runtime"
-	"strings"
-	"time"
 
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
@@ -49,26 +45,34 @@ func (p *SpeedtestPlugin) handleSpeedtest(ctx *plugin.CommandContext) error {
 		mode = ctx.Args[0]
 	}
 
-	// Check if speedtest-cli exists
-	result := "⌛ 正在测试..."
-	go func() {
-		time.Sleep(2 * time.Second)
-		// Real impl would run: speedtest-cli --simple
-		// Simulate for now
-		_ = mode
-		_ = result
-	}()
+	// Locate a speedtest binary: prefer speedtest-cli, fall back to speedtest.
+	bin := ""
+	for _, candidate := range []string{"speedtest-cli", "speedtest"} {
+		if p, err := exec.LookPath(candidate); err == nil {
+			bin = p
+			break
+		}
+	}
+	if bin == "" {
+		return ctx.Edit("❌ 未找到 speedtest-cli/speedtest，请先安装（如 <code>apt install speedtest-cli</code>）")
+	}
 
-	return ctx.Edit(fmt.Sprintf(`🌐 <b>网络测速</b>
+	args := []string{}
+	if mode == "full" {
+		args = append(args, "--bytes")
+	}
 
-模式: <code>%s</code>
+	out, err := exec.Command(bin, args...).CombinedOutput()
+	if err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 测速失败: %v\n<pre>%s</pre>", err, truncate(string(out), 1500)))
+	}
 
-⚠️ 完整实现需安装 speedtest-cli 或调用 speedtest.net API
+	return ctx.Edit(fmt.Sprintf("🌐 <b>网络测速</b>\n\n模式: <code>%s</code>\n\n<pre>%s</pre>", mode, truncate(string(out), 3000)))
+}
 
-<u>模拟结果:</u>
-下载: 523.45 Mbps
-上传: 87.21 Mbps
-延迟: 12.3 ms
-抖动: 2.1 ms
-服务器: Tokyo, JP`, mode))
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "\n…(截断)"
 }

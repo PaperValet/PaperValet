@@ -39,6 +39,9 @@ var Metadata = &plugin.PluginMetadata{
 func (p *PingPlugin) Name() string        { return "ping" }
 func (p *PingPlugin) Description() string { return "网络延迟测试工具" }
 
+func (p *PingPlugin) Start(ctx context.Context) error { return nil }
+func (p *PingPlugin) Stop(ctx context.Context) error  { return nil }
+
 func (p *PingPlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&plugin.Command{
 		Name:        "ping",

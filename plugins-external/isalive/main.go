@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )

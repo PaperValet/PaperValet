@@ -6,7 +6,6 @@ import (
 	"image/png"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/boombuler/barcode"

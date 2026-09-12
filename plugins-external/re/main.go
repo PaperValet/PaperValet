@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
+	"time"
 
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/gotd/td/tg"
@@ -39,7 +39,7 @@ func (p *RePlugin) Init(ctx context.Context, mgr plugin.Manager) error {
 }
 
 func (p *RePlugin) handleRe(ctx *plugin.CommandContext) error {
-	msg := ctx.Message()
+	msg := ctx.Message
 	if msg == nil {
 		return ctx.Edit("❌ 无消息上下文")
 	}
@@ -71,15 +71,66 @@ func (p *RePlugin) handleRe(ctx *plugin.CommandContext) error {
 		repeat = 10
 	}
 
-	// Get the API client
-	client := ctx.API()
+	client := ctx.API
 	if client == nil {
 		return ctx.Edit("❌ 客户端不可用")
 	}
 
-	// Try to get the replied message
-	// This is a simplified implementation
-	return ctx.Edit(fmt.Sprintf("📝 复读功能\n\n数量: %d\n次数: %d\n\n⚠️ 需要完整实现消息获取和转发逻辑", count, repeat))
+	// Fetch the replied message
+	peer, err := ctx.ResolvePeer()
+	if err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 解析 Peer 失败: %v", err))
+	}
+
+	res, err := client.MessagesGetMessages(ctx.Context(), []tg.InputMessageClass{
+		&tg.InputMessageReplyTo{ID: msg.ReplyToID},
+	})
+	if err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 获取回复消息失败: %v", err))
+	}
+
+	var text string
+	switch r := res.(type) {
+	case *tg.MessagesMessages:
+		for _, m := range r.Messages {
+			if mm, ok := m.(*tg.Message); ok {
+				text = mm.Message
+				break
+			}
+		}
+	case *tg.MessagesMessagesSlice:
+		for _, m := range r.Messages {
+			if mm, ok := m.(*tg.Message); ok {
+				text = mm.Message
+				break
+			}
+		}
+	case *tg.MessagesChannelMessages:
+		for _, m := range r.Messages {
+			if mm, ok := m.(*tg.Message); ok {
+				text = mm.Message
+				break
+			}
+		}
+	}
+
+	if text == "" {
+		return ctx.Edit("❌ 回复的消息无文本内容")
+	}
+
+	for i := 0; i < repeat; i++ {
+		for j := 0; j < count; j++ {
+			if _, err := client.MessagesSendMessage(ctx.Context(), &tg.MessagesSendMessageRequest{
+				Peer:     peer,
+				Message:  text,
+				RandomID: time.Now().UnixNano(),
+			}); err != nil {
+				return ctx.Edit(fmt.Sprintf("❌ 发送失败: %v", err))
+			}
+		}
+	}
+
+	return ctx.Edit(fmt.Sprintf("✅ 复读完成: %d 条 × %d 次", count, repeat))
 }
 
 func (p *RePlugin) Start(ctx context.Context) error { return nil }

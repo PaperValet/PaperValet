@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
@@ -48,12 +50,68 @@ func (p *SendLogPlugin) handleSendLog(ctx *plugin.CommandContext) error {
 		}
 	}
 
-	return ctx.Edit(fmt.Sprintf(`📋 <b>发送日志</b>
+	// Locate the newest PaperValet log file.
+	logFile := findLatestLog()
+	if logFile == "" {
+		return ctx.Edit("❌ 未找到日志文件（已检查 ./logs、~/.pm2/logs、/var/log/papervalet）")
+	}
 
-行数: <code>%d</code>
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 读取日志失败: %v", err))
+	}
 
-⚠️ <i>需要实现日志文件读取和发送逻辑</i>
-⏰ <i>%s</i>`, lines, time.Now().Format("15:04:05")))
+	text := string(data)
+	if text == "" {
+		return ctx.Edit(fmt.Sprintf("📋 日志文件为空: <code>%s</code>", logFile))
+	}
+
+	// Keep only the last N lines.
+	allLines := strings.Split(text, "\n")
+	if len(allLines) > lines {
+		allLines = allLines[len(allLines)-lines:]
+	}
+	tail := strings.Join(allLines, "\n")
+
+	// Telegram messages are capped at 4096 chars; truncate from the head.
+	const maxLen = 3500
+	if len(tail) > maxLen {
+		tail = "…(截断)\n" + tail[len(tail)-maxLen:]
+	}
+
+	return ctx.Edit(fmt.Sprintf("📋 <b>日志尾部</b> (<code>%s</code>)\n\n<pre>%s</pre>", filepath.Base(logFile), tail))
+}
+
+func findLatestLog() string {
+	var candidates []string
+	for _, dir := range []string{"logs", filepath.Join(os.Getenv("HOME"), ".pm2", "logs"), "/var/log/papervalet"} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := strings.ToLower(e.Name())
+			if strings.Contains(name, "paper") && strings.HasSuffix(name, ".log") {
+				candidates = append(candidates, filepath.Join(dir, e.Name()))
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return ""
+	}
+	// Newest first.
+	sort.Slice(candidates, func(i, j int) bool {
+		iInfo, iErr := os.Stat(candidates[i])
+		jInfo, jErr := os.Stat(candidates[j])
+		if iErr != nil || jErr != nil {
+			return false
+		}
+		return iInfo.ModTime().After(jInfo.ModTime())
+	})
+	return candidates[0]
 }
 
 func (p *SendLogPlugin) Start(ctx context.Context) error { return nil }
