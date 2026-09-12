@@ -17,7 +17,7 @@ type PrunePlugin struct{}
 
 func NewPrune() *PrunePlugin { return &PrunePlugin{} }
 
-func (p *PrunePlugin) Name() string        { return "prune" }
+func (p *PrunePlugin) Name() string        { return "dme" }
 func (p *PrunePlugin) Description() string { return "消息清理" }
 
 func (p *PrunePlugin) Init(_ context.Context, mgr plugin.Manager) error {
