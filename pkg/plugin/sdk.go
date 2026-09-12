@@ -73,6 +73,7 @@ type Manager interface {
 	Commands() RegistryProvider
 	GetInfo(name string) (PluginInfo, bool)
 	GetAllInfo() []PluginInfo
+	GetPlugin(name string) (Plugin, bool)
 	Emit(ctx context.Context, eventType string, data any) error
 	InitAll(ctx context.Context) error
 	StartAll(ctx context.Context) error

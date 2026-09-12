@@ -46,13 +46,11 @@ func (p *StatusPlugin) handleStatus(ctx *interfaces.CommandContext) error {
 
 	uptime := time.Since(p.startTime).Truncate(time.Second)
 
-	// Memory breakdown
 	allocMB := float64(mem.Alloc) / 1024 / 1024
 	sysMB := float64(mem.Sys) / 1024 / 1024
 	heapMB := float64(mem.HeapAlloc) / 1024 / 1024
 	heapSysMB := float64(mem.HeapSys) / 1024 / 1024
 
-	// GC stats
 	nextGCMB := float64(mem.NextGC) / 1024 / 1024
 	gcCount := mem.NumGC
 	lastGC := time.Unix(0, int64(mem.LastGC)).Format("15:04:05")

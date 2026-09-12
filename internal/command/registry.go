@@ -29,6 +29,7 @@ type Registry struct {
 	rateLimits map[string]time.Time
 	logger     interfaces.Logger
 	i18n       *i18n.Manager
+	sudoChecker func(int64) bool
 }
 
 func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
@@ -60,6 +61,25 @@ func (r *Registry) SetOwnerID(id int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ownerID = id
+}
+
+// SetSudoChecker wires a permission checker used to let delegated users
+// run OwnerOnly commands.
+func (r *Registry) SetSudoChecker(f func(int64) bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sudoChecker = f
+}
+
+// isSudoUser reports whether the user has been granted delegated access.
+func (r *Registry) isSudoUser(userID int64) bool {
+	r.mu.RLock()
+	f := r.sudoChecker
+	r.mu.RUnlock()
+	if f == nil {
+		return false
+	}
+	return f(userID)
 }
 
 func (r *Registry) Use(mw interfaces.Middleware) {
@@ -240,7 +260,7 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 	if !exists {
 		return nil
 	}
-	if cmd.OwnerOnly && r.ownerID != 0 && msg.UserID != r.ownerID {
+	if cmd.OwnerOnly && r.ownerID != 0 && msg.UserID != r.ownerID && !r.isSudoUser(msg.UserID) {
 		return nil
 	}
 

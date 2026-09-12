@@ -125,34 +125,39 @@ func New(cfg *config.Config) (*App, error) {
 func (a *App) registerBuiltins() error {
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
-		builtin.NewPPM(a.pluginLoader),
+		builtin.NewApt(a.pluginLoader),
 		builtin.NewInfo(),
 		builtin.NewRemind(),
 		builtin.NewNote(),
 		builtin.NewFun(),
-		builtin.NewAdmin(),
 		builtin.NewCron(a.cron),
 		builtin.NewAlias(),
 		builtin.NewDebug(),
 		builtin.NewExec(),
 		builtin.NewSudo(),
-		builtin.NewLog(),
 		builtin.NewReload(a.pluginLoader),
+		builtin.NewLog(),
+		builtin.NewSendLog(),
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
 		builtin.NewBF(),
-		builtin.NewKitt(),
-		builtin.NewHealth(),
-		builtin.NewAutofix(),
-		builtin.NewLogLevel(),
-		builtin.NewSendLog(),
+		builtin.NewMemory(),
+		builtin.NewUpdate(),
+		builtin.NewAccount(),
+		builtin.NewPrune(),
 		builtin.NewSave(),
 		builtin.NewLeech(),
 		builtin.NewLang(a.i18n),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err
+		}
+	}
+	// Wire the sudo plugin's permission checker into the command registry.
+	if sudo, ok := a.plugins.GetPlugin("sudo"); ok {
+		if s, ok := sudo.(*builtin.SudoPlugin); ok {
+			a.commands.SetSudoChecker(s.IsSudoUser)
 		}
 	}
 	return nil

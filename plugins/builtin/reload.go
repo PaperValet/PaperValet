@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -10,7 +11,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// ReloadPlugin provides hot-reload functionality for external plugins.
+// ReloadPlugin provides hot-reload for external plugins.
 type ReloadPlugin struct {
 	loader *loader.Loader
 	mgr    plugin.Manager
@@ -28,7 +29,7 @@ func (p *ReloadPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "reload",
 		Aliases:     []string{"rl"},
-		Description: "重载外部插件（别名: rl）",
+		Description: "重载外部插件",
 		Usage:       "reload <插件名|all|list>",
 		Plugin:      p.Name(),
 		Category:    "admin",
@@ -56,7 +57,13 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 		}
 		var b strings.Builder
 		b.WriteString("🔌 <b>已加载外部插件:</b>\n\n")
-		for name, info := range loaded {
+		var names []string
+		for name := range loaded {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			info := loaded[name]
 			b.WriteString(fmt.Sprintf("• <code>%s</code> (%s)\n", name, info.Path))
 			if info.Metadata != nil {
 				b.WriteString(fmt.Sprintf("  版本: %s | 作者: %s\n", info.Metadata.Version, info.Metadata.Author))
@@ -81,7 +88,6 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 		return ctx.Edit("🔄 <b>全量重载结果:</b>\n\n" + strings.Join(results, "\n"))
 
 	default:
-		// Reload single plugin
 		if p.loader.IsLoaded(target) {
 			if err := p.loader.Unload(ctx.Context(), target); err != nil {
 				return ctx.Edit(fmt.Sprintf("❌ 卸载失败: %v", err))

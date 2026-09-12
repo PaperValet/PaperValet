@@ -161,3 +161,37 @@ func (w *stdLogWriter) Write(p []byte) (n int, err error) {
 	Get().Info(strings.TrimSpace(string(p)))
 	return len(p), nil
 }
+
+// SetLevel changes the global log level at runtime.
+func SetLevel(level string) error {
+	mu.RLock()
+	defer mu.RUnlock()
+	if globalLogger == nil {
+		return nil
+	}
+	var l zapcore.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		l = zapcore.DebugLevel
+	case "info":
+		l = zapcore.InfoLevel
+	case "warn", "warning":
+		l = zapcore.WarnLevel
+	case "error":
+		l = zapcore.ErrorLevel
+	default:
+		return nil
+	}
+	globalLevel.SetLevel(l)
+	return nil
+}
+
+// GetLevel returns the current global log level as a string.
+func GetLevel() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	if globalLogger == nil {
+		return "info"
+	}
+	return globalLevel.Level().String()
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -124,3 +125,5 @@ func (p *CronPlugin) handleCron(ctx *interfaces.CommandContext) error {
 		return ctx.Edit("未知子命令: " + sub)
 	}
 }
+
+var _ = time.Now
