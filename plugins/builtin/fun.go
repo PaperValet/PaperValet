@@ -19,47 +19,11 @@ func (p *FunPlugin) Description() string { return "娱乐命令" }
 
 func (p *FunPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*interfaces.Command{
-		{
-			Name:        "roll",
-			Aliases:     []string{"dice"},
-			Description: "掷骰子",
-			Usage:       "roll [最大值]",
-			Plugin:      p.Name(),
-			Category:    "fun",
-			Handler:     p.handleRoll,
-		},
-		{
-			Name:        "coin",
-			Aliases:     []string{"flip"},
-			Description: "抛硬币",
-			Plugin:      p.Name(),
-			Category:    "fun",
-			Handler:     p.handleCoin,
-		},
-		{
-			Name:        "choose",
-			Aliases:     []string{"pick"},
-			Description: "从选项中随机选择",
-			Usage:       "choose <选项1> <选项2> ...",
-			Plugin:      p.Name(),
-			Category:    "fun",
-			Handler:     p.handleChoose,
-		},
-		{
-			Name:        "8ball",
-			Description: "魔法八球占卜",
-			Usage:       "8ball <问题>",
-			Plugin:      p.Name(),
-			Category:    "fun",
-			Handler:     p.handle8ball,
-		},
-		{
-			Name:        "fact",
-			Description: "随机冷知识",
-			Plugin:      p.Name(),
-			Category:    "fun",
-			Handler:     p.handleFact,
-		},
+		{Name: "roll", Aliases: []string{"dice"}, Description: "掷骰子", Usage: "roll [最大值]", Plugin: p.Name(), Category: "fun", Handler: p.handleRoll},
+		{Name: "coin", Aliases: []string{"flip"}, Description: "抛硬币", Plugin: p.Name(), Category: "fun", Handler: p.handleCoin},
+		{Name: "choose", Description: "从选项中随机选择", Usage: "choose <选项1> <选项2> ...", Plugin: p.Name(), Category: "fun", Handler: p.handleChoose},
+		{Name: "8ball", Description: "魔法八球占卜", Usage: "8ball <问题>", Plugin: p.Name(), Category: "fun", Handler: p.handle8ball},
+		{Name: "fact", Description: "随机冷知识", Plugin: p.Name(), Category: "fun", Handler: p.handleFact},
 	}
 	for _, cmd := range cmds {
 		if err := mgr.RegisterCommand(cmd); err != nil {

@@ -12,7 +12,6 @@ import (
 )
 
 // PPMPlugin — Plugin Package Manager.
-// Full lifecycle: search, install, remove, load, unload, reload, list, info.
 type PPMPlugin struct {
 	loader *loader.Loader
 	mgr    plugin.Manager
@@ -54,52 +53,42 @@ func (p *PPMPlugin) handlePPM(ctx *interfaces.CommandContext) error {
 	switch sub {
 	case "help", "h", "?":
 		return p.showHelp(ctx)
-
 	case "list", "ls", "installed":
 		return p.listInstalled(ctx)
-
 	case "loaded", "active":
 		return p.listLoaded(ctx)
-
 	case "info", "status":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm info <插件名>")
 		}
 		return p.pluginInfo(ctx, subArgs[0])
-
 	case "search", "find":
 		return p.searchRegistry(ctx, subArgs)
-
 	case "install", "add", "get":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm install <插件名> [插件名...]")
 		}
 		return p.installPlugins(ctx, subArgs)
-
 	case "remove", "rm", "delete", "uninstall":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm remove <插件名> [插件名...]")
 		}
 		return p.removePlugins(ctx, subArgs)
-
 	case "load", "enable":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm load <插件名> [插件名...]")
 		}
 		return p.loadPlugins(ctx, subArgs)
-
 	case "unload", "disable":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm unload <插件名> [插件名...]")
 		}
 		return p.unloadPlugins(ctx, subArgs)
-
 	case "reload", "restart", "refresh":
 		if len(subArgs) == 0 {
 			return ctx.Edit("用法: ppm reload <插件名> [插件名...]")
 		}
 		return p.reloadPlugins(ctx, subArgs)
-
 	default:
 		return ctx.Edit(fmt.Sprintf("❌ 未知子命令: %s\n\n%s", sub, p.helpText()))
 	}
@@ -124,14 +113,7 @@ func (p *PPMPlugin) helpText() string {
 <b>生命周期:</b>
 • <code>ppm load &lt;name&gt;</code> — 加载插件（启动）
 • <code>ppm unload &lt;name&gt;</code> — 卸载插件（停止）
-• <code>ppm reload &lt;name&gt;</code> — 热重载插件
-
-<b>示例:</b>
-• <code>ppm list</code>
-• <code>ppm install ping</code>
-• <code>ppm load ping</code>
-• <code>ppm unload ping</code>
-• <code>ppm remove ping</code>`
+• <code>ppm reload &lt;name&gt;</code> — 热重载插件`
 }
 
 func (p *PPMPlugin) listInstalled(ctx *interfaces.CommandContext) error {
@@ -146,11 +128,9 @@ func (p *PPMPlugin) listInstalled(ctx *interfaces.CommandContext) error {
 		return ctx.Edit("📦 暂无已安装的插件\n\n使用 <code>ppm install &lt;name&gt;</code> 安装插件")
 	}
 
-	// Collect all unique plugin names
 	seen := make(map[string]bool)
 	var allPlugins []string
 
-	// Built-in plugins from manager
 	for _, info := range p.mgr.GetAllInfo() {
 		if !seen[info.Name] {
 			allPlugins = append(allPlugins, info.Name)
@@ -168,7 +148,6 @@ func (p *PPMPlugin) listInstalled(ctx *interfaces.CommandContext) error {
 	var b strings.Builder
 	b.WriteString("📦 <b>插件列表</b>\n\n")
 
-	// Count by type
 	var builtinCount, loadedCount int
 	for _, name := range allPlugins {
 		isLoaded := loaded[name] != nil
@@ -226,13 +205,10 @@ func (p *PPMPlugin) listLoaded(ctx *interfaces.CommandContext) error {
 	var b strings.Builder
 	b.WriteString("✅ <b>已加载插件</b>\n\n")
 
-	// Built-in plugins
 	var builtinNames []string
-	seen := make(map[string]bool)
 	for _, info := range builtins {
 		if info.Status == plugin.StatusActive {
 			builtinNames = append(builtinNames, info.Name)
-			seen[info.Name] = true
 		}
 	}
 	sort.Strings(builtinNames)
@@ -246,7 +222,6 @@ func (p *PPMPlugin) listLoaded(ctx *interfaces.CommandContext) error {
 		b.WriteString("\n")
 	}
 
-	// External plugins
 	if len(loaded) > 0 {
 		b.WriteString("<b>🔌 外部插件:</b>\n")
 		var names []string
@@ -269,18 +244,13 @@ func (p *PPMPlugin) listLoaded(ctx *interfaces.CommandContext) error {
 }
 
 func (p *PPMPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) error {
-	// Check loaded
 	loaded := p.loader.GetLoaded()
 	if entry, ok := loaded[name]; ok {
 		meta := ""
 		if entry.Metadata != nil {
-			meta = fmt.Sprintf(`📌 <b>版本:</b> %s
-👤 <b>作者:</b> %s
-📅 <b>加载时间:</b> %s
-📁 <b>路径:</b> <code>%s</code>`,
+			meta = fmt.Sprintf("📌 <b>版本:</b> %s\n👤 <b>作者:</b> %s\n📅 <b>加载时间:</b> %s\n📁 <b>路径:</b> <code>%s</code>",
 				entry.Metadata.Version, entry.Metadata.Author,
-				entry.LoadedAt.Format("2006-01-02 15:04:05"),
-				entry.Path)
+				entry.LoadedAt.Format("2006-01-02 15:04:05"), entry.Path)
 		}
 		cmds := p.mgr.Commands().GetByPlugin(name)
 		cmdList := ""
@@ -295,7 +265,6 @@ func (p *PPMPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) erro
 		return ctx.Edit(fmt.Sprintf("✅ <b>%s</b> 🟢 已加载\n%s%s", name, meta, cmdList))
 	}
 
-	// Check built-in
 	if info, ok := p.mgr.GetInfo(name); ok {
 		cmds := p.mgr.Commands().GetByPlugin(name)
 		var cmdList []string
@@ -310,7 +279,6 @@ func (p *PPMPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) erro
 		return ctx.Edit(fmt.Sprintf("📦 <b>%s</b> %s\n%s\n命令: %s", name, statusStr, info.Description, strings.Join(cmdList, ", ")))
 	}
 
-	// Check installed but not loaded
 	installed, _ := p.loader.GetInstalled()
 	for _, n := range installed {
 		if n == name {
@@ -324,7 +292,6 @@ func (p *PPMPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) erro
 func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string) error {
 	_ = ctx.Edit("⏳ 正在查询插件注册表...")
 
-	// Real external plugins available from PaperValet-Plugins registry
 	knownPlugins := []struct {
 		name        string
 		description string
@@ -337,7 +304,6 @@ func (p *PPMPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 		{"re", "消息复读机", "1.0.0"},
 		{"sendlog", "日志发送工具", "1.0.0"},
 		{"tpm", "Telegram 插件管理器 (旧版)", "1.0.0"},
-		// New plugins from TeleBox-Plugins migration
 		{"atadmins", "一键艾特全部管理员", "1.0.0"},
 		{"ids", "显示用户/群组/消息 ID 及跳转链接", "1.0.0"},
 		{"isalive", "活了么 - 检测 bot 是否在线", "1.0.0"},
@@ -470,15 +436,12 @@ func (p *PPMPlugin) reloadPlugins(ctx *interfaces.CommandContext, names []string
 
 	var results []string
 	for _, name := range names {
-		// Unload if loaded
 		if p.loader.IsLoaded(name) {
 			if err := p.loader.Unload(ctx.Context(), name); err != nil {
 				results = append(results, fmt.Sprintf("❌ <b>%s</b> 卸载失败: %v", name, err))
 				continue
 			}
 		}
-
-		// Reload: unload old + load fresh
 		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
 			results = append(results, fmt.Sprintf("❌ <b>%s</b> 重载失败: %v", name, err))
 			continue

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/gotd/td/tg"
+
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 )
@@ -84,17 +85,17 @@ func (h *UpdateHandler) dispatchMessage(ctx context.Context, msg *tg.Message, ra
 	}
 
 	ev := &interfaces.MessageEvent{
-		Update:    raw,
-		Message:   msg,
-		Text:      msg.Message,
-		UserID:    userID,
-		ChatID:    extractChatID(msg),
-		IsOut:     msg.Out,
-		Entities:  msg.Entities,
-		Media:     msg.Media,
-		Date:      msg.Date,
-		PeerID:    msg.PeerID,
-		Raw:       msg,
+		Update:   raw,
+		Message:  msg,
+		Text:     msg.Message,
+		UserID:   userID,
+		ChatID:   extractChatID(msg),
+		IsOut:    msg.Out,
+		Entities: msg.Entities,
+		Media:    msg.Media,
+		Date:     msg.Date,
+		PeerID:   msg.PeerID,
+		Raw:      msg,
 	}
 	if reply, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		ev.IsReply = true

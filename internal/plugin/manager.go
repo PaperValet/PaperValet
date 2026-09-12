@@ -8,8 +8,8 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
-	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // Manager implements the plugin.Manager interface for internal use.
@@ -77,13 +77,7 @@ func (m *Manager) InitPlugin(ctx context.Context, name string) error {
 		return fmt.Errorf("plugin %s not registered", name)
 	}
 	if err := p.Init(ctx, m); err != nil {
-		m.mu.Lock()
-		m.infos[name] = plugin.PluginInfo{
-			Name:        name,
-			Description: p.Description(),
-			Status:      plugin.StatusError,
-		}
-		m.mu.Unlock()
+		m.setStatus(name, plugin.StatusError)
 		return err
 	}
 	return nil
@@ -98,22 +92,10 @@ func (m *Manager) StartPlugin(ctx context.Context, name string) error {
 		return fmt.Errorf("plugin %s not registered", name)
 	}
 	if err := p.Start(ctx); err != nil {
-		m.mu.Lock()
-		m.infos[name] = plugin.PluginInfo{
-			Name:        name,
-			Description: p.Description(),
-			Status:      plugin.StatusError,
-		}
-		m.mu.Unlock()
+		m.setStatus(name, plugin.StatusError)
 		return err
 	}
-	m.mu.Lock()
-	m.infos[name] = plugin.PluginInfo{
-		Name:        name,
-		Description: p.Description(),
-		Status:      plugin.StatusActive,
-	}
-	m.mu.Unlock()
+	m.setStatus(name, plugin.StatusActive)
 	return nil
 }
 
@@ -128,13 +110,58 @@ func (m *Manager) StopPlugin(ctx context.Context, name string) error {
 	if err := p.Stop(ctx); err != nil {
 		return err
 	}
-	m.mu.Lock()
-	m.infos[name] = plugin.PluginInfo{
-		Name:        name,
-		Description: p.Description(),
-		Status:      plugin.StatusInactive,
+	m.setStatus(name, plugin.StatusInactive)
+	return nil
+}
+
+// InitAll initializes all registered plugins.
+func (m *Manager) InitAll(ctx context.Context) error {
+	m.mu.RLock()
+	names := make([]string, 0, len(m.plugins))
+	for name := range m.plugins {
+		names = append(names, name)
 	}
-	m.mu.Unlock()
+	m.mu.RUnlock()
+
+	for _, name := range names {
+		if err := m.InitPlugin(ctx, name); err != nil {
+			logger.NamedLogger("plugin").Error("init failed", "name", name, "error", err)
+		}
+	}
+	return nil
+}
+
+// StartAll starts all registered plugins.
+func (m *Manager) StartAll(ctx context.Context) error {
+	m.mu.RLock()
+	names := make([]string, 0, len(m.plugins))
+	for name := range m.plugins {
+		names = append(names, name)
+	}
+	m.mu.RUnlock()
+
+	for _, name := range names {
+		if err := m.StartPlugin(ctx, name); err != nil {
+			logger.NamedLogger("plugin").Error("start failed", "name", name, "error", err)
+		}
+	}
+	return nil
+}
+
+// StopAll stops all registered plugins.
+func (m *Manager) StopAll(ctx context.Context) error {
+	m.mu.RLock()
+	names := make([]string, 0, len(m.plugins))
+	for name := range m.plugins {
+		names = append(names, name)
+	}
+	m.mu.RUnlock()
+
+	for _, name := range names {
+		if err := m.StopPlugin(ctx, name); err != nil {
+			logger.NamedLogger("plugin").Warn("stop failed", "name", name, "error", err)
+		}
+	}
 	return nil
 }
 
@@ -155,82 +182,48 @@ func (m *Manager) GetInfo(name string) (plugin.PluginInfo, bool) {
 func (m *Manager) GetAllInfo() []plugin.PluginInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	infos := make([]plugin.PluginInfo, 0, len(m.infos))
+	out := make([]plugin.PluginInfo, 0, len(m.infos))
 	for _, info := range m.infos {
-		infos = append(infos, info)
+		out = append(out, info)
 	}
-	return infos
+	return out
 }
 
-// Emit sends an event through the event bus.
+// Emit emits an event on the bus.
 func (m *Manager) Emit(ctx context.Context, eventType string, data any) error {
 	return m.bus.Emit(ctx, eventType, data)
 }
 
-// InitAll calls Init on all registered plugins. Collects errors from all
-// plugins instead of aborting on the first failure.
-func (m *Manager) InitAll(ctx context.Context) error {
+// GetPlugin returns a plugin by name.
+func (m *Manager) GetPlugin(name string) (plugin.Plugin, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var errs []string
-	for name, p := range m.plugins {
-		if err := p.Init(ctx, m); err != nil {
-			m.infos[name] = plugin.PluginInfo{
-				Name:        name,
-				Description: p.Description(),
-				Status:      plugin.StatusError,
-			}
-			errs = append(errs, fmt.Sprintf("plugin %s init: %s", name, err))
-			continue
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("plugin init errors:\n  %s", strings.Join(errs, "\n  "))
-	}
-	return nil
+	p, ok := m.plugins[name]
+	return p, ok
 }
 
-// StartAll calls Start on all registered plugins. Collects errors from all
-// plugins instead of aborting on the first failure.
-func (m *Manager) StartAll(ctx context.Context) error {
+// ListPlugins returns all plugin names.
+func (m *Manager) ListPlugins() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var errs []string
-	for name, p := range m.plugins {
-		if err := p.Start(ctx); err != nil {
-			m.infos[name] = plugin.PluginInfo{
-				Name:        name,
-				Description: p.Description(),
-				Status:      plugin.StatusError,
-			}
-			errs = append(errs, fmt.Sprintf("plugin %s start: %s", name, err))
-			continue
-		}
-		m.infos[name] = plugin.PluginInfo{
-			Name:        name,
-			Description: p.Description(),
-			Status:      plugin.StatusActive,
-		}
+	var names []string
+	for name := range m.plugins {
+		names = append(names, name)
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("plugin start errors:\n  %s", strings.Join(errs, "\n  "))
-	}
-	return nil
+	return names
 }
 
-// StopAll calls Stop on all registered plugins.
-func (m *Manager) StopAll(ctx context.Context) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	for name, p := range m.plugins {
-		if err := p.Stop(ctx); err != nil {
-			logger.NamedLogger("plugin").Error("plugin stop error", "name", name, "error", err)
-		}
-		m.infos[name] = plugin.PluginInfo{
-			Name:        name,
-			Description: p.Description(),
-			Status:      plugin.StatusInactive,
-		}
+func (m *Manager) setStatus(name string, status plugin.PluginStatus) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if info, ok := m.infos[name]; ok {
+		info.Status = status
+		m.infos[name] = info
 	}
-	return nil
+}
+
+// NormalizeName trims .so suffix and lowercases.
+func NormalizeName(name string) string {
+	name = strings.TrimSuffix(name, ".so")
+	return strings.ToLower(name)
 }

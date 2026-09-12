@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
+
+	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
@@ -26,9 +28,10 @@ type Registry struct {
 	prefixes   []string // all supported command prefixes (main first)
 	rateLimits map[string]time.Time
 	logger     interfaces.Logger
+	i18n       *i18n.Manager
 }
 
-func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64) *Registry {
+func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
 	if len(prefixes) == 0 {
 		prefixes = []string{"."}
 	}
@@ -43,6 +46,7 @@ func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, 
 		prefixes:   prefixes,
 		rateLimits: make(map[string]time.Time),
 		logger:     logger.NamedLogger("command"),
+		i18n:       i18nMgr,
 	}
 	r.Use(r.recoveryMiddleware)
 	r.Use(r.loggingMiddleware)
@@ -254,6 +258,12 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 		Metadata:     make(map[string]any),
 		Ctx:          ctx,
 		Logger:       r.logger,
+		I18n: func(key string, args ...any) string {
+			if r.i18n != nil {
+				return r.i18n.T(msg.UserID, key, args...)
+			}
+			return key
+		},
 	}
 
 	handler := cmd.Handler

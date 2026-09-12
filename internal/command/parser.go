@@ -11,8 +11,6 @@ import (
 
 // Parser listens for message events and dispatches commands.
 // As a userbot, the Parser only handles outgoing messages (IsOut == true).
-// Incoming messages could be added for bot-style operation by removing the
-// IsOut filter — this is a deliberate design choice for the userbot use case.
 type Parser struct {
 	registry *Registry
 	bus      *eventbus.Bus

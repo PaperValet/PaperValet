@@ -14,6 +14,12 @@ type Config struct {
 	Telegram TelegramConfig `json:"telegram"`
 	Bot      BotConfig      `json:"bot"`
 	Logger   LoggerConfig   `json:"logger"`
+	I18n     I18nConfig     `json:"i18n"`
+}
+
+// I18nConfig controls language behavior.
+type I18nConfig struct {
+	DefaultLanguage string `json:"default_language"`
 }
 
 type TelegramConfig struct {

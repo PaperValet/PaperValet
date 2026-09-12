@@ -64,7 +64,7 @@ func (p *AdminPlugin) Start(_ context.Context) error { return nil }
 func (p *AdminPlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *AdminPlugin) handleRestart(ctx *interfaces.CommandContext) error {
-	_ = ctx.Edit("🔄 正在重启...")
+	_ = ctx.Edit(ctx.T("admin.restarting"))
 	go func() {
 		time.Sleep(1 * time.Second)
 		os.Exit(0)
@@ -73,7 +73,7 @@ func (p *AdminPlugin) handleRestart(ctx *interfaces.CommandContext) error {
 }
 
 func (p *AdminPlugin) handleShutdown(ctx *interfaces.CommandContext) error {
-	_ = ctx.Edit("🛑 正在关闭...")
+	_ = ctx.Edit(ctx.T("admin.shutting"))
 	go func() {
 		time.Sleep(1 * time.Second)
 		os.Exit(0)
@@ -93,15 +93,10 @@ func (p *AdminPlugin) handleGC(ctx *interfaces.CommandContext) error {
 
 	freed := beforeAlloc - after.Alloc
 	elapsed := time.Since(p.startTime).Truncate(time.Second)
-	return ctx.Edit(fmt.Sprintf(
-		"🗑 <b>GC 完成</b>\n\n"+
-			"之前: %.1f MB → 之后: %.1f MB\n"+
-			"释放: %.1f MB\n"+
-			"GC 次数: %d\n"+
-			"运行时间: %s",
-		float64(beforeAlloc)/1024/1024,
-		float64(after.Alloc)/1024/1024,
-		float64(freed)/1024/1024,
+	return ctx.Edit(ctx.T("admin.gc_done",
+		fmt.Sprintf("%.1f", float64(beforeAlloc)/1024/1024),
+		fmt.Sprintf("%.1f", float64(after.Alloc)/1024/1024),
+		fmt.Sprintf("%.1f", float64(freed)/1024/1024),
 		after.NumGC-before.NumGC,
 		elapsed,
 	))

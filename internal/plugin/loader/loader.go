@@ -22,7 +22,7 @@ type Loader struct {
 	loaded  map[string]*LoadedPlugin
 	logger  pkgplugin.Logger
 	http    *http.Client
-	repoURL string // base URL for plugin registry
+	repoURL string
 }
 
 // LoadedPlugin represents a loaded .so plugin.
@@ -92,7 +92,6 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		return fmt.Errorf("open plugin: %w", err)
 	}
 
-	// Lookup New() function
 	newSymbol, err := p.Lookup("New")
 	if err != nil {
 		return fmt.Errorf("plugin missing New function: %w", err)
@@ -118,7 +117,6 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		return fmt.Errorf("plugin does not implement plugin.Plugin interface")
 	}
 
-	// Optional metadata
 	var meta *pkgplugin.PluginMetadata
 	if metaSym, err := p.Lookup("Metadata"); err == nil {
 		if m, ok := metaSym.(*pkgplugin.PluginMetadata); ok {
@@ -126,7 +124,6 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 		}
 	}
 
-	// Register & init
 	if err := l.manager.RegisterPlugin(plug); err != nil {
 		return fmt.Errorf("register plugin: %w", err)
 	}
@@ -159,7 +156,7 @@ func (l *Loader) LoadByName(ctx context.Context, name string) error {
 	return l.Load(ctx, path)
 }
 
-// Unload unloads a plugin by name (stops it, unregisters commands, removes from manager).
+// Unload unloads a plugin by name.
 func (l *Loader) Unload(ctx context.Context, name string) error {
 	loaded, ok := l.loaded[name]
 	if !ok {
@@ -175,7 +172,7 @@ func (l *Loader) Unload(ctx context.Context, name string) error {
 	return nil
 }
 
-// Install downloads a plugin .so from the registry and places it in the plugins dir.
+// Install downloads a plugin .so from the registry.
 func (l *Loader) Install(ctx context.Context, name string) error {
 	if strings.HasSuffix(name, ".so") {
 		name = strings.TrimSuffix(name, ".so")
@@ -223,13 +220,12 @@ func (l *Loader) Install(ctx context.Context, name string) error {
 	return nil
 }
 
-// Remove deletes a plugin .so file from the plugins directory.
+// Remove deletes a plugin .so file.
 func (l *Loader) Remove(ctx context.Context, name string) error {
 	if strings.HasSuffix(name, ".so") {
 		name = strings.TrimSuffix(name, ".so")
 	}
 
-	// Unload if loaded
 	if _, ok := l.loaded[name]; ok {
 		if err := l.Unload(ctx, name); err != nil {
 			l.logger.Warn("unload before remove", "name", name, "error", err)

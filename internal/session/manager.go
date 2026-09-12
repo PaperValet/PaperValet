@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TiaraBasori/PaperValet/internal/interfaces"
+	_ "modernc.org/sqlite"
+
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
@@ -29,19 +30,18 @@ type Manager struct {
 	cache   map[string]*Record
 	mu      sync.RWMutex
 	ttl     time.Duration
-	logger  interfaces.Logger
+	logger  interface{ Info(string, ...any); Debug(string, ...any) }
 	cleanup *time.Ticker
 	done    chan struct{}
 }
 
-// NewManager creates a new session manager.
+// NewManager creates a new session manager backed by SQLite.
 func NewManager(dbPath string) (*Manager, error) {
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session database: %w", err)
 	}
 
-	// Create tables
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS sessions (
 			user_id INTEGER NOT NULL,
@@ -60,7 +60,7 @@ func NewManager(dbPath string) (*Manager, error) {
 		db:      db,
 		cache:   make(map[string]*Record),
 		ttl:     24 * time.Hour,
-		logger:  logger.NamedLogger("session_manager"),
+		logger:  logger.NamedLogger("session"),
 		cleanup: time.NewTicker(1 * time.Hour),
 		done:    make(chan struct{}),
 	}
@@ -74,7 +74,6 @@ func NewManager(dbPath string) (*Manager, error) {
 func (m *Manager) GetOrCreate(ctx context.Context, userID, chatID int64) (*Record, error) {
 	key := m.key(userID, chatID)
 
-	// Check cache first
 	m.mu.RLock()
 	if cached, ok := m.cache[key]; ok {
 		m.mu.RUnlock()
@@ -82,10 +81,8 @@ func (m *Manager) GetOrCreate(ctx context.Context, userID, chatID int64) (*Recor
 	}
 	m.mu.RUnlock()
 
-	// Query database
 	record, err := m.queryDB(ctx, userID, chatID)
 	if err != nil {
-		// Create new session
 		record = &Record{
 			UserID:    userID,
 			ChatID:    chatID,
@@ -99,7 +96,6 @@ func (m *Manager) GetOrCreate(ctx context.Context, userID, chatID int64) (*Recor
 		}
 	}
 
-	// Update cache
 	m.mu.Lock()
 	m.cache[key] = record
 	m.mu.Unlock()
@@ -112,12 +108,10 @@ func (m *Manager) Save(ctx context.Context, record *Record) error {
 	record.UpdatedAt = time.Now()
 	key := m.key(record.UserID, record.ChatID)
 
-	// Update cache
 	m.mu.Lock()
 	m.cache[key] = record
 	m.mu.Unlock()
 
-	// Update database
 	return m.updateDB(ctx, record)
 }
 
@@ -149,8 +143,6 @@ func (m *Manager) Close() error {
 
 	return m.db.Close()
 }
-
-// --- Internal ---
 
 func (m *Manager) key(userID, chatID int64) string {
 	return fmt.Sprintf("%d:%d", userID, chatID)

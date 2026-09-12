@@ -14,6 +14,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
+	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -23,7 +24,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/plugins/builtin"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // App is the top-level orchestrator.
 type App struct {
@@ -40,6 +41,7 @@ type App struct {
 	accessHash   *peer.AccessHashManager
 	updates      *UpdateHandler
 	cron         *cron.Manager
+	i18n         *i18n.Manager
 	logger       pkgplugin.Logger
 }
 
@@ -60,6 +62,11 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session manager: %w", err)
 	}
+
+	// i18n: build catalog from core + builtin plugin catalogs.
+	i18nCat := i18n.CoreCatalog()
+	i18nCat.SetDefault(i18n.Lang(cfg.I18n.DefaultLanguage))
+	i18nMgr := i18n.NewManager(i18nCat)
 
 	bus := eventbus.New(log)
 	updates := NewUpdateHandler(bus)
@@ -83,12 +90,11 @@ func New(cfg *config.Config) (*App, error) {
 	accessHash := peer.NewAccessHashManager(api)
 	resolver := peer.NewResolver(accessHash)
 
-	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID)
+	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID, i18nMgr)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
 	cronMgr := cron.NewManager()
 
-	// External plugin loader
 	pluginsDir := cfg.Bot.PluginsDir
 	if pluginsDir == "" {
 		pluginsDir = "plugins"
@@ -110,6 +116,7 @@ func New(cfg *config.Config) (*App, error) {
 		accessHash:   accessHash,
 		updates:      updates,
 		cron:         cronMgr,
+		i18n:         i18nMgr,
 		logger:       log,
 	}
 	return app, nil
@@ -142,6 +149,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewSendLog(),
 		builtin.NewSave(),
 		builtin.NewLeech(),
+		builtin.NewLang(a.i18n),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err
@@ -170,10 +178,10 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		a.updates.SetSelfUserID(self.ID)
 		if a.cfg.Bot.OwnerID == 0 {
-				a.cfg.Bot.OwnerID = self.ID
-			}
-			a.commands.SetOwnerID(a.cfg.Bot.OwnerID)
-a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
+			a.cfg.Bot.OwnerID = self.ID
+		}
+		a.commands.SetOwnerID(a.cfg.Bot.OwnerID)
+		a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 
 		if err := a.plugins.InitAll(ctx); err != nil {
 			return fmt.Errorf("plugin init: %w", err)
@@ -181,19 +189,19 @@ a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 		if err := a.plugins.StartAll(ctx); err != nil {
 			return fmt.Errorf("plugin start: %w", err)
 		}
-		_ = a.bus.Emit(ctx, eventbus.EventStart, map[string]any{"version": Version, "user_id": self.ID})
 
-		// Load external plugins
 		if err := a.pluginLoader.LoadAll(ctx); err != nil {
-			a.logger.Warn("external plugin loading failed", "error", err)
+			a.logger.Warn("external plugin load", "error", err)
 		}
 
-		a.logger.Info("PaperValet ready", "version", Version, "prefix", a.cfg.Bot.CommandPrefix)
+		a.bus.Emit(ctx, eventbus.EventStart, map[string]any{"version": Version})
+
 		<-ctx.Done()
-		return ctx.Err()
+		return nil
 	})
 }
 
+// Shutdown gracefully stops the app.
 func (a *App) Shutdown(ctx context.Context) error {
 	a.logger.Info("shutting down")
 	a.cron.Stop()
@@ -214,4 +222,9 @@ func (a *App) GetCronManager() *cron.Manager {
 // GetPluginLoader returns the external plugin loader.
 func (a *App) GetPluginLoader() *loader.Loader {
 	return a.pluginLoader
+}
+
+// GetI18n returns the i18n manager.
+func (a *App) GetI18n() *i18n.Manager {
+	return a.i18n
 }

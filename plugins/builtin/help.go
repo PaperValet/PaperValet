@@ -11,7 +11,6 @@ import (
 )
 
 // HelpPlugin provides help and command discovery.
-// This is the primary user-facing help system and MUST be built-in.
 type HelpPlugin struct {
 	mgr plugin.Manager
 }
@@ -47,17 +46,14 @@ func (p *HelpPlugin) handleHelp(ctx *interfaces.CommandContext) error {
 
 	target := args[0]
 
-	// Check command
 	if cmd, ok := p.mgr.Commands().Get(target); ok {
 		return p.showCommandHelp(ctx, prefix, cmd)
 	}
 
-	// Check plugin
 	if info, ok := p.mgr.GetInfo(target); ok {
 		return p.showPluginHelp(ctx, prefix, info)
 	}
 
-	// Check aliases
 	for _, cmd := range p.mgr.Commands().GetAll() {
 		for _, alias := range cmd.Aliases {
 			if alias == target {
@@ -66,13 +62,12 @@ func (p *HelpPlugin) handleHelp(ctx *interfaces.CommandContext) error {
 		}
 	}
 
-	return ctx.Edit("未找到命令或插件: " + target)
+	return ctx.Edit(ctx.T("help.not_found", target))
 }
 
 func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) error {
 	cmds := p.mgr.Commands().GetAll()
 
-	// Group by category
 	categories := make(map[string][]*interfaces.Command)
 	for _, cmd := range cmds {
 		if cmd.Hidden {
@@ -85,7 +80,6 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 		categories[cat] = append(categories[cat], cmd)
 	}
 
-	// Sort category names
 	var catNames []string
 	for cat := range categories {
 		catNames = append(catNames, cat)
@@ -93,7 +87,7 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 	sort.Strings(catNames)
 
 	var b strings.Builder
-	b.WriteString("📚 <b>PaperValet 帮助</b>\n\n")
+	b.WriteString(ctx.T("help.title") + "\n\n")
 
 	for _, cat := range catNames {
 		cmds := categories[cat]
@@ -101,19 +95,7 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 			return cmds[i].Name < cmds[j].Name
 		})
 
-		catDisplay := cat
-		switch cat {
-		case "core":
-			catDisplay = "🔧 核心"
-		case "admin":
-			catDisplay = "👑 管理员"
-		case "tools":
-			catDisplay = "🛠 工具"
-		case "fun":
-			catDisplay = "🎮 娱乐"
-		case "debug":
-			catDisplay = "🐛 调试"
-		}
+		catDisplay := ctx.T("help.cat_" + cat)
 		b.WriteString(fmt.Sprintf("<b>%s</b>\n", catDisplay))
 		for _, cmd := range cmds {
 			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, cmd.Name, cmd.Description))
@@ -121,8 +103,8 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 		b.WriteString("\n")
 	}
 
-	b.WriteString(fmt.Sprintf("使用 <code>%shelp &lt;命令&gt;</code> 查看详情\n", prefix))
-	b.WriteString(fmt.Sprintf("使用 <code>%sppm list</code> 查看插件列表", prefix))
+	b.WriteString(ctx.T("help.detail_hint", prefix) + "\n")
+	b.WriteString(ctx.T("help.plugins_hint", prefix))
 	return ctx.Edit(b.String())
 }
 
@@ -132,19 +114,19 @@ func (p *HelpPlugin) showCommandHelp(ctx *interfaces.CommandContext, prefix stri
 	b.WriteString(fmt.Sprintf("%s\n", cmd.Description))
 
 	if cmd.Usage != "" {
-		b.WriteString(fmt.Sprintf("\n<b>用法:</b> <code>%s</code>\n", prefix+cmd.Usage))
+		b.WriteString("\n" + ctx.T("help.usage", prefix+cmd.Usage) + "\n")
 	}
 
 	if len(cmd.Aliases) > 0 {
-		b.WriteString(fmt.Sprintf("\n<b>别名:</b> <code>%s</code>", strings.Join(cmd.Aliases, "</code>, <code>")))
+		b.WriteString("\n" + ctx.T("help.aliases", strings.Join(cmd.Aliases, "</code>, <code>")) + "\n")
 	}
 
 	if cmd.OwnerOnly {
-		b.WriteString("\n\n⚠️ <b>仅拥有者可用</b>")
+		b.WriteString("\n\n" + ctx.T("help.owner_only"))
 	}
 
 	if cmd.RateLimit > 0 {
-		b.WriteString(fmt.Sprintf("\n⏱ <b>频率限制:</b> %d次/%ds", cmd.RateLimit, cmd.RateLimit))
+		b.WriteString("\n" + ctx.T("help.rate_limit", cmd.RateLimit, cmd.RateLimit))
 	}
 
 	return ctx.Edit(b.String())
@@ -157,19 +139,19 @@ func (p *HelpPlugin) showPluginHelp(ctx *interfaces.CommandContext, prefix strin
 	b.WriteString(fmt.Sprintf("📦 <b>%s</b>\n", info.Name))
 	b.WriteString(fmt.Sprintf("%s\n", info.Description))
 
-	statusStr := "⏸️ 未激活"
+	statusStr := ctx.T("help.status_idle")
 	switch info.Status {
 	case plugin.StatusActive:
-		statusStr = "✅ 活跃"
+		statusStr = ctx.T("help.status_active")
 	case plugin.StatusError:
-		statusStr = "❌ 错误"
+		statusStr = ctx.T("help.status_error")
 	}
-	b.WriteString(fmt.Sprintf("状态: %s\n\n", statusStr))
+	b.WriteString(ctx.T("help.status", statusStr) + "\n\n")
 
 	if len(cmds) == 0 {
-		b.WriteString("无命令")
+		b.WriteString(ctx.T("help.no_commands"))
 	} else {
-		b.WriteString("<b>命令:</b>\n")
+		b.WriteString(ctx.T("help.commands") + "\n")
 		var names []string
 		for name := range cmds {
 			names = append(names, name)

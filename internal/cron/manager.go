@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"github.com/TiaraBasori/PaperValet/internal/interfaces"
+
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
 // Job represents a scheduled job.
 type Job struct {
 	Name     string
-	Schedule string // cron expression
+	Schedule string
 	Fn       func(ctx context.Context)
 	NextRun  time.Time
 	LastRun  time.Time
-	entryID  cron.EntryID // internal cron entry ID for removal
+	entryID  cron.EntryID
 }
 
 // Manager handles scheduled jobs using robfig/cron.
@@ -28,7 +28,7 @@ type Manager struct {
 	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
-	logger interfaces.Logger
+	logger interface{ Info(string, ...any); Debug(string, ...any) }
 }
 
 // NewManager creates a new cron manager.
@@ -44,7 +44,7 @@ func NewManager() *Manager {
 }
 
 // AddJob adds a scheduled job.
-// schedule: cron expression with optional seconds field (e.g., "0 */5 * * * *" for every 5 min)
+// schedule: cron expression with optional seconds field (e.g., "0 */5 * * * *").
 func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -53,19 +53,13 @@ func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) er
 		return fmt.Errorf("job %s already exists", name)
 	}
 
-	job := &Job{
-		Name:     name,
-		Schedule: schedule,
-		Fn:       fn,
-	}
+	job := &Job{Name: name, Schedule: schedule, Fn: fn}
 	m.jobs[name] = job
 
 	eid, err := m.cron.AddFunc(schedule, func() {
 		m.mu.Lock()
 		job.LastRun = time.Now()
-		// Calculate next run
-		entries := m.cron.Entries()
-		for _, e := range entries {
+		for _, e := range m.cron.Entries() {
 			if e.Next.After(time.Now()) {
 				job.NextRun = e.Next
 				break
@@ -73,7 +67,6 @@ func (m *Manager) AddJob(name, schedule string, fn func(ctx context.Context)) er
 		}
 		m.mu.Unlock()
 
-		// Run job with timeout
 		ctx, cancel := context.WithTimeout(m.ctx, 5*time.Minute)
 		defer cancel()
 		fn(ctx)
@@ -145,27 +138,4 @@ func (m *Manager) RunJob(ctx context.Context, name string) error {
 	}
 	job.Fn(ctx)
 	return nil
-}
-
-// --- Built-in job registration ---
-
-// RegisterBuiltinJobs registers common built-in jobs.
-func (m *Manager) RegisterBuiltinJobs(app interface {
-	GetPluginManager() interface {
-		GetPlugin(name string) (interface{}, bool)
-	}
-	GetSessionManager() interface {
-		CleanupOldDownloads(maxAge time.Duration) error
-	}
-}) {
-	// Cleanup old downloads daily at 3 AM
-	m.AddJob("cleanup_downloads", "0 0 3 * * *", func(ctx context.Context) {
-		// Session manager cleanup would go here
-		m.logger.Info("cleanup_downloads job ran")
-	})
-
-	// Memory stats every hour
-	m.AddJob("memory_stats", "0 0 * * * *", func(ctx context.Context) {
-		m.logger.Info("memory_stats job ran")
-	})
 }

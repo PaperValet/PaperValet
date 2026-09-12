@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gotd/td/tg"
+
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
@@ -59,16 +60,6 @@ func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 	var targetID int64 = msg.UserID
 	var targetName string
 
-	// Check if replying to a message
-	if msg.IsReply && msg.Message.ReplyTo != nil {
-		if replyHeader, ok := msg.Message.ReplyTo.(*tg.MessageReplyHeader); ok {
-			// We can't extract the sender from the reply header alone
-			// but we can still show useful info
-			_ = replyHeader
-		}
-	}
-
-	// Try @username resolution
 	if ctx.ArgCount() > 0 {
 		arg := ctx.GetArg(0)
 		if strings.HasPrefix(arg, "@") && len(arg) > 1 {
@@ -92,7 +83,6 @@ func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 		}
 	}
 
-	// Build peer type string
 	peerType := "👤 用户"
 	chatID := msg.ChatID
 	if chatID < 0 {
@@ -133,7 +123,6 @@ func (p *InfoPlugin) handleForward(ctx *interfaces.CommandContext) error {
 	target := ctx.GetArg(0)
 	var destPeer tg.InputPeerClass
 
-	// Parse target
 	if strings.HasPrefix(target, "@") && len(target) > 1 {
 		username := target[1:]
 		peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), username)
@@ -153,10 +142,14 @@ func (p *InfoPlugin) handleForward(ctx *interfaces.CommandContext) error {
 		destPeer = peer
 	}
 
-	// Forward the replied message
-	_, err := ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
-		FromPeer: destPeer,
-		ID:       []int{ctx.Message.Message.ID},
+	fromPeer, err := ctx.ResolvePeer()
+	if err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 解析来源失败: %v", err))
+	}
+
+	_, err = ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
+		FromPeer: fromPeer,
+		ID:       []int{ctx.Message.ReplyToID},
 		ToPeer:   destPeer,
 	})
 

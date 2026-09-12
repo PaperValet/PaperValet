@@ -10,8 +10,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// CorePlugin provides fundamental startup/shutdown commands.
-// This is the minimal core — help, status, ppm are separate plugins.
+// CorePlugin provides fundamental commands.
 type CorePlugin struct {
 	startTime time.Time
 	version   string
@@ -62,28 +61,21 @@ func (p *CorePlugin) Start(_ context.Context) error { return nil }
 func (p *CorePlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *CorePlugin) handleVersion(ctx *interfaces.CommandContext) error {
-	return ctx.Edit(fmt.Sprintf(
-		"PaperValet <b>%s</b>\nGo: %s\nBuild: %s",
-		p.version, runtime.Version(), p.startTime.Format("2006-01-02"),
-	))
+	return ctx.Edit(ctx.T("core.version", p.version, runtime.Version(), p.startTime.Format("2006-01-02")))
 }
 
 func (p *CorePlugin) handleUptime(ctx *interfaces.CommandContext) error {
 	uptime := time.Since(p.startTime).Truncate(time.Second)
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	return ctx.Edit(fmt.Sprintf(
-		"⏱ <b>运行时间:</b> %s\n🧠 <b>内存:</b> %.1f MB\n🔀 <b>Goroutines:</b> %d",
-		uptime, float64(mem.Alloc)/1024/1024, runtime.NumGoroutine(),
-	))
+	return ctx.Edit(ctx.T("core.uptime", uptime, fmt.Sprintf("%.1f", float64(mem.Alloc)/1024/1024), runtime.NumGoroutine()))
 }
 
 func (p *CorePlugin) handlePing(ctx *interfaces.CommandContext) error {
 	start := time.Now()
-	msg := "🏓 Pong!"
-	if err := ctx.Edit(msg); err != nil {
+	if err := ctx.Edit(ctx.T("core.ping_start")); err != nil {
 		return err
 	}
 	latency := time.Since(start)
-	return ctx.Edit(fmt.Sprintf("%s\n📡 <b>延迟:</b> %v", msg, latency))
+	return ctx.Edit(ctx.T("core.ping", latency))
 }

@@ -238,6 +238,7 @@ type CommandContext struct {
 	Metadata     map[string]any
 	Ctx          context.Context
 	Logger       Logger
+	I18n         func(key string, args ...any) string
 }
 
 func (c *CommandContext) Context() context.Context {
@@ -255,6 +256,15 @@ func (c *CommandContext) ResolvePeer() (tg.InputPeerClass, error) {
 		return nil, ErrNoMessage
 	}
 	return c.PeerResolver.ResolveFromChatID(c.Context(), c.Message.ChatID)
+}
+
+// T translates a message key using the command's i18n resolver.
+// Falls back to the raw key when no resolver is wired.
+func (c *CommandContext) T(key string, args ...any) string {
+	if c.I18n != nil {
+		return c.I18n(key, args...)
+	}
+	return key
 }
 
 func (c *CommandContext) Reply(text string) error {

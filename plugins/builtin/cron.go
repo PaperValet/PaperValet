@@ -66,7 +66,6 @@ func (p *CronPlugin) handleCron(ctx *interfaces.CommandContext) error {
 		cmdText := strings.Join(ctx.Args[3:], " ")
 
 		handler := func(ctx context.Context) {
-			// In real implementation, this would execute the command
 			fmt.Printf("[CRON] Executing: %s (%s)\n", name, cmdText)
 		}
 
@@ -121,17 +120,7 @@ func (p *CronPlugin) handleCron(ctx *interfaces.CommandContext) error {
 		}
 		return ctx.Edit(fmt.Sprintf("▶️ 已执行: %s", name))
 
-	case "help", "h":
-		return ctx.Edit(
-			"⏰ <b>Cron 定时任务</b>\n\n" +
-				"<b>用法:</b>\n" +
-				"• <code>cron add &lt;名称&gt; &lt;表达式&gt; &lt;命令&gt;</code>\n" +
-				"• <code>cron list</code>\n" +
-				"• <code>cron del &lt;名称&gt;</code>\n" +
-				"• <code>cron run &lt;名称&gt;</code>",
-		)
-
 	default:
-		return ctx.Edit("未知子命令: " + sub + "\n\n使用 <code>cron help</code> 查看帮助")
+		return ctx.Edit("未知子命令: " + sub)
 	}
 }

@@ -526,20 +526,21 @@ func (p *HealthPlugin) checkMemory() {
 		return
 	}
 
-	// Busy defer
-	// Note: In Go, we don't have a task tracking system like TeleBox
-	// So we skip busy defer for now
-
-	// Soft recover: GC then could trigger reload (not implemented in Go yet)
+	// Soft recover: force GC first
 	p.tryGC()
 
 	// Hard path: still high after soft streak + hard streak
 	if p.config.OverThresholdStreak >= p.config.HardStreak {
-		// In Go, we can't easily "reload runtime" like TeleBox
-		// Just log and optionally restart
-		fmt.Printf("[Health] 内存持续超限，达到 hard streak (%d)，建议重启\n", p.config.OverThresholdStreak)
+		// In Go we can't hot-reload the runtime, so the hard action is a
+		// controlled self-restart: exit with a special code so the supervisor
+		// (systemd/docker) brings the process back up.
+		fmt.Printf("[Health] 内存持续超限，达到 hard streak (%d)，触发自重启\n", p.config.OverThresholdStreak)
 		p.config.LastActionAt = now
 		p.saveConfig()
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			os.Exit(42)
+		}()
 	}
 }
 

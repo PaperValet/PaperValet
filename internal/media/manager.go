@@ -6,8 +6,10 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
@@ -135,48 +137,78 @@ func (m *Manager) downloadFile(ctx context.Context, w *os.File, loc tg.InputFile
 
 // UploadFile uploads a local file and returns InputMedia for sending.
 func (m *Manager) UploadFile(ctx context.Context, chatID int64, path string) (tg.InputMediaClass, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
 	ext := filepath.Ext(path)
 	mimeType := mime.TypeByExtension(ext)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 
-	// For now, create a placeholder - real implementation needs gotd's uploader
-	// This is a stub that will be implemented properly when sender.UploadMedia is available
-	return m.createInputMedia(f, mimeType)
-}
+	// Upload via gotd uploader
+	up := uploader.NewUploader(m.api)
+	inputFile, err := up.FromPath(ctx, path)
+	if err != nil {
+		return nil, fmt.Errorf("upload: %w", err)
+	}
 
-// createInputMedia creates InputMedia from file.
-func (m *Manager) createInputMedia(file *os.File, mimeType string) (tg.InputMediaClass, error) {
-	// Stub - needs proper implementation with gotd message.Sender
-	// Return nil for now to indicate not implemented
-	return nil, nil
+	// Determine media type from extension
+	if isImageExt(ext) {
+		return &tg.InputMediaUploadedPhoto{
+			File: inputFile,
+		}, nil
+	}
+
+	// Build document attributes
+	attrs := []tg.DocumentAttributeClass{
+		&tg.DocumentAttributeFilename{
+			FileName: filepath.Base(path),
+		},
+	}
+
+	return &tg.InputMediaUploadedDocument{
+		File:       inputFile,
+		MimeType:   mimeType,
+		Attributes: attrs,
+	}, nil
 }
 
 // SendFile sends a local file to a chat.
 func (m *Manager) SendFile(ctx context.Context, chatID int64, path string, caption string, replyTo int) error {
 	media, err := m.UploadFile(ctx, chatID, path)
 	if err != nil {
-		return err
-	}
-	if media == nil {
-		return fmt.Errorf("media upload not implemented")
+		return fmt.Errorf("upload: %w", err)
 	}
 
 	p, err := m.peer.ResolveFromChatID(ctx, chatID)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve peer: %w", err)
 	}
 
-	// This will work once sender.Media is properly used
-	_ = p
-	return fmt.Errorf("send file not fully implemented")
+	req := &tg.MessagesSendMediaRequest{
+		Peer:    p,
+		Media:   media,
+		Message: caption,
+	}
+
+	if replyTo > 0 {
+		req.SetReplyTo(&tg.InputReplyToMessage{
+			ReplyToMsgID: replyTo,
+		})
+	}
+
+	_, err = m.api.MessagesSendMedia(ctx, req)
+	if err != nil {
+		return fmt.Errorf("send media: %w", err)
+	}
+	return nil
+}
+
+// isImageExt returns true for common image file extensions.
+func isImageExt(ext string) bool {
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff":
+		return true
+	}
+	return false
 }
 
 // SendPhoto sends a photo from local path.
