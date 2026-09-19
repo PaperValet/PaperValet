@@ -5,8 +5,12 @@ package plugin
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/gotd/td/telegram/message/entity"
+	"github.com/gotd/td/telegram/message/html"
 	"github.com/gotd/td/tg"
 )
 
@@ -128,6 +132,11 @@ type PeerResolver interface {
 // Message
 // ============================================================
 
+// MediaSender sends local files to chats. Implemented by internal/media.Manager.
+type MediaSender interface {
+	SendFile(ctx context.Context, chatID int64, path string, caption string, replyTo int) error
+}
+
 // MessageEvent represents a processed message event.
 type MessageEvent struct {
 	Update    tg.UpdatesClass
@@ -234,6 +243,7 @@ type CommandContext struct {
 	API          *tg.Client
 	PeerResolver PeerResolver
 	Emitter      Emitter
+	Media        MediaSender
 	PluginName   string
 	StartTime    time.Time
 	Metadata     map[string]any
@@ -276,9 +286,11 @@ func (c *CommandContext) Reply(text string) error {
 	if err != nil {
 		return err
 	}
+	plain, entities := c.parseHTML(text)
 	_, err = c.API.MessagesSendMessage(c.Context(), &tg.MessagesSendMessageRequest{
 		Peer:     peer,
-		Message:  text,
+		Message:  plain,
+		Entities: entities,
 		RandomID: time.Now().UnixNano(),
 		ReplyTo:  &tg.InputReplyToMessage{ReplyToMsgID: c.Message.Message.ID},
 	})
@@ -293,12 +305,52 @@ func (c *CommandContext) Edit(text string) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.API.MessagesEditMessage(c.Context(), &tg.MessagesEditMessageRequest{
+	plain, entities := c.parseHTML(text)
+	req := &tg.MessagesEditMessageRequest{
 		Peer:    peer,
 		ID:      c.Message.Message.ID,
-		Message: text,
-	})
+		Message: plain,
+	}
+	if len(entities) > 0 {
+		req.SetEntities(entities)
+	}
+	_, err = c.API.MessagesEditMessage(c.Context(), req)
 	return err
+}
+
+// ReplyMedia sends a local file (photo/document) as a reply and deletes nothing.
+func (c *CommandContext) ReplyMedia(path, caption string) error {
+	if c.Message == nil || c.Media == nil {
+		return ErrNoMessage
+	}
+	return c.Media.SendFile(c.Context(), c.Message.ChatID, path, caption, c.Message.Message.ID)
+}
+
+// parseHTML converts a limited HTML string (b/i/u/s/a/code/pre/blockquote)
+// into plain text plus Telegram entities. On parse failure it falls back to
+// the raw text with no entities. tg://user?id= links resolve via the API and
+// degrade to plain text when the user cannot be resolved.
+func (c *CommandContext) parseHTML(text string) (string, []tg.MessageEntityClass) {
+	var b entity.Builder
+	if err := html.HTML(strings.NewReader(text), &b, html.Options{UserResolver: c.resolveInputUser}); err != nil {
+		return text, nil
+	}
+	return b.Complete()
+}
+
+func (c *CommandContext) resolveInputUser(id int64) (tg.InputUserClass, error) {
+	if c.API == nil {
+		return nil, fmt.Errorf("no api client")
+	}
+	users, err := c.API.UsersGetUsers(c.Context(), []tg.InputUserClass{&tg.InputUser{UserID: id}})
+	if err != nil || len(users) == 0 {
+		return nil, fmt.Errorf("resolve user %d failed", id)
+	}
+	u, ok := users[0].(*tg.User)
+	if !ok {
+		return nil, fmt.Errorf("unexpected user type %T", users[0])
+	}
+	return u.AsInput(), nil
 }
 
 func (c *CommandContext) Delete() error {

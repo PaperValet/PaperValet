@@ -30,6 +30,7 @@ type Registry struct {
 	logger     interfaces.Logger
 	i18n       *i18n.Manager
 	sudoChecker func(int64) bool
+	media       interfaces.MediaSender
 }
 
 func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
@@ -69,6 +70,13 @@ func (r *Registry) SetSudoChecker(f func(int64) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.sudoChecker = f
+}
+
+// SetMediaSender wires the media manager so command handlers can send files.
+func (r *Registry) SetMediaSender(m interfaces.MediaSender) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.media = m
 }
 
 // isSudoUser reports whether the user has been granted delegated access.
@@ -273,6 +281,7 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 		API:          r.api,
 		PeerResolver: r.resolver,
 		Emitter:      r.emitter,
+		Media:        r.media,
 		PluginName:   cmd.Plugin,
 		StartTime:    time.Now(),
 		Metadata:     make(map[string]any),

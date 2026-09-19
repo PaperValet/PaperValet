@@ -2,7 +2,10 @@ module github.com/TiaraBasori/PaperValet-Plugins/plugins-external/qr
 
 go 1.25.0
 
-require github.com/TiaraBasori/PaperValet v0.1.0
+require (
+	github.com/TiaraBasori/PaperValet v0.1.0
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+)
 
 require (
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -11,6 +14,7 @@ require (
 	github.com/gotd/td v0.161.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
 

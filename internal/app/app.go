@@ -15,6 +15,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
+	"github.com/TiaraBasori/PaperValet/internal/media"
 	"github.com/TiaraBasori/PaperValet/internal/peer"
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -91,6 +92,8 @@ func New(cfg *config.Config) (*App, error) {
 	resolver := peer.NewResolver(accessHash)
 
 	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID, i18nMgr)
+	mediaMgr := media.NewManager(api, resolver, "downloads")
+	cmdReg.SetMediaSender(mediaMgr)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
 	cronMgr := cron.NewManager()

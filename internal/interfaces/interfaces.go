@@ -23,6 +23,7 @@ type (
 	CommandContext   = plugin.CommandContext
 	CommandError     = plugin.CommandError
 	Error            = plugin.CommandError
+	MediaSender      = plugin.MediaSender
 )
 
 var NewSessionContext = plugin.NewSessionContext
