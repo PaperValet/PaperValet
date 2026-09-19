@@ -30,8 +30,9 @@ github.com/TiaraBasori/PaperValet/
 │   ├── app/                  # Application orchestrator (App, Bot)
 │   ├── command/              # Command registry, parser, context
 │   ├── config/               # Configuration (JSON, env)
-│   ├── cron/                 # Cron scheduler
 │   ├── eventbus/             # Event system + hooks
+│   ├── i18n/                 # Language catalog + per-user language
+│   ├── media/                # Media upload/send manager
 │   ├── peer/                 # Peer resolution + AccessHashManager
 │   ├── plugin/
 │   │   ├── loader/           # Go plugin (.so) loader
@@ -45,28 +46,32 @@ github.com/TiaraBasori/PaperValet/
 │       └── helpers.go        # CommandContext helpers (Reply, Edit, etc.)
 └── plugins/
     ├── builtin/              # Built-in plugins (compiled in)
-    │   ├── core.go           # help, status, restart, shutdown, gc, version
-    │   ├── tools.go          # ping, uptime, info, fwd, remind, note, calc, base64, hash, uuid, time
-    │   ├── fun.go            # roll, coin, choose, 8ball, fact
-    │   ├── cron.go           # cron add/list/remove/run/enable/disable
-    │   ├── alias.go          # alias set/del/list
-    │   ├── debug.go          # goroutines, heap, stack, profile
-    │   ├── exec.go           # exec/shell (owner)
-    │   ├── sudo.go           # sudo (owner)
-    │   ├── log.go            # log show/clear/level/target (owner)
-    │   ├── re.go             # repeat messages
-    │   ├── bf.go             # brainfuck interpreter
-    │   ├── prefix.go         # prefix get/set/list
-    │   ├── help.go           # help, plugins (core UX)
+    │   ├── core.go           # version, ping, restart
+    │   ├── help.go           # help (categorized, i18n)
     │   ├── status.go         # detailed system status
-    │   └── ppm.go            # Plugin Package Manager (install/update/remove/list/enable/disable/reload/search/info)
+    │   ├── apt.go            # Plugin package manager (list/install/remove/load/unload)
+    │   ├── info.go           # info, fwd
+    │   ├── alias.go          # runtime alias set/del/list (wired into parsing)
+    │   ├── exec.go           # exec/shell (owner)
+    │   ├── sudo.go           # permission delegation (owner)
+    │   ├── reload.go         # external plugin hot reload
+    │   ├── log.go            # loglevel, sendlog (owner)
+    │   ├── prefix.go         # prefix list/add/del/set (runtime applied)
+    │   ├── backup.go         # backup/restore (owner)
+    │   ├── update.go         # update, autofix (owner)
+    │   ├── dme.go            # dme, dme all (owner)
+    │   └── lang.go           # per-user language switching
     └── external/             # External plugins (built separately as .so)
+        # mirrored at plugins-external/, source of truth:
+        # github.com/PaperValet/PaperValet-Plugins
+        ├── fun/              # roll, coin, choose, 8ball, fact
+        ├── account/          # username, name, bio, rmpfp
+        ├── save/             # save messages/messages ranges to a target
         ├── qrcode/
-        ├── leech/
+        ├── leech/            # Media downloader (yt-dlp)
         ├── ping/             # Advanced ping (DC, ICMP, HTTP)
         ├── bf/               # Brainfuck interpreter
         ├── re/               # Message repeater
-        ├── sendlog/          # Log sender
         └── tpm/              # Legacy plugin manager
 ```
 

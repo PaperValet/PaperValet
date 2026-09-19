@@ -20,14 +20,21 @@ Clean, modular architecture — no "TeleBox legacy" spaghetti.
 
 | Plugin | Commands | Description |
 |--------|----------|-------------|
-| `core` | `.help`, `.status` | Core bot management |
-| `apt` | `.apt list/enable/disable` | Plugin manager |
-| `tools` | `.ping`, `.uptime`, `.info`, `.fwd` | Utility commands |
-| `remind` | `.remind` | Reminders (in-memory) |
-| `cron` | `.cron` | Scheduled tasks |
-| `note` | `.note` | Personal notes |
-| `fun` | `.roll`, `.coin`, `.choose`, `.8ball`, `.fact` | Entertainment |
-| `admin` | `.restart`, `.shutdown`, `.gc`, `.version` | Owner-only |
+| `core` | `.version`, `.ping`, `.restart` | Core bot management |
+| `help` | `.help` | Command help by category |
+| `status` | `.status` | Runtime status + metrics |
+| `apt` | `.apt list/install/remove/load/unload` | Plugin manager |
+| `info` | `.info`, `.fwd` | Chat/user info + forward |
+| `alias` | `.alias set/del/list` | Runtime command aliases |
+| `exec` | `.exec` | System command execution |
+| `sudo` | `.sudo on/off/add/remove/list` | Permission delegation |
+| `reload` | `.reload` | External plugin hot reload |
+| `log` | `.loglevel`, `.sendlog` | Log level + log delivery |
+| `prefix` | `.prefix list/add/del/set` | Command prefix management |
+| `backup` | `.backup` | Config/session backup + restore |
+| `update` | `.update`, `.autofix` | Git sync + restart |
+| `dme` | `.dme`, `.dme all` | Message cleanup |
+| `lang` | `.lang` | Language switching |
 
 ## Quick Start
 
@@ -178,17 +185,17 @@ Prefix is `.` by default.
 | `.help <cmd>` | Command detail |
 | `.status` | Bot status |
 | `.ping` | Latency check |
-| `.uptime` | Uptime + memory |
 | `.info` | Chat/user IDs |
 | `.apt list` | List plugins |
-| `.remind 5m drink water` | Set a reminder |
-| `.cron add daily 0 0 9 * * * .status` | Scheduled task |
-| `.note set todo "Buy milk"` | Personal note |
-| `.roll 20` | Dice roll |
-| `.coin` | Coin flip |
-| `.choose pizza burger sushi` | Random choice |
-| `.8ball Will it rain?` | Magic 8-ball |
-| `.fact` | Random fact |
+| `.exec uname -a` | Run system command |
+| `.backup` | Create a backup |
+| `.dme all 10` | Delete own recent messages |
+| `.alias set p ping` | Create a command alias |
+| `.prefix add ,` | Add a command prefix |
+
+External plugins (installed via `.apt install`) add more commands, e.g.
+`.roll`, `.coin`, `.choose`, `.8ball`, `.fact` (fun), `.username`, `.name`,
+`.bio`, `.rmpfp` (account) and `.save` (save).
 
 ## Architecture
 
@@ -199,7 +206,6 @@ internal/
   command/
   config/
   core/
-  cron/
   eventbus/
   media/
   peer/
@@ -216,7 +222,6 @@ pkg/logger/
 | `internal/command/` | Parser, registry, middleware |
 | `internal/config/` | JSON config with defaults |
 | `internal/core/` | Types: MessageEvent, CommandContext, interfaces |
-| `internal/cron/` | Scheduled jobs (robfig/cron) |
 | `internal/eventbus/` | Priority pub/sub |
 | `internal/media/` | Download/upload helpers |
 | `internal/peer/` | AccessHashManager + Resolver |

@@ -20,14 +20,21 @@
 
 | 插件 | 指令 | 说明 |
 |------|------|------|
-| `core` | `.help`、`.status` | 机器人核心管理 |
-| `apt` | `.apt list/enable/disable` | 插件管理器 |
-| `tools` | `.ping`、`.uptime`、`.info`、`.fwd` | 实用工具指令 |
-| `remind` | `.remind` | 提醒功能（仅内存） |
-| `cron` | `.cron` | 定时任务 |
-| `note` | `.note` | 个人笔记 |
-| `fun` | `.roll`、`.coin`、`.choose`、`.8ball`、`.fact` | 娱乐指令 |
-| `admin` | `.restart`、`.shutdown`、`.gc`、`.version` | 仅所有者可用 |
+| `core` | `.version`、`.ping`、`.restart` | 机器人核心管理 |
+| `help` | `.help` | 按分类显示帮助 |
+| `status` | `.status` | 运行状态与性能指标 |
+| `apt` | `.apt list/install/remove/load/unload` | 插件管理器 |
+| `info` | `.info`、`.fwd` | 对话信息与转发 |
+| `alias` | `.alias set/del/list` | 运行时命令别名 |
+| `exec` | `.exec` | 执行系统命令 |
+| `sudo` | `.sudo on/off/add/remove/list` | 权限委派 |
+| `reload` | `.reload` | 外部插件热重载 |
+| `log` | `.loglevel`、`.sendlog` | 日志级别与发送 |
+| `prefix` | `.prefix list/add/del/set` | 命令前缀管理 |
+| `backup` | `.backup` | 备份与恢复 |
+| `update` | `.update`、`.autofix` | 代码同步与一键修复 |
+| `dme` | `.dme`、`.dme all` | 消息清理 |
+| `lang` | `.lang` | 语言切换 |
 
 ## 快速开始
 
@@ -176,17 +183,17 @@ GitHub Actions 当前只产出 `amd64` 的 `.so`（Go 的 `buildmode=plugin` 在
 | `.help <cmd>` | 指令详情 |
 | `.status` | 机器人状态 |
 | `.ping` | 延迟检测 |
-| `.uptime` | 运行时长和内存 |
 | `.info` | 对话和用户 ID |
 | `.apt list` | 列出插件 |
-| `.remind 5m 喝水` | 设置提醒 |
-| `.cron add daily 0 0 9 * * * .status` | 定时任务 |
-| `.note set todo "买牛奶"` | 个人笔记 |
-| `.roll 20` | 掷骰 |
-| `.coin` | 抛硬币 |
-| `.choose 披萨 汉堡 寿司` | 随机选择 |
-| `.8ball 今天会下雨吗？` | 魔法 8 球 |
-| `.fact` | 随机冷知识 |
+| `.exec uname -a` | 执行系统命令 |
+| `.backup` | 创建备份 |
+| `.dme all 10` | 删除自己最近的消息 |
+| `.alias set p ping` | 创建命令别名 |
+| `.prefix add ,` | 添加命令前缀 |
+
+外部插件（通过 `.apt install` 安装）会提供更多指令，例如 `.roll`、`.coin`、
+`.choose`、`.8ball`、`.fact`（fun）、`.username`、`.name`、`.bio`、`.rmpfp`
+（account）和 `.save`（save）。
 
 ## 架构
 
@@ -197,7 +204,6 @@ internal/
   command/
   config/
   core/
-  cron/
   eventbus/
   media/
   peer/
@@ -214,7 +220,6 @@ pkg/logger/
 | `internal/command/` | 解析器、注册表、中间件 |
 | `internal/config/` | JSON 配置与默认值 |
 | `internal/core/` | 核心类型定义 |
-| `internal/cron/` | 定时任务（基于 robfig/cron） |
 | `internal/eventbus/` | 带优先级的事件总线 |
 | `internal/media/` | 文件下载与上传 |
 | `internal/peer/` | AccessHash 管理器与解析器 |
