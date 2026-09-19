@@ -381,7 +381,7 @@ func (p *TPMPlugin) showHelp(ctx *plugin.CommandContext) error {
 • <code>%stpm enable ping</code>
 • <code>%stpm update</code>
 
-💡 <i>插件以 .so 文件形式存放在 plugins/ 目录</i>`, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix))
+💡 <i>插件以 .so 文件形式存放在 plugins/ 目录</i>`, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix, prefix))
 }
 
 func (p *TPMPlugin) Start(ctx context.Context) error { return nil }
