@@ -24,6 +24,7 @@ type (
 	CommandError     = plugin.CommandError
 	Error            = plugin.CommandError
 	MediaSender      = plugin.MediaSender
+	MediaDownloader  = plugin.MediaDownloader
 )
 
 var NewSessionContext = plugin.NewSessionContext
