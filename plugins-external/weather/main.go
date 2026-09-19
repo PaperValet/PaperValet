@@ -61,7 +61,7 @@ type wttrResp struct {
 		} `json:"country"`
 	} `json:"nearest_area"`
 	Weather []struct {
-		Date    string `json:"date"`
+		Date     string `json:"date"`
 		MaxTempC string `json:"maxtempC"`
 		MinTempC string `json:"mintempC"`
 	} `json:"weather"`

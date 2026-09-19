@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/gotd/td/tg"
 
@@ -232,10 +232,10 @@ func (p *SavePlugin) forwardMessage(ctx *plugin.CommandContext, targetOverride s
 	}
 
 	_, err = ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
-		FromPeer:     fromPeer,
-		ID:           ids,
-		ToPeer:       destPeer,
-		DropAuthor:   true,
+		FromPeer:   fromPeer,
+		ID:         ids,
+		ToPeer:     destPeer,
+		DropAuthor: true,
 	})
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 转发失败: %v", err))

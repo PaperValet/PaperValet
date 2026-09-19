@@ -60,11 +60,11 @@ func (p *DuckDuckGoPlugin) handleSearch(ctx *plugin.CommandContext) error {
 	query := strings.Join(ctx.Args, " ")
 
 	q := url.Values{
-		"q":              {query},
-		"format":         {"json"},
-		"no_html":        {"1"},
-		"skip_disambig":  {"1"},
-		"t":              {"PaperValet"},
+		"q":             {query},
+		"format":        {"json"},
+		"no_html":       {"1"},
+		"skip_disambig": {"1"},
+		"t":             {"PaperValet"},
 	}
 	req, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet,
 		"https://api.duckduckgo.com/?"+q.Encode(), nil)

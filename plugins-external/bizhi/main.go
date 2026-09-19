@@ -40,10 +40,10 @@ func (p *BizhiPlugin) Start(ctx context.Context) error { return nil }
 func (p *BizhiPlugin) Stop(ctx context.Context) error  { return nil }
 
 var bizhiSources = map[string]string{
-	"dongman": "https://api.btstu.cn/sjbz/api.php?lx=dongman&format=images",
-	"meinv":   "https://api.btstu.cn/sjbz/api.php?lx=meinv&format=images",
+	"dongman":  "https://api.btstu.cn/sjbz/api.php?lx=dongman&format=images",
+	"meinv":    "https://api.btstu.cn/sjbz/api.php?lx=meinv&format=images",
 	"fengjing": "https://api.btstu.cn/sjbz/api.php?lx=fengjing&format=images",
-	"suiji":   "https://api.btstu.cn/sjbz/api.php?lx=suiji&format=images",
+	"suiji":    "https://api.btstu.cn/sjbz/api.php?lx=suiji&format=images",
 }
 
 func (p *BizhiPlugin) handleBizhi(ctx *plugin.CommandContext) error {

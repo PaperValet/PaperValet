@@ -15,11 +15,11 @@ import (
 
 // Telegram Data Centers (from TeleBox)
 var dcs = map[int]string{
-	1: "149.154.175.53",   // DC1 Miami
-	2: "149.154.167.51",   // DC2 Amsterdam
-	3: "149.154.175.100",  // DC3 Miami
-	4: "149.154.167.91",   // DC4 Amsterdam
-	5: "91.108.56.130",    // DC5 Singapore
+	1: "149.154.175.53",  // DC1 Miami
+	2: "149.154.167.51",  // DC2 Amsterdam
+	3: "149.154.175.100", // DC3 Miami
+	4: "149.154.167.91",  // DC4 Amsterdam
+	5: "91.108.56.130",   // DC5 Singapore
 }
 
 type PingPlugin struct{}

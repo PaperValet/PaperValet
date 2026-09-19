@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/qr"
-	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 type QRCodePlugin struct{}

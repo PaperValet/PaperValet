@@ -24,8 +24,10 @@ var Metadata = &plugin.PluginMetadata{
 	MinVersion:  "0.1.0",
 }
 
-func (p *AccountPlugin) Name() string        { return "account" }
-func (p *AccountPlugin) Description() string { return "账号资料管理（用户名/昵称/简介/头像）" }
+func (p *AccountPlugin) Name() string { return "account" }
+func (p *AccountPlugin) Description() string {
+	return "账号资料管理（用户名/昵称/简介/头像）"
+}
 
 func (p *AccountPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*plugin.Command{

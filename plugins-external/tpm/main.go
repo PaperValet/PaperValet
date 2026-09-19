@@ -14,7 +14,7 @@ import (
 )
 
 type TPMPlugin struct {
-	mgr      plugin.Manager
+	mgr        plugin.Manager
 	pluginsDir string
 }
 
