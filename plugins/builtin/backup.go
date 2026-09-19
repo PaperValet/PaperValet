@@ -9,17 +9,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // BackupPlugin provides config/session backup and restore.
 type BackupPlugin struct {
-	backupDir string
+	backupDir  string
+	configPath string
+	config     *config.Config
 }
 
-func NewBackup() *BackupPlugin {
-	return &BackupPlugin{backupDir: "backups"}
+func NewBackup() *BackupPlugin { return &BackupPlugin{backupDir: "backups"} }
+
+// SetConfig wires the active configuration so backups include configured paths
+// instead of silently looking only in the process working directory.
+func (p *BackupPlugin) SetConfig(path string, cfg *config.Config) {
+	p.configPath = path
+	p.config = cfg
 }
 
 func (p *BackupPlugin) Name() string        { return "backup" }
@@ -27,23 +35,15 @@ func (p *BackupPlugin) Description() string { return "备份与恢复管理" }
 
 func (p *BackupPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
-		Name:        "backup",
-		Description: "备份管理",
-		Usage:       "backup [名称] | backup list|restore <名称> [--force]|clean|info",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleBackup,
+		Name: "backup", Description: "备份管理",
+		Usage:  "backup [名称] | backup list|restore <名称> [--force]|clean|info",
+		Plugin: p.Name(), Category: "admin", OwnerOnly: true, Handler: p.handleBackup,
 	})
 }
 
 func (p *BackupPlugin) Start(_ context.Context) error {
-	if err := os.MkdirAll(p.backupDir, 0o755); err != nil {
-		return fmt.Errorf("create backup dir: %w", err)
-	}
-	return nil
+	return os.MkdirAll(p.backupDir, 0o700)
 }
-
 func (p *BackupPlugin) Stop(_ context.Context) error { return nil }
 
 func (p *BackupPlugin) handleBackup(ctx *interfaces.CommandContext) error {
@@ -51,7 +51,6 @@ func (p *BackupPlugin) handleBackup(ctx *interfaces.CommandContext) error {
 	if len(args) == 0 {
 		return p.doBackup(ctx, "")
 	}
-
 	switch args[0] {
 	case "list", "ls":
 		return p.listBackups(ctx)
@@ -77,7 +76,6 @@ func (p *BackupPlugin) handleBackup(ctx *interfaces.CommandContext) error {
 		}
 		return p.doBackup(ctx, name)
 	default:
-		// Single unknown token is treated as a backup name.
 		if len(args) == 1 {
 			return p.doBackup(ctx, args[0])
 		}
@@ -97,13 +95,32 @@ func (p *BackupPlugin) usage() string {
 • <code>backup info</code> — 查看备份统计`
 }
 
-// backupSet is one named backup directory under backups/.
 type backupSet struct {
 	name    string
 	path    string
 	size    int64
 	files   int
 	modTime time.Time
+}
+
+func validBackupName(name string) bool {
+	return name != "" && name != "." && name != ".." && filepath.Base(name) == name &&
+		!strings.ContainsAny(name, `/\`) && !strings.HasPrefix(name, ".")
+}
+
+func (p *BackupPlugin) backupPath(name string) (string, error) {
+	if !validBackupName(name) {
+		return "", fmt.Errorf("invalid backup name")
+	}
+	root, err := filepath.Abs(p.backupDir)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(root, name)
+	if filepath.Dir(path) != root {
+		return "", fmt.Errorf("invalid backup path")
+	}
+	return path, nil
 }
 
 func (p *BackupPlugin) getBackups() []backupSet {
@@ -113,7 +130,7 @@ func (p *BackupPlugin) getBackups() []backupSet {
 	}
 	var backups []backupSet
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || !validBackupName(e.Name()) {
 			continue
 		}
 		info, err := e.Info()
@@ -123,24 +140,19 @@ func (p *BackupPlugin) getBackups() []backupSet {
 		dir := filepath.Join(p.backupDir, e.Name())
 		var size int64
 		var files int
-		_ = filepath.Walk(dir, func(_ string, fi os.FileInfo, err error) error {
-			if err == nil && !fi.IsDir() {
+		_ = filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if fi.Mode().IsRegular() {
 				size += fi.Size()
 				files++
 			}
 			return nil
 		})
-		backups = append(backups, backupSet{
-			name:    e.Name(),
-			path:    dir,
-			size:    size,
-			files:   files,
-			modTime: info.ModTime(),
-		})
+		backups = append(backups, backupSet{name: e.Name(), path: dir, size: size, files: files, modTime: info.ModTime()})
 	}
-	sort.Slice(backups, func(i, j int) bool {
-		return backups[i].modTime.After(backups[j].modTime)
-	})
+	sort.Slice(backups, func(i, j int) bool { return backups[i].modTime.After(backups[j].modTime) })
 	return backups
 }
 
@@ -148,82 +160,109 @@ func (p *BackupPlugin) showStatus(ctx *interfaces.CommandContext) error {
 	backups := p.getBackups()
 	var totalSize int64
 	var outdated int
-	now := time.Now()
 	for _, b := range backups {
 		totalSize += b.size
-		if now.Sub(b.modTime) > 7*24*time.Hour {
+		if time.Since(b.modTime) > 7*24*time.Hour {
 			outdated++
 		}
 	}
-
 	return ctx.Edit(fmt.Sprintf(`📦 <b>备份管理状态</b>
 
 📁 备份目录: <code>%s</code>
 📊 备份数量: <b>%d</b>
 💾 总大小: <b>%s</b>
-⏰ 过期备份: <b>%d</b> (7天以上)
-
-<b>常用命令:</b>
-<code>backup</code> — 快速备份
-<code>backup list</code> — 查看列表
-<code>backup restore &lt;名称&gt; --force</code> — 恢复`,
+⏰ 过期备份: <b>%d</b> (7天以上)`,
 		p.backupDir, len(backups), formatBytes(totalSize), outdated))
 }
 
-// backupPatterns are the file globs copied into each backup set.
-var backupPatterns = []string{"config.json", "config.yaml", "*.db", "*.session", "*.key", "data/*.json"}
+func sqliteCompanionFiles(path string) []string {
+	lower := strings.ToLower(path)
+	if strings.HasSuffix(lower, ".db") || strings.HasSuffix(lower, ".sqlite") {
+		return []string{path, path + "-wal", path + "-shm", path + "-journal"}
+	}
+	return []string{path}
+}
+
+func (p *BackupPlugin) sourceFiles() []string {
+	seen := map[string]bool{}
+	var files []string
+	add := func(path string) {
+		if path == "" || seen[path] {
+			return
+		}
+		seen[path] = true
+		files = append(files, path)
+	}
+	if p.configPath != "" {
+		add(p.configPath)
+	}
+	if p.config != nil {
+		for _, path := range sqliteCompanionFiles(p.config.Telegram.Database) {
+			add(path)
+		}
+		add(p.config.Telegram.SessionFile)
+	}
+	// Compatibility fallback when constructed without application config.
+	for _, path := range []string{"config.json", "session.json", "sessions.db", "sessions.db-wal", "sessions.db-shm"} {
+		add(path)
+	}
+	return files
+}
 
 func (p *BackupPlugin) doBackup(ctx *interfaces.CommandContext, name string) error {
 	if name == "" {
 		name = "backup-" + time.Now().Format("20060102-150405")
 	}
-	dest := filepath.Join(p.backupDir, name)
+	dest, err := p.backupPath(name)
+	if err != nil {
+		return ctx.Edit("❌ 无效备份名称（仅允许目录名，不能包含路径）")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		return ctx.Edit(fmt.Sprintf("❌ 备份已存在: <code>%s</code>", name))
+	}
 
-	var files []string
-	seen := make(map[string]bool)
-	for _, pattern := range backupPatterns {
-		matches, err := filepath.Glob(pattern)
+	var copied, missing []string
+	for _, src := range p.sourceFiles() {
+		info, err := os.Lstat(src)
 		if err != nil {
+			missing = append(missing, filepath.Base(src))
 			continue
 		}
-		for _, m := range matches {
-			if !seen[m] {
-				seen[m] = true
-				files = append(files, m)
-			}
+		if !info.Mode().IsRegular() {
+			missing = append(missing, filepath.Base(src)+" (非普通文件)")
+			continue
 		}
-	}
-	if len(files) == 0 {
-		return ctx.Edit("❌ 未找到可备份的文件（config.json, *.db 等）")
-	}
-
-	_ = ctx.Edit(fmt.Sprintf("⏳ 正在备份 %d 个文件到 <code>%s</code>...", len(files), dest))
-
-	var backedUp []string
-	for _, f := range files {
-		data, err := os.ReadFile(f)
+		if _, err := os.Stat(filepath.Join(dest, filepath.Base(src))); err == nil {
+			// Name collision across configured/fallback locations; preserve all files explicitly.
+			continue
+		}
+		data, err := os.ReadFile(src)
 		if err != nil {
+			missing = append(missing, filepath.Base(src))
 			continue
 		}
-		out := filepath.Join(dest, f)
-		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		if err := os.MkdirAll(dest, 0o700); err != nil {
+			return ctx.Edit(fmt.Sprintf("❌ 创建备份目录失败: %v", err))
+		}
+		if err := os.WriteFile(filepath.Join(dest, filepath.Base(src)), data, 0o600); err != nil {
+			missing = append(missing, filepath.Base(src))
 			continue
 		}
-		if err := os.WriteFile(out, data, 0o600); err != nil {
-			continue
-		}
-		backedUp = append(backedUp, f)
+		copied = append(copied, filepath.Base(src))
 	}
-
-	if len(backedUp) == 0 {
+	if len(copied) == 0 {
+		_ = os.RemoveAll(dest)
 		return ctx.Edit("❌ 备份失败：没有文件写入成功")
 	}
-	return ctx.Edit(fmt.Sprintf(`✅ <b>备份完成</b>
+	status := fmt.Sprintf(`✅ <b>备份完成</b>
 
 📁 备份路径: <code>%s</code>
-📄 已备份: <b>%d</b> / %d 个文件
-<code>%s</code>`,
-		dest, len(backedUp), len(files), strings.Join(backedUp, "\n")))
+📄 已备份: <b>%d</b> 个文件
+<code>%s</code>`, dest, len(copied), strings.Join(copied, "\n"))
+	if len(missing) > 0 {
+		status += fmt.Sprintf("\n⚠️ 缺失或失败: <code>%s</code>", strings.Join(missing, "</code>, <code>"))
+	}
+	return ctx.Edit(status)
 }
 
 func (p *BackupPlugin) listBackups(ctx *interfaces.CommandContext) error {
@@ -231,90 +270,62 @@ func (p *BackupPlugin) listBackups(ctx *interfaces.CommandContext) error {
 	if len(backups) == 0 {
 		return ctx.Edit("📦 暂无备份\n\n使用 <code>backup</code> 创建第一个备份")
 	}
-
 	var b strings.Builder
 	b.WriteString("📦 <b>备份列表</b>\n\n")
 	for i, bak := range backups {
-		age := time.Since(bak.modTime).Truncate(time.Second)
-		b.WriteString(fmt.Sprintf("%d. <code>%s</code>\n", i+1, bak.name))
-		b.WriteString(fmt.Sprintf("   📅 %s | 💾 %s (%d 文件) | ⏰ %s前\n",
-			bak.modTime.Format("01-02 15:04"),
-			formatBytes(bak.size),
-			bak.files,
-			formatDuration(age)))
+		b.WriteString(fmt.Sprintf("%d. <code>%s</code>\n   📅 %s | 💾 %s (%d 文件) | ⏰ %s前\n",
+			i+1, bak.name, bak.modTime.Format("01-02 15:04"), formatBytes(bak.size), bak.files, formatDuration(time.Since(bak.modTime).Truncate(time.Second))))
 	}
 	return ctx.Edit(b.String())
 }
 
 func (p *BackupPlugin) doRestore(ctx *interfaces.CommandContext, name string, force bool) error {
 	backups := p.getBackups()
-
-	// Find by exact/prefix name or 1-based index.
 	var target *backupSet
 	for i := range backups {
-		if backups[i].name == name || strings.HasPrefix(backups[i].name, name) {
+		if backups[i].name == name {
 			target = &backups[i]
 			break
 		}
 	}
 	if target == nil {
-		var idx int
-		if n, err := fmt.Sscanf(name, "%d", &idx); n == 1 && err == nil && idx > 0 && idx <= len(backups) {
-			target = &backups[idx-1]
-		}
+		return ctx.Edit(fmt.Sprintf("❌ 未找到备份: %s", name))
 	}
-	if target == nil {
-		return ctx.Edit(fmt.Sprintf("❌ 未找到备份: %s\n使用 <code>backup list</code> 查看可用备份", name))
-	}
-
 	if !force {
-		return ctx.Edit(fmt.Sprintf("⚠️ <b>恢复确认</b>\n\n备份: <code>%s</code>\n时间: %s\n文件: %d 个\n\n‼️ 恢复将覆盖现有文件，确认请使用 <code>backup restore %s --force</code>",
-			target.name, target.modTime.Format("2006-01-02 15:04:05"), target.files, target.name))
+		return ctx.Edit(fmt.Sprintf("⚠️ 恢复将覆盖现有文件。确认: <code>backup restore %s --force</code>", target.name))
 	}
-
-	var restored, failed []string
-	err := filepath.Walk(target.path, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(target.path, path)
-		if err != nil {
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			failed = append(failed, rel)
-			return nil
-		}
-		if err := os.MkdirAll(filepath.Dir(rel), 0o755); err != nil && filepath.Dir(rel) != "." {
-			failed = append(failed, rel)
-			return nil
-		}
-		if err := os.WriteFile(rel, data, 0o600); err != nil {
-			failed = append(failed, rel)
-			return nil
-		}
-		restored = append(restored, rel)
-		return nil
-	})
+	entries, err := os.ReadDir(target.path)
 	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 恢复失败: %v", err))
+		return ctx.Edit(fmt.Sprintf("❌ 读取备份失败: %v", err))
 	}
-
-	out := fmt.Sprintf("✅ <b>恢复完成</b>\n\n备份: <code>%s</code>\n恢复: %d 个文件", target.name, len(restored))
+	var restored, failed []string
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		src := filepath.Join(target.path, e.Name())
+		data, err := os.ReadFile(src)
+		if err != nil {
+			failed = append(failed, e.Name())
+			continue
+		}
+		if err := os.WriteFile(e.Name(), data, 0o600); err != nil {
+			failed = append(failed, e.Name())
+		} else {
+			restored = append(restored, e.Name())
+		}
+	}
 	if len(failed) > 0 {
-		out += fmt.Sprintf("\n失败: %d 个\n<code>%s</code>", len(failed), strings.Join(failed, "\n"))
+		return ctx.Edit(fmt.Sprintf("⚠️ 恢复部分完成：成功 %d，失败 %d\n<code>%s</code>", len(restored), len(failed), strings.Join(failed, "\n")))
 	}
-	out += "\n\n💡 建议重启使配置生效"
-	return ctx.Edit(out)
+	return ctx.Edit(fmt.Sprintf("✅ 恢复完成: %d 个文件\n💡 建议重启使配置生效", len(restored)))
 }
 
 func (p *BackupPlugin) cleanBackups(ctx *interfaces.CommandContext) error {
-	backups := p.getBackups()
-	now := time.Now()
-	var removed int
-	for _, b := range backups {
-		if now.Sub(b.modTime) > 7*24*time.Hour {
+	removed := 0
+	for _, b := range p.getBackups() {
+		if time.Since(b.modTime) > 7*24*time.Hour {
 			if err := os.RemoveAll(b.path); err == nil {
 				removed++
 			}
@@ -344,10 +355,7 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%d分", int(d.Minutes()))
 	}
 	if d < 24*time.Hour {
-		h := int(d.Hours())
-		m := int(d.Minutes()) % 60
-		return fmt.Sprintf("%d时%d分", h, m)
+		return fmt.Sprintf("%d时%d分", int(d.Hours()), int(d.Minutes())%60)
 	}
-	days := int(d.Hours()) / 24
-	return fmt.Sprintf("%d天", days)
+	return fmt.Sprintf("%d天", int(d.Hours())/24)
 }
