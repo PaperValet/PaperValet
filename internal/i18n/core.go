@@ -9,7 +9,6 @@ func CoreCatalog() *Catalog {
 	// ---- core ----
 	c.AddMany(ZhCN, map[string]string{
 		"core.version":       "PaperValet <b>{0}</b>\nGo: {1}\n构建: {2}",
-		"core.uptime":        "⏱ <b>运行时间:</b> {0}\n🧠 <b>内存:</b> {1} MB\n🔀 <b>Goroutines:</b> {2}",
 		"core.ping":          "🏓 Pong!\n📡 <b>延迟:</b> {0}",
 		"core.ping_start":    "🏓 Pong!",
 		"core.unknown_cmd":   "❌ 未知命令: {0}\n使用 {1}help 查看帮助",
@@ -23,7 +22,6 @@ func CoreCatalog() *Catalog {
 	})
 	c.AddMany(EnUS, map[string]string{
 		"core.version":       "PaperValet <b>{0}</b>\nGo: {1}\nBuild: {2}",
-		"core.uptime":        "⏱ <b>Uptime:</b> {0}\n🧠 <b>Memory:</b> {1} MB\n🔀 <b>Goroutines:</b> {2}",
 		"core.ping":          "🏓 Pong!\n📡 <b>Latency:</b> {0}",
 		"core.ping_start":    "🏓 Pong!",
 		"core.unknown_cmd":   "❌ Unknown command: {0}\nUse {1}help to list commands",
@@ -46,7 +44,7 @@ func CoreCatalog() *Catalog {
 		"help.cat_debug":    "🐛 调试",
 		"help.cat_other":    "📦 其他",
 		"help.detail_hint":  "使用 {0}help &lt;命令&gt; 查看详情",
-		"help.plugins_hint": "使用 {0}ppm list 查看插件列表",
+		"help.plugins_hint": "使用 {0}apt list 查看插件列表",
 		"help.not_found":    "未找到命令或插件: {0}",
 		"help.usage":        "<b>用法:</b> <code>{0}</code>",
 		"help.aliases":      "<b>别名:</b> <code>{0}</code>",
@@ -68,7 +66,7 @@ func CoreCatalog() *Catalog {
 		"help.cat_debug":     "🐛 Debug",
 		"help.cat_other":     "📦 Other",
 		"help.detail_hint":   "Use {0}help &lt;command&gt; for details",
-		"help.plugins_hint":  "Use {0}ppm list to list plugins",
+		"help.plugins_hint":  "Use {0}apt list to list plugins",
 		"help.not_found":     "Command or plugin not found: {0}",
 		"help.usage":         "<b>Usage:</b> <code>{0}</code>",
 		"help.aliases":       "<b>Aliases:</b> <code>{0}</code>",
@@ -85,13 +83,9 @@ func CoreCatalog() *Catalog {
 	// ---- admin ----
 	c.AddMany(ZhCN, map[string]string{
 		"admin.restarting": "🔄 正在重启...",
-		"admin.shutting":   "🛑 正在关闭...",
-		"admin.gc_done":    "🗑 <b>GC 完成</b>\n\n之前: {0} MB → 之后: {1} MB\n释放: {2} MB\nGC 次数: {3}\n运行时间: {4}",
 	})
 	c.AddMany(EnUS, map[string]string{
 		"admin.restarting": "🔄 Restarting...",
-		"admin.shutting":   "🛑 Shutting down...",
-		"admin.gc_done":    "🗑 <b>GC done</b>\n\nBefore: {0} MB → After: {1} MB\nFreed: {2} MB\nGC count: {3}\nUptime: {4}",
 	})
 
 	// ---- i18n ----

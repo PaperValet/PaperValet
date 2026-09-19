@@ -12,7 +12,6 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/config"
-	"github.com/TiaraBasori/PaperValet/internal/cron"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/media"
@@ -41,7 +40,6 @@ type App struct {
 	peers        *peer.Resolver
 	accessHash   *peer.AccessHashManager
 	updates      *UpdateHandler
-	cron         *cron.Manager
 	i18n         *i18n.Manager
 	logger       pkgplugin.Logger
 }
@@ -96,7 +94,6 @@ func New(cfg *config.Config) (*App, error) {
 	cmdReg.SetMediaSender(mediaMgr)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
-	cronMgr := cron.NewManager()
 
 	pluginsDir := cfg.Bot.PluginsDir
 	if pluginsDir == "" {
@@ -118,7 +115,6 @@ func New(cfg *config.Config) (*App, error) {
 		peers:        resolver,
 		accessHash:   accessHash,
 		updates:      updates,
-		cron:         cronMgr,
 		i18n:         i18nMgr,
 		logger:       log,
 	}
@@ -130,27 +126,19 @@ func (a *App) registerBuiltins() error {
 		builtin.NewCore(Version),
 		builtin.NewApt(a.pluginLoader),
 		builtin.NewInfo(),
-		builtin.NewRemind(),
-		builtin.NewNote(),
-		builtin.NewFun(),
-		builtin.NewCron(a.cron),
 		builtin.NewAlias(),
-		builtin.NewDebug(),
 		builtin.NewExec(),
 		builtin.NewSudo(),
 		builtin.NewReload(a.pluginLoader),
 		builtin.NewLog(),
-		builtin.NewSendLog(),
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
 		builtin.NewBF(),
-		builtin.NewMemory(),
 		builtin.NewUpdate(),
 		builtin.NewAccount(),
 		builtin.NewPrune(),
 		builtin.NewSave(),
-		builtin.NewLeech(),
 		builtin.NewLang(a.i18n),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
@@ -173,7 +161,6 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	a.parser.Start()
-	a.cron.Start()
 
 	return a.client.Run(ctx, func(ctx context.Context) error {
 		if err := EnsureAuth(ctx, a.client, ""); err != nil {
@@ -212,7 +199,6 @@ func (a *App) Run(ctx context.Context) error {
 // Shutdown gracefully stops the app.
 func (a *App) Shutdown(ctx context.Context) error {
 	a.logger.Info("shutting down")
-	a.cron.Stop()
 	_ = a.plugins.StopAll(ctx)
 	_ = a.bus.Shutdown(ctx)
 	if a.sessions != nil {
@@ -220,11 +206,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	_ = logger.Sync()
 	return nil
-}
-
-// GetCronManager returns the cron manager for plugins.
-func (a *App) GetCronManager() *cron.Manager {
-	return a.cron
 }
 
 // GetPluginLoader returns the external plugin loader.
