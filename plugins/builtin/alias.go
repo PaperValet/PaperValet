@@ -12,16 +12,16 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// AliasPlugin manages command aliases with persistent storage.
+// AliasPlugin manages runtime command aliases with persistent storage.
+// Aliases are expanded once during command parsing; they do not nest.
 type AliasPlugin struct {
-	aliases map[string]string
-	file    string
+	mgr  plugin.Manager
+	file string
 }
 
 func NewAlias() *AliasPlugin {
 	return &AliasPlugin{
-		aliases: make(map[string]string),
-		file:    "data/aliases.json",
+		file: "data/aliases.json",
 	}
 }
 
@@ -29,6 +29,7 @@ func (p *AliasPlugin) Name() string        { return "alias" }
 func (p *AliasPlugin) Description() string { return "命令别名管理" }
 
 func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
+	p.mgr = mgr
 	p.load()
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "alias",
@@ -37,6 +38,7 @@ func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Usage:       "alias [set|del|list] [名称] [命令]",
 		Plugin:      p.Name(),
 		Category:    "tools",
+		OwnerOnly:   true,
 		Handler:     p.handleAlias,
 	})
 }
@@ -44,18 +46,25 @@ func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 func (p *AliasPlugin) Start(_ context.Context) error { return nil }
 func (p *AliasPlugin) Stop(_ context.Context) error  { return nil }
 
+// load pushes persisted aliases into the command registry.
 func (p *AliasPlugin) load() {
 	data, err := os.ReadFile(p.file)
 	if err != nil {
 		return
 	}
-	json.Unmarshal(data, &p.aliases)
+	var aliases map[string]string
+	if err := json.Unmarshal(data, &aliases); err != nil {
+		return
+	}
+	for name, cmd := range aliases {
+		p.mgr.Commands().AddUserAlias(name, cmd)
+	}
 }
 
 func (p *AliasPlugin) save() {
-	os.MkdirAll(filepath.Dir(p.file), 0o755)
-	data, _ := json.MarshalIndent(p.aliases, "", "  ")
-	os.WriteFile(p.file, data, 0o644)
+	_ = os.MkdirAll(filepath.Dir(p.file), 0o755)
+	data, _ := json.MarshalIndent(p.mgr.Commands().UserAliases(), "", "  ")
+	_ = os.WriteFile(p.file, data, 0o644)
 }
 
 func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
@@ -72,7 +81,7 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 		}
 		name := args[1]
 		cmd := strings.Join(args[2:], " ")
-		p.aliases[name] = cmd
+		p.mgr.Commands().AddUserAlias(name, cmd)
 		p.save()
 		return ctx.Edit(fmt.Sprintf("✅ 别名已设置: %s → %s", name, cmd))
 
@@ -81,12 +90,13 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 			return ctx.Edit("用法: alias del <名称>")
 		}
 		name := args[1]
-		if _, ok := p.aliases[name]; ok {
-			delete(p.aliases, name)
-			p.save()
-			return ctx.Edit(fmt.Sprintf("🗑 别名已删除: %s", name))
+		aliases := p.mgr.Commands().UserAliases()
+		if _, ok := aliases[name]; !ok {
+			return ctx.Edit("别名不存在: " + name)
 		}
-		return ctx.Edit("别名不存在: " + name)
+		p.mgr.Commands().RemoveUserAlias(name)
+		p.save()
+		return ctx.Edit(fmt.Sprintf("🗑 别名已删除: %s", name))
 
 	case "list", "ls":
 		return p.listAliases(ctx)
@@ -100,10 +110,10 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 • <code>alias list</code> - 列出所有别名
 
 <b>示例:</b>
-• <code>alias set ping .ping</code>
-• <code>alias set deploy .exec ./deploy.sh</code>
+• <code>alias set p ping</code>
+• <code>alias set deploy exec ./deploy.sh</code>
 
-<b>注意:</b> 别名不支持嵌套，仅展开一次。`)
+<b>注意:</b> 别名不支持嵌套，仅展开一次。命令部分不需要带前缀。`)
 
 	default:
 		return ctx.Edit("未知子命令: " + sub)
@@ -111,12 +121,13 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 }
 
 func (p *AliasPlugin) listAliases(ctx *interfaces.CommandContext) error {
-	if len(p.aliases) == 0 {
+	aliases := p.mgr.Commands().UserAliases()
+	if len(aliases) == 0 {
 		return ctx.Edit("暂无别名")
 	}
 	var b strings.Builder
 	b.WriteString("🔧 <b>命令别名列表:</b>\n\n")
-	for name, cmd := range p.aliases {
+	for name, cmd := range aliases {
 		b.WriteString(fmt.Sprintf("• <code>%s</code> → <code>%s</code>\n", name, cmd))
 	}
 	return ctx.Edit(b.String())

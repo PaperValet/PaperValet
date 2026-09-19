@@ -91,6 +91,13 @@ type RegistryProvider interface {
 	GetByPlugin(plugin string) map[string]*Command
 	GetPrefix() string
 	GetPrefixes() []string
+	// SetPrefixes replaces all command prefixes (main prefix first).
+	SetPrefixes(prefixes []string)
+	// AddUserAlias registers a runtime alias expanded once during parsing.
+	// The value is a full command line, e.g. "exec ./deploy.sh".
+	AddUserAlias(name, cmd string)
+	RemoveUserAlias(name string)
+	UserAliases() map[string]string
 }
 
 // ============================================================

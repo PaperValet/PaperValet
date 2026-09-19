@@ -32,6 +32,8 @@ func (p *PrefixPlugin) Description() string { return "命令前缀管理（多�
 func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	p.load()
+	// Apply persisted prefixes to the command registry immediately.
+	p.mgr.Commands().SetPrefixes(p.prefixes)
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "prefix",
 		Aliases:     []string{"pfx", "cmdprefix"},
@@ -62,6 +64,7 @@ func (p *PrefixPlugin) save() {
 	os.MkdirAll(filepath.Dir(p.file), 0o755)
 	data, _ := json.MarshalIndent(p.prefixes, "", "  ")
 	os.WriteFile(p.file, data, 0o644)
+	p.mgr.Commands().SetPrefixes(p.prefixes)
 }
 
 func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {

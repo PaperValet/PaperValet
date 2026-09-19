@@ -24,8 +24,8 @@ func (p *ExecPlugin) Description() string { return "执行系统命令" }
 func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "exec",
-		Aliases:     []string{"sh", "shell", "cmd", "sudo"},
-		Description: "执行系统命令（sudo 别名以 root 运行）",
+		Aliases:     []string{"sh", "shell", "cmd"},
+		Description: "执行系统命令（--sudo 以 root 运行）",
 		Usage:       "exec <命令> [参数...]",
 		Plugin:      p.Name(),
 		Category:    "admin",

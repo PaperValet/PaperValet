@@ -17,18 +17,19 @@ import (
 // Registry manages command registration, lookup, and middleware execution.
 // Supports multi-prefix command parsing.
 type Registry struct {
-	mu         sync.RWMutex
-	commands   map[string]*interfaces.Command
-	aliases    map[string]string
-	globalMW   []interfaces.Middleware
-	emitter    interfaces.Emitter
-	resolver   interfaces.PeerResolver
-	api        *tg.Client
-	ownerID    int64
-	prefixes   []string // all supported command prefixes (main first)
-	rateLimits map[string]time.Time
-	logger     interfaces.Logger
-	i18n       *i18n.Manager
+	mu          sync.RWMutex
+	commands    map[string]*interfaces.Command
+	aliases     map[string]string
+	userAliases map[string]string // runtime aliases: name -> full command line
+	globalMW    []interfaces.Middleware
+	emitter     interfaces.Emitter
+	resolver    interfaces.PeerResolver
+	api         *tg.Client
+	ownerID     int64
+	prefixes    []string // all supported command prefixes (main first)
+	rateLimits  map[string]time.Time
+	logger      interfaces.Logger
+	i18n        *i18n.Manager
 	sudoChecker func(int64) bool
 	media       interfaces.MediaSender
 }
@@ -38,17 +39,18 @@ func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, 
 		prefixes = []string{"."}
 	}
 	r := &Registry{
-		commands:   make(map[string]*interfaces.Command),
-		aliases:    make(map[string]string),
-		globalMW:   make([]interfaces.Middleware, 0),
-		emitter:    emitter,
-		resolver:   resolver,
-		api:        api,
-		ownerID:    ownerID,
-		prefixes:   prefixes,
-		rateLimits: make(map[string]time.Time),
-		logger:     logger.NamedLogger("command"),
-		i18n:       i18nMgr,
+		commands:    make(map[string]*interfaces.Command),
+		aliases:     make(map[string]string),
+		userAliases: make(map[string]string),
+		globalMW:    make([]interfaces.Middleware, 0),
+		emitter:     emitter,
+		resolver:    resolver,
+		api:         api,
+		ownerID:     ownerID,
+		prefixes:    prefixes,
+		rateLimits:  make(map[string]time.Time),
+		logger:      logger.NamedLogger("command"),
+		i18n:        i18nMgr,
 	}
 	r.Use(r.recoveryMiddleware)
 	r.Use(r.loggingMiddleware)
@@ -202,6 +204,33 @@ func (r *Registry) SetPrefixes(prefixes []string) {
 	r.prefixes = prefixes
 }
 
+// AddUserAlias registers a runtime alias. The alias value is a full command
+// line (command plus optional fixed arguments) and is expanded exactly once
+// during parsing; aliases do not nest.
+func (r *Registry) AddUserAlias(name, cmd string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.userAliases[name] = cmd
+}
+
+// RemoveUserAlias deletes a runtime alias.
+func (r *Registry) RemoveUserAlias(name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.userAliases, name)
+}
+
+// UserAliases returns a copy of the runtime alias map.
+func (r *Registry) UserAliases() map[string]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]string, len(r.userAliases))
+	for k, v := range r.userAliases {
+		out[k] = v
+	}
+	return out
+}
+
 // AddPrefix adds a prefix without removing existing ones.
 func (r *Registry) AddPrefix(prefix string) {
 	r.mu.Lock()
@@ -258,7 +287,20 @@ func (r *Registry) ParseCommand(text string) (name string, args []string, ok boo
 		if len(parts) == 0 {
 			return "", nil, false
 		}
-		return parts[0], parts[1:], true
+		name, args = parts[0], parts[1:]
+
+		// Expand user aliases once (no nesting).
+		r.mu.RLock()
+		repl, isAlias := r.userAliases[name]
+		r.mu.RUnlock()
+		if isAlias {
+			fields := strings.Fields(repl)
+			if len(fields) > 0 {
+				name = fields[0]
+				args = append(fields[1:], args...)
+			}
+		}
+		return name, args, true
 	}
 	return "", nil, false
 }
