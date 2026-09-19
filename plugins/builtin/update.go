@@ -133,11 +133,10 @@ func (p *UpdatePlugin) handleAutofix(ctx *interfaces.CommandContext) error {
 func (p *UpdatePlugin) removeCollidingPlugins() []string {
 	pluginsDir := "plugins"
 	builtins := map[string]bool{
-		"core": true, "ppm": true, "info": true, "utility": true,
-		"fun": true, "cron": true, "alias": true, "debug": true,
-		"exec": true, "sudo": true, "log": true, "prefix": true,
-		"help": true, "status": true, "bf": true, "kitt": true,
-		"account": true, "update": true, "lang": true,
+		"core": true, "apt": true, "info": true, "alias": true,
+		"exec": true, "sudo": true, "reload": true, "log": true,
+		"prefix": true, "help": true, "status": true, "backup": true,
+		"update": true, "dme": true, "lang": true,
 	}
 
 	var removed []string
