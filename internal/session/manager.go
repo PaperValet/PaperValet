@@ -26,11 +26,14 @@ type Record struct {
 
 // Manager manages session state with SQLite + in-memory cache.
 type Manager struct {
-	db      *sql.DB
-	cache   map[string]*Record
-	mu      sync.RWMutex
-	ttl     time.Duration
-	logger  interface{ Info(string, ...any); Debug(string, ...any) }
+	db     *sql.DB
+	cache  map[string]*Record
+	mu     sync.RWMutex
+	ttl    time.Duration
+	logger interface {
+		Info(string, ...any)
+		Debug(string, ...any)
+	}
 	cleanup *time.Ticker
 	done    chan struct{}
 }

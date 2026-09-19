@@ -30,13 +30,13 @@ type TelegramConfig struct {
 }
 
 type BotConfig struct {
-	CommandPrefix  string   `json:"command_prefix"`
+	CommandPrefix   string   `json:"command_prefix"`
 	CommandPrefixes []string `json:"command_prefixes,omitempty"`
-	PluginsDir     string   `json:"plugins_dir"`
-	PluginRepo     string   `json:"plugin_repo,omitempty"`
-	OwnerID        int64    `json:"owner_id,omitempty"`
-	MaxMessageLen  int      `json:"max_message_len,omitempty"`
-	RateLimit      int      `json:"rate_limit,omitempty"`
+	PluginsDir      string   `json:"plugins_dir"`
+	PluginRepo      string   `json:"plugin_repo,omitempty"`
+	OwnerID         int64    `json:"owner_id,omitempty"`
+	MaxMessageLen   int      `json:"max_message_len,omitempty"`
+	RateLimit       int      `json:"rate_limit,omitempty"`
 }
 
 type LoggerConfig struct {

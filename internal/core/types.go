@@ -38,6 +38,7 @@ type Middleware = interfaces.Middleware
 type Command = interfaces.Command
 
 var ErrNoMessage = interfaces.ErrNoMessage
+
 type Error = interfaces.Error
 
 // Logger is the minimal logging interface.

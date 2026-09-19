@@ -15,7 +15,10 @@ type AccessHashManager struct {
 	api    *tg.Client
 	mu     sync.RWMutex
 	cache  map[int64]*peerCacheEntry
-	logger interface{ Info(string, ...any); Debug(string, ...any) }
+	logger interface {
+		Info(string, ...any)
+		Debug(string, ...any)
+	}
 }
 
 type peerCacheEntry struct {

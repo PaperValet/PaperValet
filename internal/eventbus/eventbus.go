@@ -206,9 +206,9 @@ func sortByPriority(subs []*Subscription) {
 
 type noopLogger struct{}
 
-func (n *noopLogger) Debug(msg string, keysAndValues ...any) {}
-func (n *noopLogger) Info(msg string, keysAndValues ...any)  {}
-func (n *noopLogger) Warn(msg string, keysAndValues ...any)  {}
-func (n *noopLogger) Error(msg string, keysAndValues ...any) {}
+func (n *noopLogger) Debug(msg string, keysAndValues ...any)      {}
+func (n *noopLogger) Info(msg string, keysAndValues ...any)       {}
+func (n *noopLogger) Warn(msg string, keysAndValues ...any)       {}
+func (n *noopLogger) Error(msg string, keysAndValues ...any)      {}
 func (n *noopLogger) With(keysAndValues ...any) interfaces.Logger { return n }
-func (n *noopLogger) Named(name string) interfaces.Logger      { return n }
+func (n *noopLogger) Named(name string) interfaces.Logger         { return n }

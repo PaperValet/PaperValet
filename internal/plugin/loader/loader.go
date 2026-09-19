@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	pkgplugin "github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	pkgplugin "github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // Loader loads/unloads/manages external plugins from .so files.

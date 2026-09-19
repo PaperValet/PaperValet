@@ -12,7 +12,7 @@ import (
 
 // ExamplePlugin demonstrates the external plugin SDK
 type ExamplePlugin struct {
-	mgr      plugin.Manager
+	mgr       plugin.Manager
 	startTime time.Time
 }
 
@@ -193,10 +193,10 @@ func (p *ExamplePlugin) handleEmit(ctx *plugin.CommandContext) error {
 	}
 
 	ctx.Emitter.Emit(ctx.Context(), "example.custom", map[string]any{
-		"event":  eventName,
-		"data":   data,
-		"user":   ctx.Message.UserID,
-		"chat":   ctx.Message.ChatID,
+		"event": eventName,
+		"data":  data,
+		"user":  ctx.Message.UserID,
+		"chat":  ctx.Message.ChatID,
 	})
 
 	return ctx.Edit(fmt.Sprintf("📡 已发送事件: %s", eventName))

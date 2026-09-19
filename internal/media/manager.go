@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gotd/td/telegram/uploader"
-	"github.com/gotd/td/tg"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
+	"github.com/gotd/td/telegram/uploader"
+	"github.com/gotd/td/tg"
 )
 
 // Manager handles media upload/download operations.
