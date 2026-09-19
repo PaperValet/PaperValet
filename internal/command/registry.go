@@ -17,21 +17,22 @@ import (
 // Registry manages command registration, lookup, and middleware execution.
 // Supports multi-prefix command parsing.
 type Registry struct {
-	mu          sync.RWMutex
-	commands    map[string]*interfaces.Command
-	aliases     map[string]string
-	userAliases map[string]string // runtime aliases: name -> full command line
-	globalMW    []interfaces.Middleware
-	emitter     interfaces.Emitter
-	resolver    interfaces.PeerResolver
-	api         *tg.Client
-	ownerID     int64
-	prefixes    []string // all supported command prefixes (main first)
-	rateLimits  map[string]time.Time
-	logger      interfaces.Logger
-	i18n        *i18n.Manager
-	sudoChecker func(int64) bool
-	media       interfaces.MediaSender
+	mu              sync.RWMutex
+	commands        map[string]*interfaces.Command
+	aliases         map[string]string
+	userAliases     map[string]string // runtime aliases: name -> full command line
+	globalMW        []interfaces.Middleware
+	emitter         interfaces.Emitter
+	resolver        interfaces.PeerResolver
+	api             *tg.Client
+	ownerID         int64
+	prefixes        []string // all supported command prefixes (main first)
+	rateLimits      map[string]time.Time
+	logger          interfaces.Logger
+	i18n            *i18n.Manager
+	sudoChecker     func(int64) bool
+	media           interfaces.MediaSender
+	mediaDownloader interfaces.MediaDownloader
 }
 
 func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
@@ -79,6 +80,9 @@ func (r *Registry) SetMediaSender(m interfaces.MediaSender) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.media = m
+	if d, ok := m.(interfaces.MediaDownloader); ok {
+		r.mediaDownloader = d
+	}
 }
 
 // isSudoUser reports whether the user has been granted delegated access.
@@ -324,6 +328,7 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 		PeerResolver: r.resolver,
 		Emitter:      r.emitter,
 		Media:        r.media,
+		Downloader:   r.mediaDownloader,
 		PluginName:   cmd.Plugin,
 		StartTime:    time.Now(),
 		Metadata:     make(map[string]any),
