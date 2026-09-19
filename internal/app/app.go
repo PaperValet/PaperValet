@@ -122,6 +122,8 @@ func New(cfg *config.Config) (*App, error) {
 }
 
 func (a *App) registerBuiltins() error {
+	backup := builtin.NewBackup()
+	backup.SetConfig("config.json", a.cfg)
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
 		builtin.NewApt(a.pluginLoader),
@@ -134,7 +136,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
-		builtin.NewBackup(),
+		backup,
 		builtin.NewUpdate(),
 		builtin.NewPrune(),
 		builtin.NewLang(a.i18n),
