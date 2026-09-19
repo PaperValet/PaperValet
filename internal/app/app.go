@@ -136,9 +136,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewStatus(Version),
 		builtin.NewBackup(),
 		builtin.NewUpdate(),
-		builtin.NewAccount(),
 		builtin.NewPrune(),
-		builtin.NewSave(),
 		builtin.NewLang(a.i18n),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
