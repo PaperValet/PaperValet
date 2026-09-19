@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gotd/td/tg"
@@ -18,6 +21,7 @@ import (
 // SavePlugin forwards messages to a configurable target, bypassing
 // forward restrictions via direct API calls.
 type SavePlugin struct {
+	mu     sync.RWMutex
 	dbFile string
 	db     *SaveDB
 }
@@ -40,14 +44,14 @@ func New() (plugin.Plugin, error) {
 
 var Metadata = &plugin.PluginMetadata{
 	Name:        "save",
-	Description: "突破限制保存/转发消息",
+	Description: "保存消息到本地并发送到指定目标",
 	Version:     "1.0.0",
 	Author:      "PaperValet",
 	MinVersion:  "0.1.0",
 }
 
 func (p *SavePlugin) Name() string        { return "save" }
-func (p *SavePlugin) Description() string { return "突破限制保存/转发消息" }
+func (p *SavePlugin) Description() string { return "保存消息到本地并发送到指定目标" }
 
 func (p *SavePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.loadDB()
@@ -70,23 +74,29 @@ func (p *SavePlugin) loadDB() {
 	if err != nil {
 		return
 	}
-	_ = json.Unmarshal(data, &p.db)
-	if p.db.Users == nil {
-		p.db.Users = make(map[string]UserConfig)
+	var db SaveDB
+	if err := json.Unmarshal(data, &db); err != nil || db.Users == nil {
+		return
 	}
+	p.db = &db
 }
 
-func (p *SavePlugin) saveDB() {
-	_ = os.MkdirAll(filepath.Dir(p.dbFile), 0o755)
-	data, _ := json.MarshalIndent(p.db, "", "  ")
-	_ = os.WriteFile(p.dbFile, data, 0o600)
+func (p *SavePlugin) saveDB() error {
+	if err := os.MkdirAll(filepath.Dir(p.dbFile), 0o700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(p.db, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p.dbFile, data, 0o600)
 }
 
 func (p *SavePlugin) handleSave(ctx *plugin.CommandContext) error {
 	args := ctx.Args
 	if len(args) == 0 {
 		if ctx.Message != nil && ctx.Message.IsReply {
-			return p.forwardMessage(ctx, "", ctx.Message.ChatID, []int{ctx.Message.ReplyToID})
+			return p.saveMessage(ctx, "", ctx.Message.ChatID, []int{ctx.Message.ReplyToID})
 		}
 		return ctx.Edit(p.helpText())
 	}
@@ -111,7 +121,7 @@ func (p *SavePlugin) handleSave(ctx *plugin.CommandContext) error {
 		}
 		// Reply + custom target override.
 		if ctx.Message != nil && ctx.Message.IsReply {
-			return p.forwardMessage(ctx, args[0], ctx.Message.ChatID, []int{ctx.Message.ReplyToID})
+			return p.saveMessage(ctx, args[0], ctx.Message.ChatID, []int{ctx.Message.ReplyToID})
 		}
 		return ctx.Edit(fmt.Sprintf("未知参数: %s\n\n%s", sub, p.helpText()))
 	}
@@ -133,15 +143,20 @@ func (p *SavePlugin) helpText() string {
 }
 
 func (p *SavePlugin) getUserConfig(userID string) UserConfig {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	if config, ok := p.db.Users[userID]; ok {
 		return config
 	}
 	return UserConfig{Target: "me", ShowSource: false}
 }
 
-func (p *SavePlugin) setUserConfig(userID string, config UserConfig) {
+func (p *SavePlugin) setUserConfig(userID string, config UserConfig) error {
+	p.mu.Lock()
 	p.db.Users[userID] = config
-	p.saveDB()
+	err := p.saveDB()
+	p.mu.Unlock()
+	return err
 }
 
 func (p *SavePlugin) setTarget(ctx *plugin.CommandContext, target string) error {
@@ -153,7 +168,9 @@ func (p *SavePlugin) setTarget(ctx *plugin.CommandContext, target string) error 
 	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
 	config.Target = target
-	p.setUserConfig(userID, config)
+	if err := p.setUserConfig(userID, config); err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 保存配置失败: %v", err))
+	}
 
 	display := target
 	if target == "me" {
@@ -179,7 +196,9 @@ func (p *SavePlugin) setSource(ctx *plugin.CommandContext, value string) error {
 	default:
 		return ctx.Edit("用法: save source on|off")
 	}
-	p.setUserConfig(userID, config)
+	if err := p.setUserConfig(userID, config); err != nil {
+		return ctx.Edit(fmt.Sprintf("❌ 保存配置失败: %v", err))
+	}
 	state := "关闭"
 	if config.ShowSource {
 		state = "开启"
@@ -212,16 +231,40 @@ func (p *SavePlugin) resolveTarget(ctx *plugin.CommandContext, target string) (t
 	return ctx.PeerResolver.ResolveFromChatID(ctx.Context(), id)
 }
 
-// forwardMessage forwards message IDs from sourceChat to the target.
+// forwardMessage saves message IDs from sourceChat and sends them to the target.
 func (p *SavePlugin) forwardMessage(ctx *plugin.CommandContext, targetOverride string, sourceChatID int64, ids []int) error {
+	return p.saveMessage(ctx, targetOverride, sourceChatID, ids)
+}
+func (p *SavePlugin) saveMessage(ctx *plugin.CommandContext, targetOverride string, sourceChatID int64, ids []int) error {
 	userID := fmt.Sprintf("%d", ctx.Message.UserID)
 	config := p.getUserConfig(userID)
-
 	target := config.Target
 	if targetOverride != "" {
 		target = targetOverride
 	}
 
+	// Save the current replied message locally when it has downloadable media.
+	if len(ids) == 1 && ctx.Message != nil && ctx.Message.IsReply && ctx.Message.Media != nil && ctx.Downloader != nil && ctx.Media != nil {
+		if path, err := ctx.Downloader.DownloadMedia(ctx.Context(), ctx.Message); err == nil {
+			defer os.Remove(path)
+			destID := ctx.Message.UserID
+			if target != "" && target != "me" {
+				if strings.HasPrefix(target, "@") || func() bool { _, err := strconv.ParseInt(target, 10, 64); return err != nil }() {
+					return ctx.Edit("❌ 本地媒体目标仅支持数字 chatID 或 me")
+				}
+				id, _ := strconv.ParseInt(target, 10, 64)
+				destID = id
+			}
+			if err := ctx.Media.SendFile(ctx.Context(), destID, path, sourceLink(sourceChatID, ids[0]), 0); err != nil {
+				return ctx.Edit(fmt.Sprintf("❌ 上传失败: %v", err))
+			}
+			return ctx.Edit("✅ 已保存媒体并发送 1 条消息")
+		}
+	}
+	return p.forwardMessageRaw(ctx, target, sourceChatID, ids, config.ShowSource)
+}
+
+func (p *SavePlugin) forwardMessageRaw(ctx *plugin.CommandContext, target string, sourceChatID int64, ids []int, showSource bool) error {
 	destPeer, err := p.resolveTarget(ctx, target)
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 解析目标失败: %v", err))
@@ -230,25 +273,17 @@ func (p *SavePlugin) forwardMessage(ctx *plugin.CommandContext, targetOverride s
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 解析来源失败: %v", err))
 	}
-
 	_, err = ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
-		FromPeer:   fromPeer,
-		ID:         ids,
-		ToPeer:     destPeer,
-		DropAuthor: true,
+		FromPeer: fromPeer, ID: ids, RandomID: randomIDs(len(ids)), ToPeer: destPeer, DropAuthor: true,
 	})
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 转发失败: %v", err))
 	}
-
-	if config.ShowSource && len(ids) > 0 {
+	if showSource && len(ids) > 0 {
 		_, _ = ctx.API.MessagesSendMessage(ctx.Context(), &tg.MessagesSendMessageRequest{
-			Peer:     destPeer,
-			Message:  sourceLink(sourceChatID, ids[0]),
-			RandomID: randomID(),
+			Peer: destPeer, Message: sourceLink(sourceChatID, ids[0]), RandomID: randomID(),
 		})
 	}
-
 	display := target
 	if target == "me" || target == "" {
 		display = "收藏夹"
@@ -326,7 +361,7 @@ func (p *SavePlugin) handleLinks(ctx *plugin.CommandContext, args []string) erro
 		if lo > hi {
 			lo, hi = hi, lo
 		}
-		if hi-lo > 100 {
+		if hi-lo >= 100 {
 			return ctx.Edit("❌ 范围过大，最多 100 条")
 		}
 		peer, err := p.resolveLinkPeer(ctx, links[0])
@@ -342,15 +377,21 @@ func (p *SavePlugin) handleLinks(ctx *plugin.CommandContext, args []string) erro
 
 	// Single / batch mode.
 	sent := 0
+	var failures []string
 	for _, l := range links {
 		peer, err := p.resolveLinkPeer(ctx, l)
 		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", argLabel(l), err))
 			continue
 		}
 		if err := p.forwardFromPeer(ctx, "", peer, []int{l.msgID}); err != nil {
-			return err
+			failures = append(failures, fmt.Sprintf("%s: %v", argLabel(l), err))
+			continue
 		}
 		sent++
+	}
+	if len(failures) > 0 {
+		return ctx.Edit(fmt.Sprintf("⚠️ 已转发 %d 条，失败 %d 条\n%s", sent, len(failures), strings.Join(failures, "\n")))
 	}
 	if sent == 0 {
 		return ctx.Edit("❌ 没有链接转发成功")
@@ -372,10 +413,7 @@ func (p *SavePlugin) forwardFromPeer(ctx *plugin.CommandContext, targetOverride 
 		return ctx.Edit(fmt.Sprintf("❌ 解析目标失败: %v", err))
 	}
 	_, err = ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
-		FromPeer:   fromPeer,
-		ID:         ids,
-		ToPeer:     destPeer,
-		DropAuthor: true,
+		FromPeer: fromPeer, ID: ids, RandomID: randomIDs(len(ids)), ToPeer: destPeer, DropAuthor: true,
 	})
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 转发失败: %v", err))
@@ -388,5 +426,24 @@ func (p *SavePlugin) forwardFromPeer(ctx *plugin.CommandContext, targetOverride 
 }
 
 func randomID() int64 {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err == nil {
+		return int64(binary.LittleEndian.Uint64(b[:]))
+	}
 	return time.Now().UnixNano()
+}
+
+func randomIDs(n int) []int64 {
+	ids := make([]int64, n)
+	for i := range ids {
+		ids[i] = randomID()
+	}
+	return ids
+}
+
+func argLabel(l *msgLink) string {
+	if l.username != "" {
+		return fmt.Sprintf("t.me/%s/%d", l.username, l.msgID)
+	}
+	return fmt.Sprintf("t.me/c/%d/%d", l.chatID, l.msgID)
 }
