@@ -84,7 +84,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 		))
 	}
 
-	sub := args[0]
+	sub := strings.ToLower(ctx.GetArg(0))
 	switch sub {
 	case "get":
 		return ctx.Edit(fmt.Sprintf("当前主前缀: <code>%s</code>", p.prefixes[0]))
@@ -105,7 +105,10 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 				return ctx.Edit(fmt.Sprintf("⚠️ 前缀 <code>%s</code> 已存在", newPrefix))
 			}
 		}
-		p.prefixes = append(p.prefixes, newPrefix)
+		prefixes := p.mgr.Commands().GetPrefixes()
+		prefixes = append(prefixes, newPrefix)
+		p.mgr.Commands().SetPrefixes(prefixes)
+		p.prefixes = prefixes
 		p.save()
 		return ctx.Edit(fmt.Sprintf("✅ 已添加前缀 <code>%s</code>", newPrefix))
 
@@ -119,7 +122,10 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 		}
 		for i, pref := range p.prefixes {
 			if pref == target {
-				p.prefixes = append(p.prefixes[:i], p.prefixes[i+1:]...)
+				prefixes := p.mgr.Commands().GetPrefixes()
+				prefixes = append(prefixes[:i], prefixes[i+1:]...)
+				p.mgr.Commands().SetPrefixes(prefixes)
+				p.prefixes = prefixes
 				p.save()
 				return ctx.Edit(fmt.Sprintf("🗑 已删除前缀 <code>%s</code>", target))
 			}
@@ -134,13 +140,19 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 		for i, pref := range p.prefixes {
 			if pref == target {
 				// Move to front
-				p.prefixes = append([]string{target}, append(p.prefixes[:i], p.prefixes[i+1:]...)...)
+				prefixes := p.mgr.Commands().GetPrefixes()
+				prefixes = append([]string{target}, append(prefixes[:i], prefixes[i+1:]...)...)
+				p.mgr.Commands().SetPrefixes(prefixes)
+				p.prefixes = prefixes
 				p.save()
 				return ctx.Edit(fmt.Sprintf("✅ 主前缀已设置为 <code>%s</code>", target))
 			}
 		}
-		// Not found, add it
-		p.prefixes = append([]string{target}, p.prefixes...)
+		// Not found, add it and promote it to main
+		prefixes := p.mgr.Commands().GetPrefixes()
+		prefixes = append([]string{target}, prefixes...)
+		p.mgr.Commands().SetPrefixes(prefixes)
+		p.prefixes = prefixes
 		p.save()
 		return ctx.Edit(fmt.Sprintf("✅ 已添加并设置为主前缀 <code>%s</code>", target))
 
