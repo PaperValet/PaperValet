@@ -184,9 +184,10 @@ func (m *Manager) SendFile(ctx context.Context, chatID int64, path string, capti
 	}
 
 	req := &tg.MessagesSendMediaRequest{
-		Peer:    p,
-		Media:   media,
-		Message: caption,
+		Peer:     p,
+		Media:    media,
+		Message:  caption,
+		RandomID: time.Now().UnixNano(),
 	}
 
 	if replyTo > 0 {
