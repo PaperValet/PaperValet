@@ -144,6 +144,11 @@ type MediaSender interface {
 	SendFile(ctx context.Context, chatID int64, path string, caption string, replyTo int) error
 }
 
+// MediaDownloader downloads media from a message into a local regular file.
+type MediaDownloader interface {
+	DownloadMedia(ctx context.Context, msg *MessageEvent) (string, error)
+}
+
 // MessageEvent represents a processed message event.
 type MessageEvent struct {
 	Update    tg.UpdatesClass
@@ -251,6 +256,7 @@ type CommandContext struct {
 	PeerResolver PeerResolver
 	Emitter      Emitter
 	Media        MediaSender
+	Downloader   MediaDownloader
 	PluginName   string
 	StartTime    time.Time
 	Metadata     map[string]any
