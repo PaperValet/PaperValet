@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"sort"
@@ -175,25 +176,14 @@ func (p *LogPlugin) sendTail(ctx *interfaces.CommandContext, lines int) error {
 	if logFile == "" {
 		return ctx.Edit("❌ 未找到日志文件\n\n已检查: ./logs、~/.pm2/logs、/var/log/papervalet")
 	}
-	data, err := os.ReadFile(logFile)
+	data, err := readTail(logFile, lines, 3500)
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 读取日志失败: %v", err))
 	}
-	text := string(data)
-	if strings.TrimSpace(text) == "" {
-		return ctx.Edit(fmt.Sprintf("📋 日志文件为空: <code>%s</code>", logFile))
+	if strings.TrimSpace(data) == "" {
+		return ctx.Edit(fmt.Sprintf("📋 日志文件为空: <code>%s</code>", html.EscapeString(logFile)))
 	}
-	all := strings.Split(text, "\n")
-	if len(all) > lines {
-		all = all[len(all)-lines:]
-	}
-	tail := strings.Join(all, "\n")
-	// Telegram messages cap at 4096 chars; truncate from the head.
-	const maxLen = 3500
-	if len(tail) > maxLen {
-		tail = "…(截断)\n" + tail[len(tail)-maxLen:]
-	}
-	return ctx.Edit(fmt.Sprintf("📋 <b>日志尾部</b> (<code>%s</code>)\n\n<pre>%s</pre>", filepath.Base(logFile), tail))
+	return ctx.Edit(fmt.Sprintf("📋 <b>日志尾部</b> (<code>%s</code>)\n\n<pre>%s</pre>", html.EscapeString(filepath.Base(logFile)), html.EscapeString(data)))
 }
 
 func (p *LogPlugin) cleanLogs(ctx *interfaces.CommandContext) error {
@@ -273,4 +263,38 @@ func parseZapLevel(s string) zapcore.Level {
 	default:
 		return zapcore.InvalidLevel
 	}
+}
+
+func readTail(path string, lines, maxBytes int64) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	start := info.Size() - maxBytes
+	if start < 0 {
+		start = 0
+	}
+	if _, err := f.Seek(start, 0); err != nil {
+		return "", err
+	}
+	buf := make([]byte, info.Size()-start)
+	if _, err := f.Read(buf); err != nil && len(buf) > 0 {
+		return "", err
+	}
+	text := strings.ToValidUTF8(string(buf), "�")
+	if start > 0 {
+		if idx := strings.IndexByte(text, '\n'); idx >= 0 {
+			text = text[idx+1:]
+		}
+	}
+	parts := strings.Split(text, "\n")
+	if len(parts) > int(lines) {
+		parts = parts[len(parts)-int(lines):]
+	}
+	return strings.Join(parts, "\n"), nil
 }
