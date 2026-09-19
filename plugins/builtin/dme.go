@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/gotd/td/tg"
 
@@ -12,7 +11,6 @@ import (
 )
 
 // PrunePlugin provides message deletion utilities.
-// Ported from PagerMaid's prune.py.
 type PrunePlugin struct{}
 
 func NewPrune() *PrunePlugin { return &PrunePlugin{} }
@@ -21,24 +19,27 @@ func (p *PrunePlugin) Name() string        { return "dme" }
 func (p *PrunePlugin) Description() string { return "消息清理" }
 
 func (p *PrunePlugin) Init(_ context.Context, mgr plugin.Manager) error {
-	cmds := []*interfaces.Command{
-		{Name: "prune", Aliases: []string{"del", "purge"}, Description: "删除消息", Usage: "prune [数量] | selfprune [数量] | yourprune [数量]", Plugin: p.Name(), Category: "tools", OwnerOnly: true, Handler: p.handlePrune},
-		{Name: "selfprune", Aliases: []string{"sp"}, Description: "删除自己发送的消息", Usage: "selfprune [数量]", Plugin: p.Name(), Category: "tools", OwnerOnly: true, Handler: p.handleSelfPrune},
-	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+	return mgr.RegisterCommand(&interfaces.Command{
+		Name:        "dme",
+		Description: "删除消息",
+		Usage:       "dme（回复删除）| dme all [数量]（删除自己最近的消息）",
+		Plugin:      p.Name(),
+		Category:    "tools",
+		OwnerOnly:   true,
+		Handler:     p.handleDme,
+	})
 }
 
 func (p *PrunePlugin) Start(_ context.Context) error { return nil }
 func (p *PrunePlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *PrunePlugin) handlePrune(ctx *interfaces.CommandContext) error {
+func (p *PrunePlugin) handleDme(ctx *interfaces.CommandContext) error {
+	if ctx.ArgCount() > 0 && ctx.GetArg(0) == "all" {
+		return p.handleSelfPrune(ctx)
+	}
+
 	if !ctx.Message.IsReply {
-		return ctx.Edit("❌ 请回复一条消息作为起始点")
+		return ctx.Edit("用法: 回复消息后发送 dme 删除该消息；dme all [数量] 删除自己最近的消息")
 	}
 
 	_, err := ctx.ResolvePeer()
@@ -46,23 +47,23 @@ func (p *PrunePlugin) handlePrune(ctx *interfaces.CommandContext) error {
 		return ctx.Edit(fmt.Sprintf("❌ 解析失败: %v", err))
 	}
 
-	// Delete the replied-to message.
-	ids := []int{ctx.Message.ReplyToID}
 	_, err = ctx.API.MessagesDeleteMessages(ctx.Context(), &tg.MessagesDeleteMessagesRequest{
-		ID:     ids,
+		ID:     []int{ctx.Message.ReplyToID},
 		Revoke: true,
 	})
 	if err != nil {
 		return ctx.Edit(fmt.Sprintf("❌ 删除失败: %v", err))
 	}
 
-	return ctx.Edit(fmt.Sprintf("🗑 已删除 %d 条消息", len(ids)))
+	// Remove the command message too so nothing is left behind.
+	_ = ctx.Delete()
+	return nil
 }
 
 func (p *PrunePlugin) handleSelfPrune(ctx *interfaces.CommandContext) error {
 	count := 1
-	if ctx.ArgCount() > 0 {
-		if n, err := parseInt(ctx.GetArg(0)); err == nil && n > 0 && n <= 100 {
+	if ctx.ArgCount() > 1 {
+		if n, err := parseInt(ctx.GetArg(1)); err == nil && n > 0 && n <= 100 {
 			count = n
 		}
 	}
@@ -82,15 +83,21 @@ func (p *PrunePlugin) handleSelfPrune(ctx *interfaces.CommandContext) error {
 	}
 
 	var ids []int
-	if msgs, ok := history.(*tg.MessagesMessages); ok {
-		for _, m := range msgs.Messages {
+	collect := func(list []tg.MessageClass) {
+		for _, m := range list {
 			if msg, ok := m.(*tg.Message); ok && msg.Out {
 				ids = append(ids, msg.ID)
 				if len(ids) >= count {
-					break
+					return
 				}
 			}
 		}
+	}
+	switch msgs := history.(type) {
+	case *tg.MessagesMessages:
+		collect(msgs.Messages)
+	case *tg.MessagesChannelMessages:
+		collect(msgs.Messages)
 	}
 
 	if len(ids) == 0 {
@@ -107,5 +114,3 @@ func (p *PrunePlugin) handleSelfPrune(ctx *interfaces.CommandContext) error {
 
 	return ctx.Edit(fmt.Sprintf("🗑 已删除 %d 条自己的消息", len(ids)))
 }
-
-var _ = strings.TrimSpace

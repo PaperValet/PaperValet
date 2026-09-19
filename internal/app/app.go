@@ -134,7 +134,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
-		builtin.NewBF(),
+		builtin.NewBackup(),
 		builtin.NewUpdate(),
 		builtin.NewAccount(),
 		builtin.NewPrune(),
