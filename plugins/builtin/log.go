@@ -265,7 +265,7 @@ func parseZapLevel(s string) zapcore.Level {
 	}
 }
 
-func readTail(path string, lines, maxBytes int64) (string, error) {
+func readTail(path string, lines int, maxBytes int64) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
