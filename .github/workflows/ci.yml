@@ -172,16 +172,50 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all binaries
         uses: actions/download-artifact@v4
         with:
-          name: papervalet-all
+          pattern: papervalet-*-amd64
           path: dist/
+          merge-multiple: true
+
+      - name: Package bundles
+        run: |
+          set -euo pipefail
+          mkdir -p bundles
+          for bin in dist/papervalet-*; do
+            base=$(basename "$bin")
+            # base like papervalet-linux-amd64 or papervalet-windows-amd64.exe
+            core=${base%.exe}
+            os_arch=${core#papervalet-}
+            root="papervalet-$os_arch"
+            mkdir -p "$root/bin" "$root/plugins"
+            if [[ "$base" == *.exe ]]; then
+              cp "$bin" "$root/bin/papervalet.exe"
+            else
+              cp "$bin" "$root/bin/papervalet"
+              chmod +x "$root/bin/papervalet"
+              cp run.sh "$root/run.sh"
+              chmod +x "$root/run.sh"
+            fi
+            cp config.example.json LICENSE README.md "$root/"
+            touch "$root/plugins/.gitkeep"
+            if [[ "$base" == *.exe ]]; then
+              (cd "$root" && zip -qr "../bundles/$root.zip" .)
+            else
+              tar -czf "bundles/$root.tar.gz" "$root"
+            fi
+            rm -rf "$root"
+          done
+          ls -la bundles/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/papervalet-*
+          files: bundles/*
           generate_release_notes: true
           draft: false
           prerelease: false

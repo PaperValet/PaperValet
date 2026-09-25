@@ -194,7 +194,6 @@ write_config() {
     if command -v jq >/dev/null 2>&1; then
         [ -n "$API_ID" ]   && jq --arg v "$API_ID"   '.telegram.api_id    = ($v|tonumber)' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
         [ -n "$API_HASH" ] && jq --arg v "$API_HASH" '.telegram.api_hash  = $v'           "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
-        [ -n "$PHONE" ]    && jq --arg v "$PHONE"    '.__phone = $v'                       "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg" || true
     else
         [ -n "$API_ID" ]   && warn "缺 jq，未写入 api_id"
         [ -n "$API_HASH" ] && warn "缺 jq，未写入 api_hash"
@@ -202,9 +201,28 @@ write_config() {
 }
 
 # ===== 动作：install / reinstall / upgrade =====
+prompt_credentials() {
+    # 交互安装时一次问完登录凭据，之后 run.sh 只需输验证码/2FA。
+    [ "$NON_INTERACTIVE" = 1 ] && return 0
+    [ "$ACTION" != "install" ] && return 0
+    echo ""
+    info "登录凭据（可从 https://my.telegram.org 获取 API 凭据；回车可跳过稍后手填）"
+    if [ -z "$API_ID" ]; then
+        read -r -p "   api_id: " API_ID || true
+    fi
+    if [ -z "$API_HASH" ]; then
+        read -r -p "   api_hash: " API_HASH || true
+    fi
+    if [ -z "$PHONE" ]; then
+        read -r -p "   手机号（E.164，如 +8613800138000）: " PHONE || true
+    fi
+}
+
 do_install() {
     detect_os_arch || return 1
     require_cmd curl tar || return 1
+
+    prompt_credentials
 
     local json
     json="$(fetch_release_json "$VERSION")" || { fail "获取 release 元数据失败"; return 1; }
