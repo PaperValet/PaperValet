@@ -217,11 +217,23 @@ write_config() {
         ok "Wrote default config: $cfg | 已写入默认 config: $cfg"
     fi
     if command -v jq >/dev/null 2>&1; then
-        if [ -n "$API_ID" ]; then
-            jq --arg v "$API_ID"   '.telegram.api_id   = ($v|tonumber)' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+        if [[ "$API_ID" =~ ^[0-9]+$ ]]; then
+            if jq --arg v "$API_ID" '.telegram.api_id = ($v|tonumber)' "$cfg" > "$cfg.tmp" 2>/dev/null; then
+                mv "$cfg.tmp" "$cfg"
+            else
+                warn "Failed to write api_id into config | api_id 写入 config 失败"
+                rm -f "$cfg.tmp"
+            fi
+        elif [ -n "$API_ID" ]; then
+            warn "api_id must be numeric, not written | api_id 必须是数字，未写入"
         fi
         if [ -n "$API_HASH" ]; then
-            jq --arg v "$API_HASH" '.telegram.api_hash = $v'           "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+            if jq --arg v "$API_HASH" '.telegram.api_hash = $v' "$cfg" > "$cfg.tmp" 2>/dev/null; then
+                mv "$cfg.tmp" "$cfg"
+            else
+                warn "Failed to write api_hash into config | api_hash 写入 config 失败"
+                rm -f "$cfg.tmp"
+            fi
         fi
     else
         [ -n "$API_ID" ]   && warn "jq missing, api_id not written | 缺 jq，未写入 api_id"
