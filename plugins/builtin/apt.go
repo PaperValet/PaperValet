@@ -297,7 +297,6 @@ func (p *AptPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 	}{
 		{"atadmins", "一键艾特全部管理员", "1.0.0"},
 		{"account", "账号资料管理 (用户名/昵称/简介/头像)", "1.0.0"},
-		{"bf", "Brainfuck 解释器", "1.0.0"},
 		{"bizhi", "随机壁纸", "1.0.0"},
 		{"calc", "计算器 - 支持基本数学运算", "1.0.0"},
 		{"duckduckgo", "DuckDuckGo 搜索", "1.0.0"},
@@ -307,7 +306,6 @@ func (p *AptPlugin) searchRegistry(ctx *interfaces.CommandContext, args []string
 		{"hitokoto", "获取随机一言", "1.0.0"},
 		{"ids", "显示用户/群组/消息 ID 及跳转链接", "1.0.0"},
 		{"isalive", "活了么 - 检测 bot 是否在线", "1.0.0"},
-		{"leech", "媒体下载工具 (yt-dlp)", "1.0.0"},
 		{"ping", "网络延迟测试工具 (TCP/HTTP/ICMP/DC)", "1.0.0"},
 		{"qr", "二维码生成", "1.0.0"},
 		{"qrcode", "二维码生成与解码", "1.0.0"},

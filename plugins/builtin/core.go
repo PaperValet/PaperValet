@@ -11,8 +11,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// CorePlugin provides fundamental commands + process lifecycle.
-// Absorbs the old admin plugin (restart/shutdown/gc).
+// CorePlugin provides fundamental commands.
 type CorePlugin struct {
 	startTime time.Time
 	version   string

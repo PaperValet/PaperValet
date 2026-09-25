@@ -35,7 +35,7 @@ func (p *PrunePlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *PrunePlugin) handleDme(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() > 0 && ctx.GetArg(0) == "all" {
-		return p.handleSelfPrune(ctx)
+		return p.handleAll(ctx)
 	}
 
 	if !ctx.Message.IsReply {
@@ -57,7 +57,7 @@ func (p *PrunePlugin) handleDme(ctx *interfaces.CommandContext) error {
 	return nil
 }
 
-func (p *PrunePlugin) handleSelfPrune(ctx *interfaces.CommandContext) error {
+func (p *PrunePlugin) handleAll(ctx *interfaces.CommandContext) error {
 	count := 1
 	if ctx.ArgCount() > 1 {
 		n, err := parseInt(ctx.GetArg(1))
