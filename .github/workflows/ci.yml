@@ -72,10 +72,11 @@ jobs:
         run: |
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
           go build -ldflags "-X main.version=${{ github.ref_name }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.gitCommit=$(git rev-parse --short HEAD)" \
-          -o papervalet${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/papervalet
+          -o papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/papervalet
 
       - name: Verify binary
         run: |
+          BIN=papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
           ARCH=$(uname -m)
           case "$ARCH" in
             x86_64) GOARCH=amd64 ;;
@@ -83,16 +84,16 @@ jobs:
           esac
           if [ '${{ matrix.goos }}' != 'linux' ] || [ '${{ matrix.goarch }}' != "$GOARCH" ]; then
             # Cross-compiled binary can't run on this runner; inspect via go version
-            go version -m papervalet${{ matrix.goos == 'windows' && '.exe' || '' }}
+            go version -m "$BIN"
           else
-            ./papervalet --version
+            ./$BIN --version
           fi
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
           name: papervalet-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: papervalet${{ matrix.goos == 'windows' && '.exe' || '' }}
+          path: papervalet-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
           retention-days: 7
 
   build-matrix:
