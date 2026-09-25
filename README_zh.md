@@ -10,7 +10,7 @@
 
 - **现代 gotd/td 技术栈** — 纯 Go MTProto，无需 CGO
 - **插件系统** — 热加载、强类型指令与中间件
-- **第三方插件** — 独立维护在 [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins)，以 `.so` 文件安装
+- **第三方插件** — 独立维护在 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins)，以 `.so` 文件安装
 - **事件总线** — 带优先级的发布订阅
 - **账号解析** — Access Hash 缓存 + 多级回退
 - **会话管理** — SQLite + 内存缓存
@@ -309,7 +309,7 @@ import _ "github.com/TiaraBasori/PaperValet/plugins/myplugin"
 
 项目支持通过 `plugins` 目录动态加载外部 `.so` 插件。详见 [插件 SDK 文档](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md)。
 
-外部插件源码在独立仓库 [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) 中维护。
+外部插件源码在独立仓库 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) 中维护。
 
 ## 许可证
 

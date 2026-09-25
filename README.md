@@ -9,7 +9,7 @@ Clean, modular architecture — no "TeleBox legacy" spaghetti.
 ## Features
 
 - **Modern gotd/td stack** — Pure Go MTProto, no CGO
-- External plugins are maintained in the separate [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repository and installed as `.so` files.
+- External plugins are maintained in the separate [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repository and installed as `.so` files.
 - **Event bus** — Priority-based pub/sub for updates
 - **Peer resolution** — Access hash caching with fallback chain
 - **Session management** — SQLite + in-memory cache
@@ -310,7 +310,7 @@ import _ "github.com/TiaraBasori/PaperValet/plugins/myplugin"
 
 The `plugins` directory supports loading external `.so` plugins dynamically. See the [Plugin SDK](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md).
 
-External plugins live in the separate [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repo.
+External plugins live in the separate [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repo.
 
 ## License
 

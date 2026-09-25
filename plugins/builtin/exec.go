@@ -3,9 +3,8 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"os"
+	"html"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -43,7 +42,7 @@ func (p *ExecPlugin) handleExec(ctx *interfaces.CommandContext) error {
 		return ctx.Edit("用法: exec <命令> [参数...]")
 	}
 
-	asRoot := ctx.Command == "sudo"
+	asRoot := false
 	if args[0] == "--sudo" {
 		asRoot = true
 		args = args[1:]
@@ -78,13 +77,10 @@ func (p *ExecPlugin) handleExec(ctx *interfaces.CommandContext) error {
 	}
 
 	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 执行失败: %v\n\n输出:\n<pre>%s</pre>", err, result))
+		return ctx.Edit(fmt.Sprintf("❌ 执行失败: %v\n\n输出:\n<pre>%s</pre>", err, html.EscapeString(result)))
 	}
 	if result == "" {
 		result = "(无输出)"
 	}
-	return ctx.Edit(fmt.Sprintf("%s\n\n<pre>%s</pre>", tag, result))
+	return ctx.Edit(fmt.Sprintf("%s\n\n<pre>%s</pre>", tag, html.EscapeString(result)))
 }
-
-var _ = os.Getenv
-var _ = strings.TrimSpace

@@ -59,26 +59,20 @@ func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 
 	var targetID int64 = msg.UserID
 	var targetName string
-
 	if ctx.ArgCount() > 0 {
 		arg := ctx.GetArg(0)
-		if strings.HasPrefix(arg, "@") && len(arg) > 1 {
-			username := arg[1:]
-			if ctx.PeerResolver != nil {
-				peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), username)
-				if err == nil {
-					switch p := peer.(type) {
-					case *tg.InputPeerUser:
-						targetID = p.UserID
-						targetName = arg
-					case *tg.InputPeerChat:
-						targetID = -p.ChatID
-						targetName = arg
-					case *tg.InputPeerChannel:
-						targetID = -1000000000000 - p.ChannelID
-						targetName = arg
-					}
-				}
+		if strings.HasPrefix(arg, "@") && len(arg) > 1 && ctx.PeerResolver != nil {
+			peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), arg[1:])
+			if err != nil {
+				return ctx.Edit(fmt.Sprintf("❌ 无法解析用户名 %s: %v", arg, err))
+			}
+			switch p := peer.(type) {
+			case *tg.InputPeerUser:
+				targetID, targetName = p.UserID, arg
+			case *tg.InputPeerChat:
+				targetID, targetName = -p.ChatID, arg
+			case *tg.InputPeerChannel:
+				targetID, targetName = -1000000000000-p.ChannelID, arg
 			}
 		}
 	}

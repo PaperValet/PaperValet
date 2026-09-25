@@ -47,7 +47,7 @@ func NewLoader(dir string, mgr pkgplugin.Manager) *Loader {
 				ResponseHeaderTimeout: 10 * time.Second,
 			},
 		},
-		repoURL: "https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download",
+		repoURL: "https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download",
 	}
 }
 

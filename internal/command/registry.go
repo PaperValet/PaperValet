@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -279,8 +280,10 @@ func (r *Registry) IsCommand(text string) bool {
 // Returns the first match across all prefixes.
 func (r *Registry) ParseCommand(text string) (name string, args []string, ok bool) {
 	r.mu.RLock()
-	prefixes := r.prefixes
+	prefixes := append([]string(nil), r.prefixes...)
 	r.mu.RUnlock()
+	// Longest prefix first so ".." wins over "." when both are registered.
+	sort.Slice(prefixes, func(i, j int) bool { return len(prefixes[i]) > len(prefixes[j]) })
 
 	for _, p := range prefixes {
 		if !strings.HasPrefix(text, p) {

@@ -63,7 +63,7 @@ func Load(path string) (*Config, error) {
 		cfg.Bot.PluginsDir = "plugins"
 	}
 	if cfg.Bot.PluginRepo == "" {
-		cfg.Bot.PluginRepo = "https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download"
+		cfg.Bot.PluginRepo = "https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download"
 	}
 	if cfg.Bot.MaxMessageLen == 0 {
 		cfg.Bot.MaxMessageLen = 4000

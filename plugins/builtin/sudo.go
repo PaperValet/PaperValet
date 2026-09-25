@@ -75,12 +75,15 @@ func (p *SudoPlugin) load() {
 }
 
 func (p *SudoPlugin) save() {
-	os.MkdirAll(filepath.Dir(p.file), 0o755)
+	p.mu.RLock()
+	enabled := p.enabled
 	users := make([]int64, 0, len(p.users))
 	for id := range p.users {
 		users = append(users, id)
 	}
-	data, _ := json.MarshalIndent(map[string]any{"enabled": p.enabled, "users": users}, "", "  ")
+	p.mu.RUnlock()
+	os.MkdirAll(filepath.Dir(p.file), 0o755)
+	data, _ := json.MarshalIndent(map[string]any{"enabled": enabled, "users": users}, "", "  ")
 	os.WriteFile(p.file, data, 0o600)
 }
 
@@ -126,24 +129,17 @@ func (p *SudoPlugin) showStatus(ctx *interfaces.CommandContext) error {
 func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (int64, error) {
 	// Prefer the replied-to message sender.
 	if ctx.Message != nil && ctx.Message.IsReply {
-		// Resolve the sender of the replied message via the API.
-		peer, err := ctx.ResolvePeer()
+		msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
+			[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}},
+		)
 		if err == nil {
-			msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
-				[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}},
-			)
-			if err == nil {
-				if ml, ok := msgs.(*tg.MessagesMessages); ok {
-					for _, m := range ml.Messages {
-						if msg, ok := m.(*tg.Message); ok && msg.ID == ctx.Message.ReplyToID {
-							if pu, ok := msg.FromID.(*tg.PeerUser); ok {
-								return pu.UserID, nil
-							}
-						}
+			for _, m := range historyMessages(msgs) {
+				if msg, ok := m.(*tg.Message); ok && msg.ID == ctx.Message.ReplyToID {
+					if pu, ok := msg.FromID.(*tg.PeerUser); ok {
+						return pu.UserID, nil
 					}
 				}
 			}
-			_ = peer
 		}
 	}
 	if ctx.ArgCount() >= 2 {

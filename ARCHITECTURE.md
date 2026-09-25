@@ -415,7 +415,7 @@ External plugins are built independently as `.so` files and published to GitHub 
 | **weather** | 天气查询 | tools |
 
 **Installation flow:**
-1. `apt install ping` → downloads `ping.so` from `https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download/ping.so`
+1. `apt install ping` → downloads `ping.so` from `https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download/ping.so`
 2. `apt load ping` → opens `.so`, registers plugin, initializes, starts
 3. `apt unload ping` → stops plugin, unregisters commands
 4. `apt remove ping` → deletes `.so` file
@@ -470,7 +470,7 @@ const (
     "command_prefixes": [".", "!", "/"],
     "owner_id": 123456789,
     "plugins_dir": "plugins",
-    "plugin_repo": "https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download",
+    "plugin_repo": "https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download",
     "max_message_len": 4000,
     "rate_limit": 3
   },

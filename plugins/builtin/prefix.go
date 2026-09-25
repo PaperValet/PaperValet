@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,14 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 func (p *PrefixPlugin) Start(_ context.Context) error { return nil }
 func (p *PrefixPlugin) Stop(_ context.Context) error  { return nil }
 
+func escapedPrefixes(prefixes []string) string {
+	out := make([]string, 0, len(prefixes))
+	for _, p := range prefixes {
+		out = append(out, html.EscapeString(p))
+	}
+	return strings.Join(out, "</code> <code>")
+}
+
 func (p *PrefixPlugin) load() {
 	data, err := os.ReadFile(p.file)
 	if err != nil {
@@ -80,19 +89,19 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 				"<code>prefix add &lt;前缀&gt;</code> — 添加前缀\n"+
 				"<code>prefix del &lt;前缀&gt;</code> — 删除前缀\n"+
 				"<code>prefix set &lt;前缀&gt;</code> — 设置为主前缀",
-			mainPrefix, strings.Join(p.prefixes, "</code> <code>"),
+			html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes),
 		))
 	}
 
 	sub := strings.ToLower(ctx.GetArg(0))
 	switch sub {
 	case "get":
-		return ctx.Edit(fmt.Sprintf("当前主前缀: <code>%s</code>", p.prefixes[0]))
+		return ctx.Edit(fmt.Sprintf("当前主前缀: <code>%s</code>", html.EscapeString(p.prefixes[0])))
 
 	case "list", "ls":
 		return ctx.Edit(fmt.Sprintf(
 			"🔧 <b>支持的前缀</b> (%d 个)\n\n<code>%s</code>",
-			len(p.prefixes), strings.Join(p.prefixes, "</code> <code>"),
+			len(p.prefixes), escapedPrefixes(p.prefixes),
 		))
 
 	case "add":
@@ -102,7 +111,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 		newPrefix := args[1]
 		for _, existing := range p.prefixes {
 			if existing == newPrefix {
-				return ctx.Edit(fmt.Sprintf("⚠️ 前缀 <code>%s</code> 已存在", newPrefix))
+				return ctx.Edit(fmt.Sprintf("⚠️ 前缀 <code>%s</code> 已存在", html.EscapeString(newPrefix)))
 			}
 		}
 		prefixes := p.mgr.Commands().GetPrefixes()
@@ -110,7 +119,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 		p.mgr.Commands().SetPrefixes(prefixes)
 		p.prefixes = prefixes
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ 已添加前缀 <code>%s</code>", newPrefix))
+		return ctx.Edit(fmt.Sprintf("✅ 已添加前缀 <code>%s</code>", html.EscapeString(newPrefix)))
 
 	case "del", "delete", "remove":
 		if len(args) < 2 {
@@ -127,10 +136,10 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 				p.mgr.Commands().SetPrefixes(prefixes)
 				p.prefixes = prefixes
 				p.save()
-				return ctx.Edit(fmt.Sprintf("🗑 已删除前缀 <code>%s</code>", target))
+				return ctx.Edit(fmt.Sprintf("🗑 已删除前缀 <code>%s</code>", html.EscapeString(target)))
 			}
 		}
-		return ctx.Edit(fmt.Sprintf("❌ 未找到前缀 <code>%s</code>", target))
+		return ctx.Edit(fmt.Sprintf("❌ 未找到前缀 <code>%s</code>", html.EscapeString(target)))
 
 	case "set", "main":
 		if len(args) < 2 {
@@ -145,7 +154,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 				p.mgr.Commands().SetPrefixes(prefixes)
 				p.prefixes = prefixes
 				p.save()
-				return ctx.Edit(fmt.Sprintf("✅ 主前缀已设置为 <code>%s</code>", target))
+				return ctx.Edit(fmt.Sprintf("✅ 主前缀已设置为 <code>%s</code>", html.EscapeString(target)))
 			}
 		}
 		// Not found, add it and promote it to main

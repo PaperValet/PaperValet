@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -86,6 +87,9 @@ func (m *Manager) GetOrCreate(ctx context.Context, userID, chatID int64) (*Recor
 
 	record, err := m.queryDB(ctx, userID, chatID)
 	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("query session: %w", err)
+		}
 		record = &Record{
 			UserID:    userID,
 			ChatID:    chatID,
