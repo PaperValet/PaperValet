@@ -529,8 +529,11 @@ MENU
 }
 
 # ===== 入口 =====
+# 无论菜单还是 CLI 动作，只要有终端可读就先打开 tty 通道，凭据提问才不会跳过。
+# Open the tty channel for both menu and CLI actions, so credential prompts
+# work in every mode as long as a terminal is available.
+open_tty
 if [ "$USE_MENU" = "yes" ] && [ "$NON_INTERACTIVE" = 0 ]; then
-    open_tty
     detect_os_arch || true
     run_menu
 else
