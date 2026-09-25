@@ -92,7 +92,7 @@ function Get-OsArch {
     switch ($env:PROCESSOR_ARCHITECTURE) {
         'AMD64' { return @{ Os = 'windows'; Arch = 'amd64'; SoArch = 'amd64' } }
         'ARM64' {
-            Write-Warn 'arm64：bundle 内 .so 为 amd64（见 README）'
+            Write-Warn 'arm64: bundled .so files are amd64 (see README) | arm64：bundle 内 .so 为 amd64（见 README）'
             return @{ Os = 'windows'; Arch = 'arm64'; SoArch = 'amd64' }
         }
         default { throw "不支持的架构: $env:PROCESSOR_ARCHITECTURE" }
@@ -127,7 +127,7 @@ function Save-ConfigFromInputs {
     if (-not $NoConfig) {
         if ((-not (Test-Path $Cfg)) -and (Test-Path $Example)) {
             Copy-Item $Example $Cfg
-            Write-Ok "已写入默认 config.json: $Cfg"
+            Write-Ok "Wrote default config.json: $Cfg | 已写入默认 config.json: $Cfg"
         }
     }
     if ($ApiId -or $ApiHash) {
@@ -136,7 +136,7 @@ function Save-ConfigFromInputs {
             if ($ApiId)   { $json.telegram.api_id   = [int]$ApiId }
             if ($ApiHash) { $json.telegram.api_hash = $ApiHash }
             $json | ConvertTo-Json -Depth 10 | Set-Content -Path $Cfg -Encoding UTF8
-        } catch { Write-Warn "写入 api_id/api_hash 失败，请手动编辑 $Cfg" }
+        } catch { Write-Warn "Failed to write api_id/api_hash, edit manually: $Cfg | 写入 api_id/api_hash 失败，请手动编辑 $Cfg" }
     }
 }
 
@@ -152,25 +152,43 @@ function Set-PhoneEnvPersist {
     if ($env:PAPERVALET_CODE)         { $lines += "`$env:PAPERVALET_CODE = '$env:PAPERVALET_CODE'" }
     if ($env:PAPERVALET_2FA_PASSWORD) { $lines += "`$env:PAPERVALET_2FA_PASSWORD = '$env:PAPERVALET_2FA_PASSWORD'" }
     Set-Content -Path $envFile -Value $lines -Encoding UTF8
-    Write-Ok "环境变量持久化到 $envFile"
-    Write-Host "   立即生效: . $envFile"
+    Write-Ok "Persisted env vars to $envFile | 环境变量持久化到 $envFile"
+    Write-Host "   To apply now: . $envFile | 立即生效: . $envFile"
 }
 
 # ===== 动作：install / reinstall / upgrade =====
+function Get-InstallCredentials {
+    # 交互安装时一次问完登录凭据，之后 run 只需输验证码/2FA。
+    # Ask once for login credentials during interactive install; later runs only need the code/2FA.
+    if ($NonInteractive) { return $true }
+    if ($script:Action -ne 'install') { return $true }
+    # 目录已存在且用户可能取消时，先确认再问凭据，避免白问一通。
+    # Confirm overwrite first when the dir exists, so we never ask for credentials in vain.
+    if (Test-Path $script:Home) {
+        $ans2 = Read-Host "   $($script:Home) 已存在，是否覆盖？Directory exists, overwrite? [y/N]"
+        if ($ans2 -notin @('y','Y','yes','YES')) { Write-Host '已取消 Cancelled'; return $false }
+        Remove-Item -Recurse -Force $script:Home
+    }
+    Write-Host ''
+    Write-Info '登录凭据 Login credentials（可从 Get API credentials at https://my.telegram.org；回车可跳过稍后手填 Press Enter to skip and fill in later）'
+    if (-not $script:ApiId)   { $script:ApiId   = Read-Host '   api_id (数字 ID / numeric ID)' }
+    if (-not $script:ApiHash) { $script:ApiHash = Read-Host '   api_hash (哈希串 / hash string)' }
+    if (-not $script:Phone)   { $script:Phone   = Read-Host '   手机号 Phone（E.164，如 e.g. +8613800138000）' }
+    return $true
+}
+
 function Invoke-Install {
     $info = Get-OsArch
     $os = $info.Os; $arch = $info.Arch
 
+    if (-not (Get-InstallCredentials)) { return }
+
     $json = Get-ReleaseJson -Version $Version
 
     if (Test-Path $Home) {
-        Write-Warn "$Home 已存在"
-        if ($Action -eq 'install') {
-            if ($NonInteractive) { throw '已存在且 --non-interactive；改用 --action upgrade / reinstall' }
-            $ans = Read-Host '   是否覆盖? [y/N]'
-            if ($ans -notin @('y','Y','yes','YES')) { Write-Host '已取消'; return }
-            Remove-Item -Recurse -Force $Home
-        } else {
+        # install 动作的目录确认已在 Get-InstallCredentials 里处理；此处只处理 reinstall/upgrade。
+        # The install-action overwrite prompt already happened in Get-InstallCredentials; only reinstall/upgrade here.
+        if ($Action -ne 'install') {
             # reinstall / upgrade：按需保留
             $tmpKeep = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
             New-Item -ItemType Directory -Path $tmpKeep | Out-Null
@@ -195,8 +213,8 @@ function Invoke-Install {
     $bundleName = "papervalet-$os-$arch.$ext"
     $url = Get-BundleUrl -Json $json -BundleName $bundleName
     if (-not $url) {
-        Write-Fail "release 中找不到 $bundleName"
-        Write-Host '可用资产:' -ForegroundColor Red
+        Write-Fail "Bundle not found in release: $bundleName | release 中找不到 $bundleName"
+        Write-Host 'Available assets: | 可用资产:' -ForegroundColor Red
         Format-AssetList $json | ForEach-Object { Write-Host $_ -ForegroundColor Red }
         return
     }
@@ -206,22 +224,22 @@ function Invoke-Install {
     $archive = Join-Path $tmp $bundleName
 
     try {
-        Write-Info "下载: $url"
+        Write-Info "Downloading | 下载: $url"
         Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
         New-Item -ItemType Directory -Path $Home -Force | Out-Null
-        Write-Info "解压到 $Home"
+        Write-Info "Extracting to | 解压到 $Home"
         Expand-Archive -Path $archive -DestinationPath $Home -Force
 
         # 还原 keep
         if ($script:lastKeep) {
             if (Test-Path (Join-Path $script:lastKeep 'config.json')) {
                 Copy-Item (Join-Path $script:lastKeep 'config.json') (Join-Path $Home 'config.json') -Force
-                Write-Ok '已保留 config.json'
+                Write-Ok 'Kept config.json | 已保留 config.json'
             }
             $dataDir = Join-Path $script:lastKeep 'data'
             if (Test-Path $dataDir) {
                 Copy-Item -Recurse -Force (Join-Path $dataDir '*') $Home
-                Write-Ok '已保留 session / database'
+                Write-Ok 'Kept session / database | 已保留 session / database'
             }
         }
 
@@ -241,16 +259,16 @@ function Invoke-Install {
 
 function Invoke-Uninstall {
     if (-not (Test-Path $Home)) {
-        Write-Warn "$Home 不存在"
+        Write-Warn "$Home does not exist | $Home 不存在"
         return
     }
-    Write-Host "即将卸载 $Home"
+    Write-Host "About to uninstall | 即将卸载 $Home"
     $keepCfg = 'N'; $keepData = 'N'; $confirm = ''
     if (-not $NonInteractive) {
-        $keepCfg  = Read-Host '   保留 config.json? [y/N]'
-        $keepData = Read-Host '   保留 session.json / sessions.db? [y/N]'
-        $confirm  = Read-Host '   确认删除? 输入 YES 继续: '
-        if ($confirm -ne 'YES') { Write-Host '已取消'; return }
+        $keepCfg  = Read-Host '   Keep config.json? 保留 config.json? [y/N]'
+        $keepData = Read-Host '   Keep session data? 保留 session.json / sessions.db? [y/N]'
+        $confirm  = Read-Host '   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: '
+        if ($confirm -ne 'YES') { Write-Host 'Cancelled | 已取消'; return }
     }
     $bak = $null
     if ($keepCfg -match '^[Yy]$' -and (Test-Path (Join-Path $Home 'config.json'))) {
@@ -270,7 +288,7 @@ function Invoke-Uninstall {
         }
     }
     Remove-Item -Recurse -Force $Home
-    Write-Ok '已卸载'
+    Write-Ok 'Uninstalled | 已卸载'
     if ($bak) {
         Write-Host "   备份: $bak"
         Write-Host "   恢复: Copy-Item -Recurse -Force $bak\* $Home"
@@ -286,12 +304,12 @@ function Show-Status {
             $ver = & $bin --version 2>&1 | Select-Object -First 1
             $hash = (Get-FileHash $bin -Algorithm SHA256).Hash.Substring(0,12)
             Write-Host "  二进制:   $bin  $ver  (sha256:$hash...)" -ForegroundColor Green
-        } else { Write-Warn "  二进制缺失" }
+        } else { Write-Warn "  binary missing | 二进制缺失" }
         $cfg = Join-Path $Home 'config.json'
         if (Test-Path $cfg) {
             $size = (Get-Item $cfg).Length
             Write-Host "  config:   $cfg ($size bytes)"
-        } else { Write-Warn '  config:   缺失' }
+        } else { Write-Warn '  config missing | config 缺失' }
         $soCount = (Get-ChildItem -Path (Join-Path $Home 'plugins') -Filter '*.so' -ErrorAction SilentlyContinue | Measure-Object).Count
         Write-Host "  .so:      $soCount 个"
         foreach ($f in 'session.json','sessions.db') {
@@ -303,7 +321,7 @@ function Show-Status {
         }
         $envFile = Join-Path $env:USERPROFILE '.papervalet.env.ps1'
         if (Test-Path $envFile) { Write-Host "  环境变量持久化: $envFile" }
-    } else { Write-Warn '未安装' }
+    } else { Write-Warn 'Not installed | 未安装' }
 }
 
 function Show-Latest {
@@ -320,21 +338,21 @@ function Show-Latest {
 
 function Set-PhoneInteractive {
     if (-not $Phone) {
-        $script:Phone = Read-Host '   输入手机号（E.164，如 +8613800138000）'
+        $script:Phone = Read-Host '   Phone number 手机号（E.164, e.g. 如 +8613800138000）'
     }
-    if (-not $Phone) { Write-Fail '未提供手机号'; return }
+    if (-not $Phone) { Write-Fail 'No phone number provided | 未提供手机号'; return }
     Set-PhoneEnvPersist -Phone $Phone -HomeDir $Home
-    Write-Ok 'PAPERVALET_PHONE 已设置'
+    Write-Ok 'PAPERVALET_PHONE set | PAPERVALET_PHONE 已设置'
     Write-Host ''
-    Write-Host '   启动方式:'
+    Write-Host '   How to start | 启动方式:'
     Write-Host "     . `$env:USERPROFILE\.papervalet.env.ps1"
     Write-Host "     & '$Home\run.cmd'"
 }
 
 function Invoke-Run {
     $bin = Join-Path $Home 'bin\papervalet.exe'
-    if (-not (Test-Path $bin)) { Write-Fail "$bin 不可用；先 install"; return }
-    Write-Info '前台启动（Ctrl+C 退出）'
+    if (-not (Test-Path $bin)) { Write-Fail "$bin unavailable, install first | $bin 不可用，先 install"; return }
+    Write-Info 'Starting in foreground (Ctrl+C to stop) | 前台启动（Ctrl+C 退出）'
     $envFile = Join-Path $env:USERPROFILE '.papervalet.env.ps1'
     if (Test-Path $envFile) { . $envFile }
     Push-Location $Home
@@ -351,13 +369,13 @@ function Invoke-Doctor {
     Write-Ok "OS=$($info.Os) ARCH=$($info.Arch) SO_ARCH=$($info.SoArch)"
     try {
         Get-ReleaseJson -Version latest | Out-Null
-        Write-Ok 'GitHub API 可达'
-    } catch { Write-Warn 'GitHub API 不可达；离线环境无法 install / upgrade' }
+        Write-Ok 'GitHub API reachable | GitHub API 可达'
+    } catch { Write-Warn 'GitHub API unreachable; offline install/upgrade unavailable | GitHub API 不可达，离线环境无法 install / upgrade' }
     if (Test-Path $Home) {
         $bin = Join-Path $Home 'bin\papervalet.exe'
         if (Test-Path $bin) { Write-Ok "本地安装: $bin" }
         else { Write-Warn '本地未安装或二进制缺失' }
-    } else { Write-Warn '本地未安装' }
+    } else { Write-Warn 'Not installed locally | 本地未安装' }
 }
 
 function Show-FinishBanner {
@@ -404,7 +422,7 @@ function Show-Menu {
 function Run-Menu {
     while ($true) {
         Show-Menu
-        $choice = Read-Host '选择 [0-9vh]'
+        $choice = Read-Host 'Select 选择 [0-9vh]'
         switch ($choice) {
             '1' { $script:Action = 'install';    Invoke-Install }
             '2' { $script:Action = 'reinstall';  Invoke-Install }
@@ -416,12 +434,12 @@ function Run-Menu {
             '8' { $script:Action = 'run';        Invoke-Run }
             '9' { $script:Action = 'doctor';     Invoke-Doctor }
             '0' { Write-Host 'bye'; return }
-            'v' { $script:Version = Read-Host '新 version（latest 或 vX.Y.Z）' }
-            'h' { $script:Home    = Read-Host '新 home 目录' }
-            default { Write-Warn "无效选择 '$choice'" }
+            'v' { $script:Version = Read-Host 'New version 新 version (latest or 或 vX.Y.Z)' }
+            'h' { $script:Home    = Read-Host 'New home dir 新 home 目录' }
+            default { Write-Warn "Invalid choice 无效选择 '$choice'" }
         }
         Write-Host ''
-        $cont = Read-Host '按 Enter 返回菜单，q 退出'
+        $cont = Read-Host 'Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出'
         if ($cont -eq 'q') { return }
     }
 }
@@ -435,9 +453,9 @@ if ($useMenu -eq 'yes') {
         'uninstall'  { Invoke-Uninstall }
         'status'     { Show-Status }
         'latest'     { Show-Latest }
-        'set-phone'  { if (-not $Phone) { $Phone = Read-Host '手机号' }; Set-PhoneInteractive }
+        'set-phone'  { if (-not $Phone) { $Phone = Read-Host 'Phone number 手机号' }; Set-PhoneInteractive }
         'run'        { Invoke-Run }
         'doctor'     { Invoke-Doctor }
-        default      { Write-Fail "未知 action: $Action" }
+        default      { Write-Fail "Unknown action 未知 action: $Action" }
     }
 }

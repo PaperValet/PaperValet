@@ -1,24 +1,25 @@
 #!/bin/bash
+# PaperValet one-line installer (macOS / Linux) — interactive menu + CLI.
 # PaperValet 一键安装脚本（macOS / Linux）—— 交互菜单 + 命令行双形态。
 #
-# ===== 菜单形态（默认） =====
+# ===== Menu mode (default) | 菜单形态（默认） =====
 #   curl -fsSL https://.../install.sh | bash
 #   curl -fsSL https://.../install.sh | bash -s -- --menu
 #
-# 菜单项：
-#   1) install      首次安装到 $HOME/.papervalet（默认）
-#   2) reinstall    覆盖式重装（保留 config.json / session.json / sessions.db）
-#   3) upgrade      升级到指定 version（保留全部数据）
-#   4) uninstall    删除安装（提供保留 config / data 的子选项）
-#   5) status       查看当前安装信息（路径 / 版本 / 二进制 SHA / .so 计数）
-#   6) latest       列出 GitHub 最新 release 的版本与资产
-#   7) set-phone    写入 PAPERVALET_PHONE 等登录环境变量到 config 与 ~/.profile
-#   8) run          前台启动 bot（带 PATH 提示）
-#   9) doctor       自检（curl / jq / 磁盘 / 架构兼容 / release 可达性）
-#   0) exit         退出
+# Menu items | 菜单项：
+#   1) install      First install to $HOME/.papervalet | 首次安装到 $HOME/.papervalet（默认）
+#   2) reinstall    Reinstall (keeps config.json / session.json / sessions.db) | 覆盖式重装（保留配置与会话）
+#   3) upgrade      Upgrade to version (keeps all data) | 升级到指定版本（保留全部数据）
+#   4) uninstall    Uninstall (optional keep config / data) | 卸载（可保留配置与数据）
+#   5) status       Show install info (path / version / binary SHA / .so count) | 查看安装信息
+#   6) latest       List latest release version and assets | 列出最新 release 版本与资产
+#   7) set-phone    Persist PAPERVALET_PHONE login env | 写入登录环境变量
+#   8) run          Start bot in foreground | 前台启动 bot
+#   9) doctor       Self-check (curl / jq / disk / arch / release reachability) | 自检
+#   0) exit         Quit | 退出
 #
-# ===== 命令行形态 =====
-#   --non-interactive   跳过菜单直接 install（CI 用）
+# ===== CLI mode | 命令行形态 =====
+#   --non-interactive   Skip menu, install directly (CI) | 跳过菜单直接安装（CI 用）
 #   --version <tag>     指定 release tag（默认 latest）
 #   --home <dir>        安装目录（默认 $HOME/.papervalet）
 #   --phone <+E164>     写入 PAPERVALET_PHONE（同时设置 ~/.profile 持久化）
@@ -75,7 +76,7 @@ while [ $# -gt 0 ]; do
         --keep-data)       KEEP_DATA=1; shift ;;
         --repo)            REPO="$2"; shift 2 ;;
         -h|--help)         usage 0 ;;
-        *) echo "未知参数: $1" >&2; usage 1 ;;
+        *) echo "Unknown argument 未知参数: $1" >&2; usage 1 ;;
     esac
 done
 
@@ -103,16 +104,16 @@ detect_os_arch() {
     case "$OS_RAW" in
         linux)  OS="linux" ;;
         darwin) OS="darwin" ;;
-        *) fail "不支持的 OS: $OS_RAW（仅 macOS / Linux）"; echo "   Windows 用户请用 scripts/install.ps1" >&2; return 1 ;;
+        *) fail "Unsupported OS: $OS_RAW (macOS / Linux only) | 不支持的 OS: $OS_RAW（仅 macOS / Linux）"; echo "   Windows users use scripts/install.ps1 | Windows 用户请用 scripts/install.ps1" >&2; return 1 ;;
     esac
     ARCH_RAW="$(uname -m)"
     case "$ARCH_RAW" in
         x86_64|amd64)   ARCH="amd64" ;;
         aarch64|arm64)  ARCH="arm64" ;;
-        *) fail "不支持的架构: $ARCH_RAW"; return 1 ;;
+        *) fail "Unsupported arch: $ARCH_RAW | 不支持的架构: $ARCH_RAW"; return 1 ;;
     esac
     if [ "$ARCH" = "arm64" ]; then
-        warn "arm64：bundle 内 .so 为 amd64（README 已说明）"
+        warn "arm64: bundled .so files are amd64 (see README) | arm64：bundle 内 .so 为 amd64（见 README）"
         SO_ARCH="amd64"
     else
         SO_ARCH="$ARCH"
@@ -122,7 +123,7 @@ detect_os_arch() {
 require_cmd() {
     for cmd in "$@"; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
-            fail "缺少依赖: $cmd"
+            fail "Missing dependency: $cmd | 缺少依赖: $cmd"
             return 1
         fi
     done
@@ -161,8 +162,8 @@ download_bundle() {
     local url
     url="$(resolve_bundle_url "$json" "$bundle_name")"
     if [ -z "$url" ]; then
-        fail "release 中找不到 $bundle_name"
-        info "可用资产:"
+        fail "Bundle not found in release: $bundle_name | release 中找不到 $bundle_name"
+        info "Available assets: | 可用资产:"
         list_release_assets "$json" | sed 's/^/  /'
         return 1
     fi
@@ -178,7 +179,7 @@ extract_bundle() {
     case "$archive" in
         *.tar.gz) tar -xzf "$archive" -C "$target" --strip-components=1 ;;
         *.zip)    (cd "$target" && unzip -oq "$(basename "$archive")") ;;
-        *) fail "未知归档: $archive"; return 1 ;;
+        *) fail "Unknown archive: $archive | 未知归档: $archive"; return 1 ;;
     esac
 }
 
@@ -189,32 +190,40 @@ write_config() {
     if [ ! -f "$cfg" ] && [ -f "$example" ]; then
         cp "$example" "$cfg"
         chmod 600 "$cfg"
-        ok "已写入默认 config: $cfg"
+        ok "Wrote default config: $cfg | 已写入默认 config: $cfg"
     fi
     if command -v jq >/dev/null 2>&1; then
         [ -n "$API_ID" ]   && jq --arg v "$API_ID"   '.telegram.api_id    = ($v|tonumber)' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
         [ -n "$API_HASH" ] && jq --arg v "$API_HASH" '.telegram.api_hash  = $v'           "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
     else
-        [ -n "$API_ID" ]   && warn "缺 jq，未写入 api_id"
-        [ -n "$API_HASH" ] && warn "缺 jq，未写入 api_hash"
+        [ -n "$API_ID" ]   && warn "jq missing, api_id not written | 缺 jq，未写入 api_id"
+        [ -n "$API_HASH" ] && warn "jq missing, api_hash not written | 缺 jq，未写入 api_hash"
     fi
 }
 
 # ===== 动作：install / reinstall / upgrade =====
 prompt_credentials() {
     # 交互安装时一次问完登录凭据，之后 run.sh 只需输验证码/2FA。
+    # Ask once for login credentials during interactive install; later runs only need the code/2FA.
     [ "$NON_INTERACTIVE" = 1 ] && return 0
     [ "$ACTION" != "install" ] && return 0
+    # 目录已存在且用户可能取消时，先确认再问凭据，避免白问一通。
+    # Confirm overwrite first when the dir exists, so we never ask for credentials in vain.
+    if [ -d "$HOME_DIR" ]; then
+        local ans2
+        read -r -p "   $HOME_DIR 已存在，是否覆盖？Directory exists, overwrite? [y/N] " ans2
+        case "$ans2" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "已取消 Cancelled"; return 1 ;; esac
+    fi
     echo ""
-    info "登录凭据（可从 https://my.telegram.org 获取 API 凭据；回车可跳过稍后手填）"
+    info "登录凭据 Login credentials（可从 Get API credentials at https://my.telegram.org；回车可跳过稍后手填 Press Enter to skip and fill in later）"
     if [ -z "$API_ID" ]; then
-        read -r -p "   api_id: " API_ID || true
+        read -r -p "   api_id (数字 ID / numeric ID): " API_ID || true
     fi
     if [ -z "$API_HASH" ]; then
-        read -r -p "   api_hash: " API_HASH || true
+        read -r -p "   api_hash (哈希串 / hash string): " API_HASH || true
     fi
     if [ -z "$PHONE" ]; then
-        read -r -p "   手机号（E.164，如 +8613800138000）: " PHONE || true
+        read -r -p "   手机号 Phone（E.164，如 e.g. +8613800138000）: " PHONE || true
     fi
 }
 
@@ -222,23 +231,15 @@ do_install() {
     detect_os_arch || return 1
     require_cmd curl tar || return 1
 
-    prompt_credentials
+    prompt_credentials || return 0
 
     local json
-    json="$(fetch_release_json "$VERSION")" || { fail "获取 release 元数据失败"; return 1; }
+    json="$(fetch_release_json "$VERSION")" || { fail "Failed to fetch release metadata | 获取 release 元数据失败"; return 1; }
 
-    # 安装目录已存在 → 提示
+    # 安装目录已存在 → 在 prompt_credentials 里已确认并删除；此处只处理 reinstall/upgrade。
+    # Existing dir was already confirmed and removed in prompt_credentials; only reinstall/upgrade need handling here.
     if [ -d "$HOME_DIR" ]; then
-        warn "$HOME_DIR 已存在"
-        if [ "$ACTION" = "install" ]; then
-            if [ "$NON_INTERACTIVE" = 1 ]; then
-                fail "已存在且 --non-interactive；改用 --action upgrade 或 --action reinstall"
-                return 1
-            fi
-            local ans
-            read -r -p "   是否覆盖? [y/N] " ans
-            case "$ans" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "已取消"; return 0 ;; esac
-        elif [ "$ACTION" = "reinstall" ]; then
+        if [ "$ACTION" = "reinstall" ]; then
             backup_keep_then_clean
         elif [ "$ACTION" = "upgrade" ]; then
             backup_keep_then_clean
@@ -252,12 +253,12 @@ do_install() {
     archive="$(download_bundle "$json" "$OS" "$ARCH" "$tmp")" || return 1
 
     mkdir -p "$HOME_DIR"
-    info "解压到 $HOME_DIR"
+    info "Extracting to | 解压到 $HOME_DIR"
     extract_bundle "$archive" "$HOME_DIR"
 
     # restore keep data
-    [ -d "$tmp/keep/config.json" ] && cp "$tmp/keep/config.json" "$HOME_DIR/config.json" && ok "保留 config.json"
-    [ -d "$tmp/keep/data" ] && cp -r "$tmp/keep/data" "$HOME_DIR/" && ok "保留 session / database"
+    [ -d "$tmp/keep/config.json" ] && cp "$tmp/keep/config.json" "$HOME_DIR/config.json" && ok "Kept config.json | 保留 config.json"
+    [ -d "$tmp/keep/data" ] && cp -r "$tmp/keep/data" "$HOME_DIR/" && ok "Kept session / database | 保留 session / database"
 
     write_config "$HOME_DIR/config.json"
     set_phone_env_persist "$PHONE"
@@ -286,16 +287,16 @@ backup_keep_then_clean() {
 # ===== 动作：uninstall =====
 do_uninstall() {
     if [ ! -d "$HOME_DIR" ]; then
-        warn "$HOME_DIR 不存在"
+        warn "$HOME_DIR does not exist | $HOME_DIR 不存在"
         return 0
     fi
-    info "即将卸载 $HOME_DIR"
+    info "About to uninstall | 即将卸载 $HOME_DIR"
     local keep_cfg="N" keep_data="N"
     if [ "$NON_INTERACTIVE" = 0 ]; then
-        read -r -p "   保留 config.json? [y/N] " keep_cfg
-        read -r -p "   保留 session.json / sessions.db? [y/N] " keep_data
-        read -r -p "   确认删除? 输入 YES 继续: " ans
-        [ "$ans" = "YES" ] || { echo "已取消"; return 0; }
+        read -r -p "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
+        read -r -p "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
+        read -r -p "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
+        [ "$ans" = "YES" ] || { echo "Cancelled | 已取消"; return 0; }
     else
         ans="YES"
     fi
@@ -311,7 +312,7 @@ do_uninstall() {
         done
     fi
     rm -rf "$HOME_DIR"
-    ok "已卸载"
+    ok "Uninstalled | 已卸载"
     if [ -n "${bak:-}" ] && [ -d "$bak" ]; then
         echo "   备份: $bak"
         echo "   恢复: cp -r $bak/* $HOME_DIR/"
@@ -320,8 +321,8 @@ do_uninstall() {
 
 # ===== 动作：status =====
 do_status() {
-    echo "${BOLD}PaperValet 安装状态${RESET}"
-    echo "  安装目录: ${HOME_DIR}"
+    echo "${BOLD}PaperValet status | PaperValet 安装状态${RESET}"
+    echo "  Install dir 安装目录: ${HOME_DIR}"
     if [ -d "$HOME_DIR" ]; then
         local bin="$HOME_DIR/bin/papervalet"
         if [ -x "$bin" ]; then
@@ -331,21 +332,21 @@ do_status() {
             sha="$(sha256sum "$bin" 2>/dev/null | awk '{print substr($1,1,12)}')"
             echo "  二进制:   $bin  ${GREEN}${ver}${RESET}  (sha256:${sha}...)"
         else
-            warn "  二进制缺失或不可执行"
+            warn "  Binary missing or not executable | 二进制缺失或不可执行"
         fi
         local cfg="$HOME_DIR/config.json"
         [ -f "$cfg" ] && echo "  config:   $cfg (size $(stat -c%s "$cfg" 2>/dev/null || stat -f%z "$cfg") bytes)" \
-            || warn "  config:   缺失"
+            || warn "  config missing | config 缺失"
         local so_count
         so_count="$(ls -1 "$HOME_DIR/plugins"/*.so 2>/dev/null | wc -l | tr -d ' ')"
-        echo "  .so:      ${so_count} 个"
+        echo "  .so plugins 插件: ${so_count}"
         for f in session.json sessions.db; do
             [ -f "$HOME_DIR/$f" ] && echo "  $f: 存在 ($(stat -c%s "$HOME_DIR/$f" 2>/dev/null || stat -f%z "$HOME_DIR/$f") bytes)"
         done
         local profile="$HOME/.papervalet.env"
-        [ -f "$profile" ] && echo "  环境变量持久化: $profile"
+        [ -f "$profile" ] && echo "  Env file 环境变量持久化: $profile"
     else
-        warn "未安装"
+        warn "Not installed | 未安装"
     fi
 }
 
@@ -354,22 +355,22 @@ do_latest() {
     require_cmd curl || return 1
     local json
     json="$(fetch_release_json latest)" || { fail "获取 latest 失败"; return 1; }
-    echo "${BOLD}最新 release${RESET}"
+    echo "${BOLD}Latest release | 最新 release${RESET}"
     echo "$json" | grep -E '"(tag_name|name|published_at|html_url)"' \
         | sed -E 's/^[[:space:]]*"([^"]+)":[[:space:]]*"([^"]+)".*/  \1: \2/'
     echo ""
-    echo "可用 bundle:"
+    echo "Available bundles: | 可用 bundle:"
     list_release_assets "$json" | grep -E '^papervalet-' | sed 's/^/  /'
 }
 
 # ===== 动作：set-phone =====
 do_set_phone() {
     if [ -z "$PHONE" ]; then
-        read -r -p "   输入手机号（E.164，如 +8613800138000）: " PHONE
+        read -r -p "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
     fi
-    [ -z "$PHONE" ] && { fail "未提供手机号"; return 1; }
+    [ -z "$PHONE" ] && { fail "No phone number provided | 未提供手机号"; return 1; }
     set_phone_env_persist "$PHONE"
-    ok "PAPERVALET_PHONE 已设置"
+    ok "PAPERVALET_PHONE set | PAPERVALET_PHONE 已设置"
     cat <<EOF
 
    后续手动启动：
@@ -395,25 +396,25 @@ set_phone_env_persist() {
 # ===== 动作：run =====
 do_run() {
     local bin="$HOME_DIR/bin/papervalet"
-    [ -x "$bin" ] || { fail "$bin 不可用；先 install"; return 1; }
-    info "前台启动（Ctrl+C 退出）"
+    [ -x "$bin" ] || { fail "$bin unavailable, install first | $bin 不可用，先 install"; return 1; }
+    info "Starting in foreground (Ctrl+C to stop) | 前台启动（Ctrl+C 退出）"
     [ -f "$HOME/.papervalet.env" ] && source "$HOME/.papervalet.env"
     cd "$HOME_DIR" && exec "$bin" -config "$HOME_DIR/config.json"
 }
 
 # ===== 动作：doctor =====
 do_doctor() {
-    echo "${BOLD}PaperValet 自检${RESET}"
-    require_cmd curl tar jq 2>/dev/null && ok "依赖完整 (curl tar jq)" \
-        || warn "缺 jq；config 写入部分字段会失败"
-    df -h "$HOME" 2>/dev/null | awk 'NR==2 {print "  磁盘: 已用 "$3" / "$2" (剩余 "$4")"}'
+    echo "${BOLD}PaperValet doctor | PaperValet 自检${RESET}"
+    require_cmd curl tar jq 2>/dev/null && ok "Dependencies OK (curl tar jq) | 依赖完整 (curl tar jq)" \
+        || warn "jq missing; some config fields will not be written | 缺 jq，config 写入部分字段会失败"
+    df -h "$HOME" 2>/dev/null | awk 'NR==2 {print "  Disk 磁盘: used 已用 "$3" / "$2" (free 剩余 "$4")"}'
     detect_os_arch && ok "OS=$OS ARCH=$ARCH SO_ARCH=$SO_ARCH"
     local json
-    json="$(fetch_release_json latest 2>/dev/null)" && ok "GitHub API 可达" \
-        || warn "GitHub API 不可达；离线环境无法安装/升级"
+    json="$(fetch_release_json latest 2>/dev/null)" && ok "GitHub API reachable | GitHub API 可达" \
+        || warn "GitHub API unreachable; offline install/upgrade unavailable | GitHub API 不可达，离线环境无法安装/升级"
     [ -d "$HOME_DIR" ] && [ -x "$HOME_DIR/bin/papervalet" ] \
-        && ok "本地安装: $HOME_DIR/bin/papervalet" \
-        || warn "本地未安装或二进制缺失"
+        && ok "Local install 本地安装: $HOME_DIR/bin/papervalet" \
+        || warn "Not installed locally or binary missing | 本地未安装或二进制缺失"
 }
 
 # ===== 收尾提示 =====
@@ -484,7 +485,7 @@ run_menu() {
   ${BOLD}v${RESET}) 切换 version（当前: ${VERSION}）
   ${BOLD}h${RESET}) 切换 home dir（当前: ${HOME_DIR}）
 MENU
-        read -r -p "选择 [0-9vh]: " choice
+        read -r -p "Select 选择 [0-9vh]: " choice
         case "$choice" in
             1) ACTION="install";    do_install ;;
             2) ACTION="reinstall";  do_install ;;
@@ -496,12 +497,12 @@ MENU
             8) ACTION="run";        do_run ;;
             9) ACTION="doctor";     do_doctor ;;
             0) echo "bye"; exit 0 ;;
-            v|V) read -r -p "新 version（latest 或 vX.Y.Z）: " VERSION ;;
-            h|H) read -r -p "新 home 目录: " HOME_DIR ;;
-            *) warn "无效选择 '$choice'" ;;
+            v|V) read -r -p "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
+            h|H) read -r -p "New home dir 新 home 目录: " HOME_DIR ;;
+            *) warn "Invalid choice 无效选择 '$choice'" ;;
         esac
         echo ""
-        read -r -p "按 Enter 返回菜单，q 退出 ... " cont
+        read -r -p "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
         [ "$cont" = "q" ] && exit 0
     done
 }
@@ -520,6 +521,6 @@ else
         set-phone) do_set_phone ;;
         run)       do_run ;;
         doctor)    do_doctor ;;
-        *) fail "未知 action: $ACTION"; usage 1 ;;
+        *) fail "Unknown action 未知 action: $ACTION"; usage 1 ;;
     esac
 fi
