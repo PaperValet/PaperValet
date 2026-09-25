@@ -167,8 +167,8 @@ download_bundle() {
         return 1
     fi
     local archive="$out_dir/$bundle_name"
-    info "下载: $url"
-    curl -fSL --progress-bar -o "$archive" "$url"
+    info "下载: $url" >&2
+    curl -fSL -o "$archive" "$url" >&2
     echo "$archive"
 }
 
