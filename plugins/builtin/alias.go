@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,7 +84,7 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 		cmd := strings.Join(args[2:], " ")
 		p.mgr.Commands().AddUserAlias(name, cmd)
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ 别名已设置: %s → %s", name, cmd))
+		return ctx.Edit(fmt.Sprintf("✅ 别名已设置: <code>%s</code> → <code>%s</code>", html.EscapeString(name), html.EscapeString(cmd)))
 
 	case "del", "delete", "remove":
 		if len(args) < 2 {
@@ -128,7 +129,7 @@ func (p *AliasPlugin) listAliases(ctx *interfaces.CommandContext) error {
 	var b strings.Builder
 	b.WriteString("🔧 <b>命令别名列表:</b>\n\n")
 	for name, cmd := range aliases {
-		b.WriteString(fmt.Sprintf("• <code>%s</code> → <code>%s</code>\n", name, cmd))
+		b.WriteString(fmt.Sprintf("• <code>%s</code> → <code>%s</code>\n", html.EscapeString(name), html.EscapeString(cmd)))
 	}
 	return ctx.Edit(b.String())
 }
