@@ -376,7 +376,7 @@ do_status() {
         [ -f "$cfg" ] && echo "  config:   $cfg (size $(stat -c%s "$cfg" 2>/dev/null || stat -f%z "$cfg") bytes)" \
             || warn "  config missing | config 缺失"
         local so_count
-        so_count="$(ls -1 "$HOME_DIR/plugins"/*.so 2>/dev/null | wc -l | tr -d ' ')"
+        so_count="$(find "$HOME_DIR/plugins" -maxdepth 1 -name '*.so' 2>/dev/null | wc -l | tr -d ' ')"
         echo "  .so plugins 插件: ${so_count}"
         for f in session.json sessions.db; do
             [ -f "$HOME_DIR/$f" ] && echo "  $f: present 存在 ($(stat -c%s "$HOME_DIR/$f" 2>/dev/null || stat -f%z "$HOME_DIR/$f") bytes)"
@@ -459,7 +459,7 @@ do_doctor() {
 print_finish_banner() {
     local phase="${1:-installed}"
     local so_count=0
-    [ -d "$HOME_DIR/plugins" ] && so_count="$(ls -1 "$HOME_DIR/plugins"/*.so 2>/dev/null | wc -l | tr -d ' ')"
+    [ -d "$HOME_DIR/plugins" ] && so_count="$(find "$HOME_DIR/plugins" -maxdepth 1 -name '*.so' 2>/dev/null | wc -l | tr -d ' ')"
     cat <<EOF
 
 ${GREEN}${BOLD}✅ PaperValet ${phase}${RESET} : $HOME_DIR
