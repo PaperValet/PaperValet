@@ -361,48 +361,64 @@ func (e *CommandError) Unwrap() error { return e.Err }
 
 ---
 
-## Built-in Plugins (16 total)
+## Built-in Plugins (15 total)
 
 | Plugin | Commands | Category | Notes |
 |--------|----------|----------|-------|
-| **core** | version, uptime, ping | core | Minimal core (help/status/ppm are separate) |
+| **core** | version, ping, restart | core | Minimal core |
 | **help** | help [cmd\|plugin] | core | Help & command discovery |
-| **status** | status, sysinfo, memory | core | Detailed system status |
-| **ppm** | ppm install/remove/load/unload/reload/list/info/search | core | Plugin Package Manager |
-| **prefix** | prefix list/add/del/set | admin | Multi-prefix management (JSON persisted) |
-| **admin** | restart, shutdown, gc | admin | Owner-only system commands |
-| **cron** | cron list/add/del/run | tools | Scheduled tasks |
-| **tools** | info, fwd | tools | User info & message forwarding |
-| **fun** | roll, coin, choose, 8ball, fact | fun | Entertainment |
+| **status** | status | core | Runtime status |
+| **apt** | apt install/remove/load/unload/list/info/search | core | Plugin package manager |
+| **info** | info, fwd | tools | User info & message forwarding |
 | **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
-| **debug** | goroutines, heap, stack, profile | debug | Profiling (owner) |
-| **exec** | exec/shell | admin | Shell commands (owner) |
-| **sudo** | sudo | admin | Root commands (owner) |
-| **log** | log show/clear/level/target | admin | Log capture & delivery (owner) |
-| **re** | re [count] [text] | tools | Message repeater |
+| **exec** | exec | admin | Shell commands (owner) |
+| **sudo** | sudo | admin | Permission delegation (owner) |
+| **reload** | reload | admin | External plugin hot reload |
+| **log** | loglevel, sendlog | admin | Log level + log delivery (owner) |
+| **prefix** | prefix list/add/del/set | admin | Multi-prefix management (JSON persisted) |
+| **backup** | backup list/restore/clean/info | admin | Config/session backup (owner) |
+| **update** | update, autofix | admin | Git sync & self-repair (owner) |
+| **dme** | dme, dme all | tools | Message cleanup (owner) |
+| **lang** | lang | core | Per-user language switching |
 
 ---
 
 ## External Plugin System
 
 External plugins are built independently as `.so` files and published to GitHub Releases by the
-[PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repo.
+[PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repo.
 
-**Available external plugins (7 total):**
+**Available external plugins (21 total):**
 
 | Plugin | Description | Category |
 |--------|-------------|----------|
-| **ping** | 网络延迟测试 (TCP/HTTP/ICMP/DC) | tools |
+| **account** | 账号资料管理 | account |
+| **atadmins** | 一键艾特全部管理员 | admin |
+| **bizhi** | 随机壁纸 | fun |
+| **calc** | 计算器 | tools |
+| **duckduckgo** | DuckDuckGo 搜索 | tools |
+| **encode** | 编码/解码 | tools |
+| **fun** | 娱乐命令 | fun |
+| **gt** | 谷歌翻译 | tools |
+| **hitokoto** | 随机一言 | fun |
+| **ids** | ID 及跳转链接 | tools |
+| **isalive** | 存活检测 | tools |
+| **ping** | 网络延迟测试 | tools |
+| **qr** | 二维码生成 | tools |
 | **qrcode** | 二维码生成与解码 | tools |
 | **re** | 消息复读机 | tools |
-| **sendlog** | 日志发送工具 | admin |
-| **tpm** | Telegram 插件管理器 (旧版) | admin |
+| **rev** | 文本反转 | tools |
+| **save** | 保存/转发消息 | tools |
+| **sendat** | 定时消息发送 | tools |
+| **speedtest** | 网络速度测试 | tools |
+| **tpm** | 旧版插件管理器 | admin |
+| **weather** | 天气查询 | tools |
 
 **Installation flow:**
-1. `ppm install ping` → downloads `ping.so` from `https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download/ping.so`
-2. `ppm load ping` → opens `.so`, registers plugin, initializes, starts
-3. `ppm unload ping` → stops plugin, unregisters commands
-4. `ppm remove ping` → deletes `.so` file
+1. `apt install ping` → downloads `ping.so` from `https://github.com/TiaraBasori/PaperValet-Plugins/releases/latest/download/ping.so`
+2. `apt load ping` → opens `.so`, registers plugin, initializes, starts
+3. `apt unload ping` → stops plugin, unregisters commands
+4. `apt remove ping` → deletes `.so` file
 
 **Build:**
 ```bash
@@ -493,7 +509,7 @@ Per-user-per-chat SQLite-backed sessions for multi-step flows.
 ### 8. Alias Manager (PagerMaid)
 Persistent command aliases stored in JSON, hot-reloadable.
 
-### 9. Plugin Package Manager (PPM)
+### 9. Plugin Package Manager (APT)
 Built-in plugin to manage external plugins from GitHub releases.
 
 ### 10. Rate Limiting & Permissions
