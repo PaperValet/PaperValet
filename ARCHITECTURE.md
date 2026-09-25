@@ -62,15 +62,12 @@ github.com/TiaraBasori/PaperValet/
     │   ├── dme.go            # dme, dme all (owner)
     │   └── lang.go           # per-user language switching
     └── external/             # External plugins (built separately as .so)
-        # mirrored at plugins-external/, source of truth:
-        # github.com/PaperValet/PaperValet-Plugins
+        # source of truth: github.com/PaperValet/PaperValet-Plugins
         ├── fun/              # roll, coin, choose, 8ball, fact
         ├── account/          # username, name, bio, rmpfp
         ├── save/             # save messages/messages ranges to a target
         ├── qrcode/
-        ├── leech/            # Media downloader (yt-dlp)
         ├── ping/             # Advanced ping (DC, ICMP, HTTP)
-        ├── bf/               # Brainfuck interpreter
         ├── re/               # Message repeater
         └── tpm/              # Legacy plugin manager
 ```
@@ -383,7 +380,6 @@ func (e *CommandError) Unwrap() error { return e.Err }
 | **sudo** | sudo | admin | Root commands (owner) |
 | **log** | log show/clear/level/target | admin | Log capture & delivery (owner) |
 | **re** | re [count] [text] | tools | Message repeater |
-| **bf** | bf backup/list/restore/clean/info | tools | Backup plugin |
 
 ---
 
@@ -397,9 +393,7 @@ External plugins are built independently as `.so` files and published to GitHub 
 | Plugin | Description | Category |
 |--------|-------------|----------|
 | **ping** | 网络延迟测试 (TCP/HTTP/ICMP/DC) | tools |
-| **leech** | 媒体下载 (yt-dlp) | tools |
 | **qrcode** | 二维码生成与解码 | tools |
-| **bf** | Brainfuck 解释器 | fun |
 | **re** | 消息复读机 | tools |
 | **sendlog** | 日志发送工具 | admin |
 | **tpm** | Telegram 插件管理器 (旧版) | admin |
@@ -412,7 +406,7 @@ External plugins are built independently as `.so` files and published to GitHub 
 
 **Build:**
 ```bash
-go build -buildmode=plugin -o plugins/ping.so ./plugins-external/ping
+go build -buildmode=plugin -o plugins/ping.so ./ping   # in PaperValet-Plugins
 ```
 
 **Metadata:** External plugin exports `var Metadata *plugin.PluginMetadata`
@@ -513,9 +507,8 @@ Built into command registry: `OwnerOnly`, `SudoOnly`, `RateLimit`, `RateWindow`.
 # Build main binary
 go build -o papervalet ./cmd/papervalet
 
-# Build external plugins
-go build -buildmode=plugin -o plugins/qrcode.so ./plugins-external/qrcode
-go build -buildmode=plugin -o plugins/leech.so ./plugins-external/leech
+# Build external plugins (in PaperValet-Plugins)
+go build -buildmode=plugin -o plugins/qrcode.so ./qrcode
 # ...
 
 # Run

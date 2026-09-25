@@ -13,9 +13,6 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
-    - path: plugins-external/
-      linters:
-        - errcheck
     - path: plugins/builtin/
       linters:
         - staticcheck

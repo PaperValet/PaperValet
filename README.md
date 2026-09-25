@@ -9,7 +9,7 @@ Clean, modular architecture — no "TeleBox legacy" spaghetti.
 ## Features
 
 - **Modern gotd/td stack** — Pure Go MTProto, no CGO
-- **Plugin system** — Hot-loadable, typed commands with middleware
+- External plugins are maintained in the separate [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repository and installed as `.so` files.
 - **Event bus** — Priority-based pub/sub for updates
 - **Peer resolution** — Access hash caching with fallback chain
 - **Session management** — SQLite + in-memory cache
@@ -127,7 +127,7 @@ or arm64 Linux host the bundle's main binary is native `arm64`, but the
 `plugins/*.so` files inside the archive are `amd64`. Two options:
 
 1. Use a Rosetta/x86-compatible runtime to load the `amd64` `.so` files.
-2. Build `.so` yourself: `cd plugins-external/<name> && go build -buildmode=plugin -o ../<name>.so .`
+2. Build `.so` yourself from the PaperValet-Plugins repo: `cd <name> && go build -buildmode=plugin -o ../<name>.so .`
 
 ## Configuration
 
@@ -310,7 +310,7 @@ import _ "github.com/TiaraBasori/PaperValet/plugins/myplugin"
 
 The `plugins` directory supports loading external `.so` plugins dynamically. See the [Plugin SDK](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md).
 
-Example TeleBox-style plugins live under `plugins-external/` (e.g. `ping`, `help`, `tpm`, `alias`, `sudo`).
+External plugins live in the separate [PaperValet-Plugins](https://github.com/TiaraBasori/PaperValet-Plugins) repo.
 
 ## License
 

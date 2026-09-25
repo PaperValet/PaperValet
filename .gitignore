@@ -19,17 +19,8 @@ coverage.out
 coverage.html
 *.coverprofile
 
-# ---------- 外部插件构建副产物 ----------
-# go build -buildmode=plugin 产物（仓库内联调试用，最终由 CI 发布）
-plugins/*.so
-plugins/*.dll
-plugins/*.dylib
-
-# plugins-external/* 单独 build 时可能产生的 vendor / build
-plugins-external/*/vendor/
-plugins-external/*/build/
-
-# ---------- 构建 / Bundle / 临时目录 ----------
+# No third-party plugin source belongs in this repository.
+# External plugin source and builds live in PaperValet-Plugins.# ---------- 构建 / Bundle / 临时目录 ----------
 build/
 tmp/
 dist/

@@ -24,7 +24,6 @@ config.json
 config.example.json
 
 # Plugin source (not needed for core image)
-plugins-external/
 examples/
 
 # OS metadata
