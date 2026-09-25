@@ -201,29 +201,50 @@ write_config() {
     fi
 }
 
-# ===== 动作：install / reinstall / upgrade =====
+# 从终端读一行。curl | bash 时 stdin 是脚本内容，必须从 /dev/tty 读用户输入。
+# Read one line from the terminal. With curl | bash, stdin is the script
+# itself, so user input must come from /dev/tty.
+read_tty() {
+    local prompt="$1" var="$2"
+    if [ -n "${READ_TTY_FD:-}" ]; then
+        printf '%s' "$prompt" >&"$READ_TTY_FD"
+        IFS= read -r -u "$READ_TTY_FD" "$var" || true
+    else
+        printf '%s' "$prompt" > /dev/tty
+        IFS= read -r "$var" < /dev/tty || true
+    fi
+}
+
+# 打开一个和脚本 stdin 分离的终端输入通道。curl | bash 时 stdin 是脚本
+# 内容，直接 read 会吞掉脚本行；菜单和凭据输入统一走这个通道。
+# Open a terminal input channel separate from the script stdin. With
+# curl | bash, stdin carries the script itself, so all prompts use this.
+open_tty() {
+    if [ -r /dev/tty ] && [ ! -t 0 ]; then
+        exec 3< /dev/tty && READ_TTY_FD=3
+    fi
+}
+
+# ===== 动作：install / reinstall / upgrade | Install / reinstall / upgrade =====
 prompt_credentials() {
-    # 交互安装时一次问完登录凭据，之后 run.sh 只需输验证码/2FA。
-    # Ask once for login credentials during interactive install; later runs only need the code/2FA.
     [ "$NON_INTERACTIVE" = 1 ] && return 0
     [ "$ACTION" != "install" ] && return 0
-    # 目录已存在且用户可能取消时，先确认再问凭据，避免白问一通。
-    # Confirm overwrite first when the dir exists, so we never ask for credentials in vain.
+    [ -z "${READ_TTY_FD:-}" ] && { warn "No terminal available for credential prompts (run from a real terminal) | 检测不到终端，无法交互输入凭据（请在真实终端运行）"; return 0; }
     if [ -d "$HOME_DIR" ]; then
         local ans2
-        read -r -p "   $HOME_DIR 已存在，是否覆盖？Directory exists, overwrite? [y/N] " ans2
-        case "$ans2" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "已取消 Cancelled"; return 1 ;; esac
+        read_tty "   $HOME_DIR | 目录已存在，是否覆盖？Overwrite? [y/N] " ans2
+        case "$ans2" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "Cancelled | 已取消"; return 1 ;; esac
     fi
     echo ""
-    info "登录凭据 Login credentials（可从 Get API credentials at https://my.telegram.org；回车可跳过稍后手填 Press Enter to skip and fill in later）"
+    info "Login credentials | 登录凭据（Get API credentials at 可从 https://my.telegram.org 获取；Press Enter to skip 回车可跳过稍后手填）"
     if [ -z "$API_ID" ]; then
-        read -r -p "   api_id (数字 ID / numeric ID): " API_ID || true
+        read_tty "   api_id (numeric ID | 数字 ID): " API_ID
     fi
     if [ -z "$API_HASH" ]; then
-        read -r -p "   api_hash (哈希串 / hash string): " API_HASH || true
+        read_tty "   api_hash (hash string | 哈希串): " API_HASH
     fi
     if [ -z "$PHONE" ]; then
-        read -r -p "   手机号 Phone（E.164，如 e.g. +8613800138000）: " PHONE || true
+        read_tty "   Phone | 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
     fi
 }
 
@@ -236,8 +257,8 @@ do_install() {
     local json
     json="$(fetch_release_json "$VERSION")" || { fail "Failed to fetch release metadata | 获取 release 元数据失败"; return 1; }
 
-    # 安装目录已存在 → 在 prompt_credentials 里已确认并删除；此处只处理 reinstall/upgrade。
-    # Existing dir was already confirmed and removed in prompt_credentials; only reinstall/upgrade need handling here.
+    # 安装目录已存在 → install 动作在 prompt_credentials 里已确认并删除；此处只处理 reinstall/upgrade。
+    # Existing dir was already confirmed and removed in prompt_credentials for install; only reinstall/upgrade here.
     if [ -d "$HOME_DIR" ]; then
         if [ "$ACTION" = "reinstall" ]; then
             backup_keep_then_clean
@@ -293,9 +314,9 @@ do_uninstall() {
     info "About to uninstall | 即将卸载 $HOME_DIR"
     local keep_cfg="N" keep_data="N"
     if [ "$NON_INTERACTIVE" = 0 ]; then
-        read -r -p "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
-        read -r -p "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
-        read -r -p "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
+        read_tty "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
+        read_tty "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
+        read_tty "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
         [ "$ans" = "YES" ] || { echo "Cancelled | 已取消"; return 0; }
     else
         ans="YES"
@@ -366,7 +387,7 @@ do_latest() {
 # ===== 动作：set-phone =====
 do_set_phone() {
     if [ -z "$PHONE" ]; then
-        read -r -p "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
+        read_tty "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
     fi
     [ -z "$PHONE" ] && { fail "No phone number provided | 未提供手机号"; return 1; }
     set_phone_env_persist "$PHONE"
@@ -485,7 +506,7 @@ run_menu() {
   ${BOLD}v${RESET}) 切换 version（当前: ${VERSION}）
   ${BOLD}h${RESET}) 切换 home dir（当前: ${HOME_DIR}）
 MENU
-        read -r -p "Select 选择 [0-9vh]: " choice
+        read_tty "Select 选择 [0-9vh]: " choice
         case "$choice" in
             1) ACTION="install";    do_install ;;
             2) ACTION="reinstall";  do_install ;;
@@ -497,18 +518,19 @@ MENU
             8) ACTION="run";        do_run ;;
             9) ACTION="doctor";     do_doctor ;;
             0) echo "bye"; exit 0 ;;
-            v|V) read -r -p "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
-            h|H) read -r -p "New home dir 新 home 目录: " HOME_DIR ;;
+            v|V) read_tty "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
+            h|H) read_tty "New home dir 新 home 目录: " HOME_DIR ;;
             *) warn "Invalid choice 无效选择 '$choice'" ;;
         esac
         echo ""
-        read -r -p "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
+        read_tty "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
         [ "$cont" = "q" ] && exit 0
     done
 }
 
 # ===== 入口 =====
 if [ "$USE_MENU" = "yes" ] && [ "$NON_INTERACTIVE" = 0 ]; then
+    open_tty
     detect_os_arch || true
     run_menu
 else
