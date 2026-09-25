@@ -2,6 +2,30 @@
 # PaperValet one-line installer (macOS / Linux) — interactive menu + CLI.
 # PaperValet 一键安装脚本（macOS / Linux）—— 交互菜单 + 命令行双形态。
 #
+# Piped execution (curl | bash): stdin carries this very script, so interactive
+# reads would eat the script itself. Re-download the script to a temp file and
+# re-exec with the terminal as stdin. Skipped automatically when there is no
+# controlling terminal (CI), where --non-interactive / env vars are the way.
+# 管道执行（curl | bash）时 stdin 是脚本内容，交互读取会吞掉脚本。
+# 此处把脚本重新下载为临时文件并以终端作为 stdin 重新执行；
+# 无控制终端的环境（CI）自动跳过，走 --non-interactive / 环境变量路径。
+if [ ! -t 0 ]; then
+    _self_url="${PAPERVALET_INSTALL_URL:-https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh}"
+    _self_tmp="$(mktemp /tmp/papervalet-install.XXXXXX.sh)"
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$_self_url" -o "$_self_tmp" 2>/dev/null && [ -s "$_self_tmp" ]; then
+        if (exec 3< /dev/tty) 2>/dev/null; then
+            exec bash "$_self_tmp" "$@" < /dev/tty
+        else
+            exec bash "$_self_tmp" "$@"
+        fi
+    else
+        rm -f "$_self_tmp"
+        echo "❌ Failed to re-download installer for interactive mode | 无法重新下载安装脚本以进入交互模式" >&2
+        exit 1
+    fi
+fi
+# PaperValet 一键安装脚本（macOS / Linux）—— 交互菜单 + 命令行双形态。
+#
 # ===== Menu mode (default) | 菜单形态（默认） =====
 #   curl -fsSL https://.../install.sh | bash
 #   curl -fsSL https://.../install.sh | bash -s -- --menu
@@ -193,58 +217,39 @@ write_config() {
         ok "Wrote default config: $cfg | 已写入默认 config: $cfg"
     fi
     if command -v jq >/dev/null 2>&1; then
-        [ -n "$API_ID" ]   && jq --arg v "$API_ID"   '.telegram.api_id    = ($v|tonumber)' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
-        [ -n "$API_HASH" ] && jq --arg v "$API_HASH" '.telegram.api_hash  = $v'           "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+        if [ -n "$API_ID" ]; then
+            jq --arg v "$API_ID"   '.telegram.api_id   = ($v|tonumber)' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+        fi
+        if [ -n "$API_HASH" ]; then
+            jq --arg v "$API_HASH" '.telegram.api_hash = $v'           "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+        fi
     else
         [ -n "$API_ID" ]   && warn "jq missing, api_id not written | 缺 jq，未写入 api_id"
         [ -n "$API_HASH" ] && warn "jq missing, api_hash not written | 缺 jq，未写入 api_hash"
     fi
-}
-
-# 从终端读一行。curl | bash 时 stdin 是脚本内容，必须从 /dev/tty 读用户输入。
-# Read one line from the terminal. With curl | bash, stdin is the script
-# itself, so user input must come from /dev/tty.
-read_tty() {
-    local prompt="$1" var="$2"
-    if [ -n "${READ_TTY_FD:-}" ]; then
-        printf '%s' "$prompt" >&"$READ_TTY_FD"
-        IFS= read -r -u "$READ_TTY_FD" "$var" || true
-    else
-        printf '%s' "$prompt" > /dev/tty
-        IFS= read -r "$var" < /dev/tty || true
-    fi
-}
-
-# 打开一个和脚本 stdin 分离的终端输入通道。curl | bash 时 stdin 是脚本
-# 内容，直接 read 会吞掉脚本行；菜单和凭据输入统一走这个通道。
-# Open a terminal input channel separate from the script stdin. With
-# curl | bash, stdin carries the script itself, so all prompts use this.
-open_tty() {
-    if [ -r /dev/tty ] && [ ! -t 0 ]; then
-        exec 3< /dev/tty && READ_TTY_FD=3
-    fi
+    return 0
 }
 
 # ===== 动作：install / reinstall / upgrade | Install / reinstall / upgrade =====
 prompt_credentials() {
     [ "$NON_INTERACTIVE" = 1 ] && return 0
     [ "$ACTION" != "install" ] && return 0
-    [ -z "${READ_TTY_FD:-}" ] && { warn "No terminal available for credential prompts (run from a real terminal) | 检测不到终端，无法交互输入凭据（请在真实终端运行）"; return 0; }
+    [ ! -t 0 ] && { warn "No terminal for credential prompts; fill config.json manually or use --api-id/--api-hash/--phone | 检测不到终端，无法交互输入凭据；请手填 config.json 或用 --api-id/--api-hash/--phone"; return 0; }
     if [ -d "$HOME_DIR" ]; then
         local ans2
-        read_tty "   $HOME_DIR | 目录已存在，是否覆盖？Overwrite? [y/N] " ans2
+        read -r -p "   $HOME_DIR | 目录已存在，是否覆盖？Overwrite? [y/N] " ans2
         case "$ans2" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "Cancelled | 已取消"; return 1 ;; esac
     fi
     echo ""
     info "Login credentials | 登录凭据（Get API credentials at 可从 https://my.telegram.org 获取；Press Enter to skip 回车可跳过稍后手填）"
     if [ -z "$API_ID" ]; then
-        read_tty "   api_id (numeric ID | 数字 ID): " API_ID
+        read -r -p "   api_id (numeric ID | 数字 ID): " API_ID || true
     fi
     if [ -z "$API_HASH" ]; then
-        read_tty "   api_hash (hash string | 哈希串): " API_HASH
+        read -r -p "   api_hash (hash string | 哈希串): " API_HASH || true
     fi
     if [ -z "$PHONE" ]; then
-        read_tty "   Phone | 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
+        read -r -p "   Phone | 手机号 (E.164, e.g. 如 +8613800138000): " PHONE || true
     fi
 }
 
@@ -314,9 +319,9 @@ do_uninstall() {
     info "About to uninstall | 即将卸载 $HOME_DIR"
     local keep_cfg="N" keep_data="N"
     if [ "$NON_INTERACTIVE" = 0 ]; then
-        read_tty "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
-        read_tty "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
-        read_tty "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
+        read -r -p "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
+        read -r -p "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
+        read -r -p "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
         [ "$ans" = "YES" ] || { echo "Cancelled | 已取消"; return 0; }
     else
         ans="YES"
@@ -335,8 +340,8 @@ do_uninstall() {
     rm -rf "$HOME_DIR"
     ok "Uninstalled | 已卸载"
     if [ -n "${bak:-}" ] && [ -d "$bak" ]; then
-        echo "   备份: $bak"
-        echo "   恢复: cp -r $bak/* $HOME_DIR/"
+        echo "   Backup 备份: $bak"
+        echo "   Restore 恢复: cp -r $bak/* $HOME_DIR/"
     fi
 }
 
@@ -362,7 +367,7 @@ do_status() {
         so_count="$(ls -1 "$HOME_DIR/plugins"/*.so 2>/dev/null | wc -l | tr -d ' ')"
         echo "  .so plugins 插件: ${so_count}"
         for f in session.json sessions.db; do
-            [ -f "$HOME_DIR/$f" ] && echo "  $f: 存在 ($(stat -c%s "$HOME_DIR/$f" 2>/dev/null || stat -f%z "$HOME_DIR/$f") bytes)"
+            [ -f "$HOME_DIR/$f" ] && echo "  $f: present 存在 ($(stat -c%s "$HOME_DIR/$f" 2>/dev/null || stat -f%z "$HOME_DIR/$f") bytes)"
         done
         local profile="$HOME/.papervalet.env"
         [ -f "$profile" ] && echo "  Env file 环境变量持久化: $profile"
@@ -387,7 +392,7 @@ do_latest() {
 # ===== 动作：set-phone =====
 do_set_phone() {
     if [ -z "$PHONE" ]; then
-        read_tty "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
+        read -r -p "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
     fi
     [ -z "$PHONE" ] && { fail "No phone number provided | 未提供手机号"; return 1; }
     set_phone_env_persist "$PHONE"
@@ -411,7 +416,7 @@ set_phone_env_persist() {
         [ -n "${PAPERVALET_CODE:-}" ] && echo "export PAPERVALET_CODE='${PAPERVALET_CODE}'"
         [ -n "${PAPERVALET_2FA_PASSWORD:-}" ] && echo "export PAPERVALET_2FA_PASSWORD='${PAPERVALET_2FA_PASSWORD}'"
     } > "$env_file"
-    ok "环境变量持久化到 $env_file（执行 'source $env_file' 生效）"
+    ok "Persisted env to $env_file (source it to apply) | 环境变量持久化到 $env_file（执行 'source $env_file' 生效）"
 }
 
 # ===== 动作：run =====
@@ -447,37 +452,37 @@ print_finish_banner() {
 
 ${GREEN}${BOLD}✅ PaperValet ${phase}${RESET} : $HOME_DIR
    ├── bin/papervalet
-   ├── plugins/        (${so_count} 个 .so)
+   ├── plugins/        (${so_count} .so plugins 个插件)
    ├── config.json     $([ -f "$HOME_DIR/config.json" ] && echo "✓" || echo "✗")
    └── run.sh
 
 EOF
     if [ ! -f "$HOME_DIR/config.json" ]; then
         cat <<EOF
-下一步：
+Next steps | 下一步：
    1) cp $HOME_DIR/config.example.json $HOME_DIR/config.json
-   2) 编辑 config.json 填入 api_id / api_hash
+   2) Edit config.json, fill api_id / api_hash | 编辑 config.json 填入 api_id / api_hash
    3) $HOME_DIR/run.sh
 EOF
     elif [ -z "$API_ID" ] || [ -z "$API_HASH" ]; then
         cat <<EOF
-下一步：
-   编辑 $HOME_DIR/config.json 填入 api_id / api_hash，然后：
+Next steps | 下一步：
+   Edit $HOME_DIR/config.json, fill api_id / api_hash, then | 编辑 $HOME_DIR/config.json 填入 api_id / api_hash，然后：
    $HOME_DIR/run.sh
 EOF
     else
         cat <<EOF
-下一步：
-   直接启动: $HOME_DIR/run.sh
-   或菜单选 8) run
+Next steps | 下一步：
+   Start directly 直接启动: $HOME_DIR/run.sh
+   Or menu option 8) run | 或菜单选 8) run
 EOF
     fi
 
     if [ -n "$PHONE" ]; then
         cat <<EOF
 
-💡 已为你持久化 PAPERVALET_PHONE 到 ~/.papervalet.env
-   立即生效: source ~/.papervalet.env
+💡 PAPERVALET_PHONE persisted to ~/.papervalet.env | 已为你持久化 PAPERVALET_PHONE 到 ~/.papervalet.env
+   Apply now | 立即生效: source ~/.papervalet.env
 EOF
     fi
 }
@@ -506,7 +511,7 @@ run_menu() {
   ${BOLD}v${RESET}) 切换 version（当前: ${VERSION}）
   ${BOLD}h${RESET}) 切换 home dir（当前: ${HOME_DIR}）
 MENU
-        read_tty "Select 选择 [0-9vh]: " choice
+        read -r -p "Select 选择 [0-9vh]: " choice
         case "$choice" in
             1) ACTION="install";    do_install ;;
             2) ACTION="reinstall";  do_install ;;
@@ -518,21 +523,17 @@ MENU
             8) ACTION="run";        do_run ;;
             9) ACTION="doctor";     do_doctor ;;
             0) echo "bye"; exit 0 ;;
-            v|V) read_tty "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
-            h|H) read_tty "New home dir 新 home 目录: " HOME_DIR ;;
+            v|V) read -r -p "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
+            h|H) read -r -p "New home dir 新 home 目录: " HOME_DIR ;;
             *) warn "Invalid choice 无效选择 '$choice'" ;;
         esac
         echo ""
-        read_tty "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
+        read -r -p "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
         [ "$cont" = "q" ] && exit 0
     done
 }
 
 # ===== 入口 =====
-# 无论菜单还是 CLI 动作，只要有终端可读就先打开 tty 通道，凭据提问才不会跳过。
-# Open the tty channel for both menu and CLI actions, so credential prompts
-# work in every mode as long as a terminal is available.
-open_tty
 if [ "$USE_MENU" = "yes" ] && [ "$NON_INTERACTIVE" = 0 ]; then
     detect_os_arch || true
     run_menu
