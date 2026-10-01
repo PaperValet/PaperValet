@@ -50,7 +50,8 @@ github.com/TiaraBasori/PaperValet/
     │   ├── help.go           # help (categorized, i18n)
     │   ├── status.go         # detailed system status
     │   ├── apt.go            # Plugin package manager (list/install/remove/load/unload)
-    │   ├── info.go           # info
+    │   ├── info.go           # info / ids
+    │   ├── re.go             # re (repeat)
     │   ├── alias.go          # runtime alias set/del/list (wired into parsing)
     │   ├── exec.go           # exec/shell (owner)
     │   ├── sudo.go           # permission delegation (owner)
@@ -68,7 +69,6 @@ github.com/TiaraBasori/PaperValet/
         ├── save/             # save messages/messages ranges to a target
         ├── qrcode/
         ├── ping/             # Advanced ping (DC, ICMP, HTTP)
-        ├── re/               # Message repeater
 ```
 
 ---
@@ -368,7 +368,8 @@ func (e *CommandError) Unwrap() error { return e.Err }
 | **help** | help [cmd\|plugin] | core | Help & command discovery |
 | **status** | status | core | Runtime status |
 | **apt** | apt install/remove/load/unload/list/info/search | core | Plugin package manager |
-| **info** | info | tools | User/chat IDs |
+| **info** | info (ids) | tools | IDs and jump links |
+| **re** | re | tools | Repeat replied messages |
 | **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
 | **exec** | exec | admin | Shell commands (owner) |
 | **sudo** | sudo | admin | Permission delegation (owner) |
@@ -400,12 +401,10 @@ External plugins are built independently as `.so` files and published to GitHub 
 | **fun** | 娱乐命令 | fun |
 | **gt** | 谷歌翻译 | tools |
 | **hitokoto** | 随机一言 | fun |
-| **ids** | ID 及跳转链接 | tools |
 | **isalive** | 存活检测 | tools |
 | **ping** | 网络延迟测试 | tools |
 | **qr** | 二维码生成 | tools |
 | **qrcode** | 二维码生成与解码 | tools |
-| **re** | 消息复读机 | tools |
 | **rev** | 文本反转 | tools |
 | **save** | 保存/转发消息 | tools |
 | **sendat** | 定时消息发送 | tools |
