@@ -38,30 +38,30 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "prefix",
 		Description: "管理命令前缀",
 		DescEN:      "Manage command prefixes",
-		Usage: `prefix · prefix add|del|set &lt;符号&gt;
-
-<b>示例</b>
-• <code>prefix</code>  看当前前缀
-• <code>prefix add !</code>  再加一个 !，. 和 ! 都能触发
-• <code>prefix set !</code>  把 ! 设为主前缀（帮助里显示的那个）
-• <code>prefix del !</code>  删除
-
-<b>机制</b>
-• 可以同时有多个前缀，至少保留一个
-• 多个前缀匹配时优先最长的，例如 .. 优先于 .
-• 立即生效，保存在 data/prefixes.json`,
-		UsageEN: `prefix · prefix add|del|set &lt;symbol&gt;
-
-<b>Examples</b>
-• <code>prefix</code>  show current prefixes
-• <code>prefix add !</code>  add !, both . and ! trigger
-• <code>prefix set !</code>  make ! the main prefix (shown in help)
-• <code>prefix del !</code>  remove
-
-<b>How it works</b>
-• Several prefixes can coexist; at least one stays
-• The longest matching prefix wins, e.g. .. before .
-• Applies immediately, stored in data/prefixes.json`,
+		Usage: "prefix · prefix add|del|set <符号>\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `prefix`  看当前前缀\n" +
+			"• `prefix add !`  再加一个 !，. 和 ! 都能触发\n" +
+			"• `prefix set !`  把 ! 设为主前缀（帮助里显示的那个）\n" +
+			"• `prefix del !`  删除\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 可以同时有多个前缀，至少保留一个\n" +
+			"• 多个前缀匹配时优先最长的，例如 .. 优先于 .\n" +
+			"• 立即生效，保存在 data/prefixes.json",
+		UsageEN: "prefix · prefix add|del|set <symbol>\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `prefix`  show current prefixes\n" +
+			"• `prefix add !`  add !, both . and ! trigger\n" +
+			"• `prefix set !`  make ! the main prefix (shown in help)\n" +
+			"• `prefix del !`  remove\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Several prefixes can coexist; at least one stays\n" +
+			"• The longest matching prefix wins, e.g. .. before .\n" +
+			"• Applies immediately, stored in data/prefixes.json",
 		Plugin:    p.Name(),
 		Category:  "admin",
 		OwnerOnly: true,
@@ -93,7 +93,7 @@ func (p *PrefixPlugin) save() {
 func prefixList(prefixes []string) string {
 	parts := make([]string, len(prefixes))
 	for i, p := range prefixes {
-		parts[i] = "<code>" + htmlEscape(p) + "</code>"
+		parts[i] = plugin.Code(p)
 	}
 	return strings.Join(parts, " ")
 }
@@ -107,7 +107,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 	switch sub {
 	case "", "list", "ls":
 		c := newCard("🔧", ctx.Tlocal("命令前缀", "Prefixes"))
-		c.blank().rawField(ctx.Tlocal("主前缀", "Main"), "<code>"+htmlEscape(p.prefixes[0])+"</code>")
+		c.blank().rawField(ctx.Tlocal("主前缀", "Main"), plugin.Code(p.prefixes[0]))
 		c.rawField(ctx.Tlocal("全部", "All"), prefixList(p.prefixes))
 		c.hint(ctx.Tlocal(cmdRef(".prefix add !")+" 添加", cmdRef(".prefix add !")+" to add"))
 		return ctx.Edit(c.String())
@@ -137,7 +137,7 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 			if x == arg {
 				p.prefixes = append(p.prefixes[:i], p.prefixes[i+1:]...)
 				p.save()
-				return ctx.Edit("🗑 <b>" + htmlEscape(arg) + "</b>  " + ctx.Tlocal("已删除", "removed"))
+				return ctx.Edit("🗑 **" + esc(arg) + "**  " + ctx.Tlocal("已删除", "removed"))
 			}
 		}
 		return ctx.Edit(errText(ctx.Tlocal("没有这个前缀 ", "no such prefix: ") + cmdRef(arg)))
