@@ -20,13 +20,11 @@ type AliasPlugin struct {
 	file string
 }
 
-func NewAlias() *AliasPlugin {
-	return &AliasPlugin{file: "data/aliases.json"}
-}
+func NewAlias() *AliasPlugin { return &AliasPlugin{file: "data/aliases.json"} }
 
 func (p *AliasPlugin) Name() string        { return "alias" }
 func (p *AliasPlugin) Description() string { return "命令别名" }
-func (p *AliasPlugin) DescEN() string      { return "Short names for commands" }
+func (p *AliasPlugin) DescEN() string      { return "Command aliases" }
 
 func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
@@ -78,11 +76,10 @@ func (p *AliasPlugin) load() {
 		return
 	}
 	var aliases map[string]string
-	if err := json.Unmarshal(data, &aliases); err != nil {
-		return
-	}
-	for name, cmd := range aliases {
-		p.mgr.Commands().AddUserAlias(name, cmd)
+	if json.Unmarshal(data, &aliases) == nil {
+		for name, cmd := range aliases {
+			p.mgr.Commands().AddUserAlias(name, cmd)
+		}
 	}
 }
 
@@ -92,87 +89,63 @@ func (p *AliasPlugin) save() {
 	_ = os.WriteFile(p.file, data, 0o600)
 }
 
-func (p *AliasPlugin) help(ctx *interfaces.CommandContext) error {
-	return ctx.Edit(ctx.Tlocal(
-		`🔗 <b>alias 别名</b>
-
-<code>alias p=ping</code>  以后 <code>.p</code> 就是 <code>.ping</code>
-<code>alias d5="dme 5"</code>  带参数也行（设完发 .d5）
-<code>alias list</code>  看全部
-<code>alias del p</code>  删掉
-
-别名只展开一层，命令部分不用写前缀。`,
-		`🔗 <b>alias</b>
-
-<code>alias p=ping</code>  now <code>.p</code> means <code>.ping</code>
-<code>alias d5="dme 5"</code>  fixed args work too (then send .d5)
-<code>alias list</code>  list all
-<code>alias del p</code>  remove one
-
-Aliases expand once; no prefix needed in the command part.`))
+func aliasRow(prefix, name, repl string) string {
+	return fmt.Sprintf("<code>%s%s</code> → <code>%s%s</code>", prefix, htmlEscape(name), prefix, htmlEscape(repl))
 }
 
 func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
+	prefix := p.mgr.Commands().GetPrefix()
 	args := ctx.Args
-	if len(args) == 0 {
-		return p.listAliases(ctx)
+	if len(args) == 0 || args[0] == "list" || args[0] == "ls" {
+		return p.listAliases(ctx, prefix)
 	}
-	if args[0] == "help" || args[0] == "h" {
-		return p.help(ctx)
-	}
-
 	switch args[0] {
 	case "set":
 		if len(args) < 3 {
-			return p.help(ctx)
+			return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef(prefix+"alias 名字=命令")))
 		}
-		name, cmd := args[1], strings.Join(args[2:], " ")
-		p.mgr.Commands().AddUserAlias(name, cmd)
+		name, repl := args[1], strings.Join(args[2:], " ")
+		p.mgr.Commands().AddUserAlias(name, repl)
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ <code>.%s</code> → <code>.%s</code>", name, cmd))
-
-	case "del", "delete", "remove":
+		return ctx.Edit("✅ " + aliasRow(prefix, name, repl))
+	case "del", "delete", "remove", "rm":
 		if len(args) < 2 {
-			return p.help(ctx)
+			return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef(prefix+"alias del 名字")))
 		}
-		name := args[1]
-		if _, ok := p.mgr.Commands().UserAliases()[name]; !ok {
-			return ctx.Edit(ctx.Tlocal("没有这个别名: "+name, "No such alias: "+name))
+		if _, ok := p.mgr.Commands().UserAliases()[args[1]]; !ok {
+			return ctx.Edit(errText(ctx.Tlocal("没有这个别名 ", "No such alias: ") + cmdRef(prefix+args[1])))
 		}
-		p.mgr.Commands().RemoveUserAlias(name)
+		p.mgr.Commands().RemoveUserAlias(args[1])
 		p.save()
-		return ctx.Edit(fmt.Sprintf("🗑 <code>.%s</code>", name))
-
-	case "list", "ls":
-		return p.listAliases(ctx)
-
+		return ctx.Edit("🗑 " + cmdRef(prefix+args[1]) + "  " + ctx.Tlocal("已删除", "removed"))
 	default:
 		// Sugar: alias p=ping
-		if name, cmd, ok := strings.Cut(args[0], "="); ok && len(args) == 1 {
-			p.mgr.Commands().AddUserAlias(name, cmd)
+		if name, repl, ok := strings.Cut(args[0], "="); ok && len(args) == 1 {
+			p.mgr.Commands().AddUserAlias(name, repl)
 			p.save()
-			return ctx.Edit(fmt.Sprintf("✅ <code>.%s</code> → <code>.%s</code>", name, cmd))
+			return ctx.Edit("✅ " + aliasRow(prefix, name, repl))
 		}
-		return p.help(ctx)
+		return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef(prefix+"alias 名字=命令")))
 	}
 }
 
-func (p *AliasPlugin) listAliases(ctx *interfaces.CommandContext) error {
+func (p *AliasPlugin) listAliases(ctx *interfaces.CommandContext, prefix string) error {
 	aliases := p.mgr.Commands().UserAliases()
 	if len(aliases) == 0 {
-		return ctx.Edit(ctx.Tlocal(
-			"还没有别名。<code>alias p=ping</code> 试一个",
-			"No aliases yet. Try <code>alias p=ping</code>"))
+		c := newCard("🔗", ctx.Tlocal("别名", "Aliases"))
+		c.blank().line(ctx.Tlocal("还没有别名", "No aliases yet"))
+		c.hint(ctx.Tlocal(cmdRef(prefix+"alias p=ping")+" 试一个", cmdRef(prefix+"alias p=ping")+" to create one"))
+		return ctx.Edit(c.String())
 	}
 	names := make([]string, 0, len(aliases))
 	for name := range aliases {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	var b strings.Builder
-	b.WriteString("🔗 " + ctx.Tlocal("别名", "Aliases") + "\n\n")
+	c := newCard("🔗", ctx.Tlocal(fmt.Sprintf("别名 · %d 个", len(names)), fmt.Sprintf("Aliases · %d", len(names)))).blank()
 	for _, name := range names {
-		fmt.Fprintf(&b, "<code>.%s</code> → <code>.%s</code>\n", name, aliases[name])
+		c.line(aliasRow(prefix, name, aliases[name]))
 	}
-	return ctx.Edit(b.String())
+	c.hint(ctx.Tlocal("删除用 ", "Remove with ") + cmdRef(prefix+"alias del 名字"))
+	return ctx.Edit(c.String())
 }
