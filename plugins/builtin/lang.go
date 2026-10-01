@@ -24,7 +24,7 @@ func NewLang(mgr *i18n.Manager) *LangPlugin {
 }
 
 func (p *LangPlugin) Name() string        { return "lang" }
-func (p *LangPlugin) Description() string { return "切换界面语言" }
+func (p *LangPlugin) Description() string { return "切换语言" }
 func (p *LangPlugin) DescEN() string      { return "Switch the interface language" }
 
 func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
@@ -35,15 +35,34 @@ func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	}
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "lang",
-		Aliases:     []string{"language"},
-		Description: "切换语言：lang en / lang zh",
-		DescEN:      "Switch language: lang en / lang zh",
-		Usage:       "lang [zh|en]",
-		UsageEN:     "lang [zh|en]",
-		Plugin:      p.Name(),
-		Category:    "core",
-		OwnerOnly:   true,
-		Handler:     p.handleLang,
+		Description: "切换语言",
+		DescEN:      "Switch language",
+		Usage: `lang [zh|en]
+
+<b>示例</b>
+• <code>lang</code>  看当前语言
+• <code>lang en</code>  切到英文
+• <code>lang zh</code>  切到中文
+
+<b>机制</b>
+• 全局生效，所有命令的回复和帮助都会切换，sudo 用户看到的也一样
+• 保存在 data/lang，重启后保持
+• 外部插件需要自己支持双语，否则保持原文`,
+		UsageEN: `lang [zh|en]
+
+<b>Examples</b>
+• <code>lang</code>  show the current language
+• <code>lang en</code>  switch to English
+• <code>lang zh</code>  switch to Chinese
+
+<b>How it works</b>
+• Global: every reply and help page switches, sudo users included
+• Stored in data/lang, kept across restarts
+• External plugins switch only if they ship both languages`,
+		Plugin:    p.Name(),
+		Category:  "core",
+		OwnerOnly: true,
+		Handler:   p.handleLang,
 	})
 }
 
