@@ -1,280 +1,132 @@
-# PaperValet External Plugin SDK
+# Plugin SDK
 
-**English** | [中文](plugin-sdk_zh.md)
+**English** · [中文](plugin-sdk_zh.md)
 
-This document describes how to create external plugins for PaperValet as shared libraries (.so files).
+External plugins are Go plugins (`.so`) that import only `github.com/TiaraBasori/PaperValet/pkg/plugin`. A working example lives in [`examples/plugin-example`](../examples/plugin-example).
 
-## Plugin Structure
-
-Each plugin is a Go package with a `New()` function that returns a `plugin.Plugin` interface.
-
-### Required Interface
+## Minimal plugin
 
 ```go
 package main
 
 import (
-    "context"
-    "github.com/TiaraBasori/PaperValet/internal/plugin"
+	"context"
+
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// Plugin is the interface all plugins must implement
-type Plugin interface {
-    Name() string
-    Description() string
-    Init(ctx context.Context, mgr *plugin.Manager) error
-    Start(ctx context.Context) error
-    Stop(ctx context.Context) error
+var Metadata = &plugin.PluginMetadata{
+	Name:        "hello",
+	Description: "打招呼",
+	DescEN:      "Say hello",
+	Version:     "1.0.0",
+	Author:      "you",
 }
+
+type Hello struct{}
+
+func New() *Hello { return &Hello{} }
+
+func (p *Hello) Name() string        { return "hello" }
+func (p *Hello) Description() string { return Metadata.Description }
+func (p *Hello) DescEN() string      { return Metadata.DescEN }
+
+func (p *Hello) Init(_ context.Context, mgr plugin.Manager) error {
+	return mgr.RegisterCommand(&plugin.Command{
+		Name:        "hello",
+		Description: "打招呼",
+		DescEN:      "Say hello",
+		Usage:       "hello [名字]",
+		UsageEN:     "hello [name]",
+		Plugin:      p.Name(),
+		Handler: func(ctx *plugin.CommandContext) error {
+			return ctx.Edit("👋 " + plugin.Bold(ctx.GetArgs()))
+		},
+	})
+}
+
+func (p *Hello) Start(context.Context) error { return nil }
+func (p *Hello) Stop(context.Context) error  { return nil }
 ```
 
-### Plugin Metadata (Optional)
+The loader looks up two symbols:
+
+- `New`: takes no arguments and returns anything that implements `plugin.Plugin`, optionally with an `error` as a second result.
+- `Metadata` (optional): `*plugin.PluginMetadata`, shown by `apt ls` and `apt info`.
+
+## Lifecycle
+
+`New` → `Init` (register commands) → `Start` → … → `Stop`.
+
+Background goroutines start in `Start` and must exit in `Stop`. `apt rm` and `reload` call `Stop` too, not just shutdown.
+
+## Commands
+
+| Field | Meaning |
+|---|---|
+| `Name`, `Aliases` | Command and extra names; keep aliases to a minimum |
+| `Description`, `DescEN` | One line for `help` |
+| `Usage`, `UsageEN` | Shown by `help <command>`; Markdown allowed |
+| `Plugin` | Owning plugin, used to group commands in `help` |
+| `OwnerOnly` | Only the owner and sudo users can run it |
+| `RateLimit` | Minimum seconds between two calls per user |
+
+## Command context
 
 ```go
-// Metadata variable (optional, for plugin loader)
-var Metadata = &loader.PluginMetadata{
-    Name:        "my-plugin",
-    Description: "My custom plugin",
-    Version:     "1.0.0",
-    Author:      "Your Name",
-    MinVersion:  "0.1.0",  // Minimum PaperValet version
-}
+ctx.Args, ctx.GetArg(i), ctx.GetArgs(), ctx.ArgCount()
+ctx.Message           // triggering message (ChatID, UserID, ReplyToID, Message)
+ctx.Edit(md)          // edit the command message
+ctx.Reply(md)         // reply to it
+ctx.ReplyMedia(path, caption)
+ctx.Delete(), ctx.DeleteMessages(ids...)
+ctx.Tlocal(zh, en)    // pick a string by the user's language
+ctx.API               // *tg.Client
+ctx.PeerResolver, ctx.Media, ctx.Downloader, ctx.Logger
+ctx.Context()         // cancelled on shutdown
 ```
 
-## Complete Example
+`DeleteMessages` handles channels and supergroups correctly.
 
-### myplugin/main.go
+## Host services
 
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "strings"
-
-    "github.com/TiaraBasori/PaperValet/internal/interfaces"
-    "github.com/TiaraBasori/PaperValet/internal/plugin"
-)
-
-// MyPlugin implements plugin.Plugin
-type MyPlugin struct {
-    mgr *plugin.Manager
-}
-
-func (p *MyPlugin) Name() string        { return "myplugin" }
-func (p *MyPlugin) Description() string { return "My custom plugin example" }
-
-// Init registers commands
-func (p *MyPlugin) Init(ctx context.Context, mgr *plugin.Manager) error {
-    p.mgr = mgr
-    
-    return mgr.RegisterCommand(&interfaces.Command{
-        Name:        "hello",
-        Aliases:     []string{"hi"},
-        Description: "Say hello",
-        Usage:       "hello [name]",
-        Plugin:      p.Name(),
-        Category:    "tools",
-        Handler:     p.handleHello,
-    })
-}
-
-func (p *MyPlugin) Start(ctx context.Context) error { return nil }
-func (p *MyPlugin) Stop(ctx context.Context) error  { return nil }
-
-func (p *MyPlugin) handleHello(ctx *interfaces.CommandContext) error {
-    name := "World"
-    if ctx.ArgCount() > 0 {
-        name = ctx.GetArg(0)
-    }
-    return ctx.Edit(fmt.Sprintf("Hello, %s! 👋", name))
-}
-
-// New is the entry point for the plugin loader
-func New() interface{} {
-    return &MyPlugin{}
-}
-
-// Metadata for the plugin loader
-var Metadata = &loader.PluginMetadata{
-    Name:        "myplugin",
-    Description: "My custom plugin example",
-    Version:     "1.0.0",
-    Author:      "Your Name",
-    MinVersion:  "0.1.0",
-}
-```
-
-### Building the Plugin
-
-Build as a plugin (not an executable):
-
-```bash
-go build -buildmode=plugin -o myplugin.so ./myplugin
-```
-
-Copy to the plugins directory:
-
-```bash
-cp myplugin.so /path/to/papervalet/plugins/
-```
-
-## Building with PaperValet
-
-### Method 1: Using the example template
-
-Clone the example:
-
-```bash
-git clone https://github.com/PaperValet/plugin-template myplugin
-cd myplugin
-```
-
-Edit `main.go` with your plugin logic, then build:
-
-```bash
-go build -buildmode=plugin -o myplugin.so .
-```
-
-Install:
-
-```bash
-mkdir -p ~/.config/papervalet/plugins
-cp myplugin.so ~/.config/papervalet/plugins/
-```
-
-### Method 2: Go module
-
-`go.mod`:
-
-```go
-module github.com/yourname/myplugin
-
-go 1.25
-
-require github.com/TiaraBasori/PaperValet v0.1.0
-```
-
-```bash
-go mod tidy
-go build -buildmode=plugin -o myplugin.so .
-```
-
-## Plugin Lifecycle
-
-1. **Load** - PaperValet loads `.so` file via `plugin.Open()`
-2. **New()** - Calls `New()` function, expects `plugin.Plugin` return
-3. **Init()** - Called with plugin manager for command registration
-4. **Start()** - Called after all plugins initialized
-5. **Stop()** - Called on shutdown
-
-## Command Context Methods
-
-```go
-ctx.Message    // *interfaces.MessageEvent - the triggering message
-ctx.Args       // []string - parsed arguments
-ctx.GetArg(i)  // string - get argument by index
-ctx.ArgCount() // int - number of arguments
-ctx.Edit(text) // error - edit the command message (userbot UX)
-ctx.Reply(text) // error - reply to message
-ctx.Delete()   // error - delete command message
-ctx.API        // *tg.Client - Telegram API client
-ctx.PeerResolver // interfaces.PeerResolver - resolve peers
-ctx.Emitter    // interfaces.Emitter - emit events
-ctx.Session    // *interfaces.SessionContext - per-chat session
-ctx.Logger     // interfaces.Logger - logging
-```
-
-## Host Services
-
-`mgr.Host()` gives plugins the same services as a command context, without a triggering message. Keep it from `Init` and use it in schedulers, restored jobs or event listeners. Network calls work once `Start` runs.
+`mgr.Host()` offers the same services without a triggering message, for schedulers and restored jobs. Keep it from `Init`. Network calls work once `Start` runs.
 
 ```go
 h := mgr.Host()
-h.API()                       // *tg.Client
-h.PeerResolver()              // resolve chat ids
-h.Media(), h.Downloader()     // send / download files
-h.SelfID()                    // logged-in account id (0 before login)
-h.Logger("myplugin")          // named logger
-h.DataDir("myplugin")         // data/myplugin, created on demand
-h.Send(ctx, chatID, md, 0)    // send Markdown, returns the message id
-h.Lang(userID)                // "zh-CN" or "en-US"
+h.API(), h.PeerResolver(), h.Media(), h.Downloader()
+h.SelfID()                   // logged-in account (0 before login)
+h.Logger("hello")
+h.DataDir("hello")           // data/hello, created on demand
+h.Send(ctx, chatID, md, 0)   // returns the new message id
+h.Lang(userID)               // "zh-CN" or "en-US"
 ```
 
-## Session Usage
+## Markdown
+
+Message text is Telegram Markdown. Anything that comes from users must go through a helper so stray symbols stay literal:
 
 ```go
-func (p *MyPlugin) handleCmd(ctx *interfaces.CommandContext) error {
-    session := ctx.Session
-    if session == nil {
-        return ctx.Edit("No session available")
-    }
-    
-    // Get/set session data
-    count, _ := session.Get("counter")
-    if count == nil {
-        count = 0
-    }
-    count = count.(int) + 1
-    session.Set("counter", count)
-    
-    return ctx.Edit(fmt.Sprintf("Counter: %d", count))
-}
+plugin.Escape(s)   plugin.Code(v)   plugin.Pre(s)
+plugin.Bold(s)     plugin.Italic(s) plugin.Link(text, url)
+plugin.Mention(text, userID)
 ```
 
-## Event Emission
+Backslash escapes do not work inside code spans, so use `plugin.Code` for those.
 
-```go
-func (p *MyPlugin) handleCmd(ctx *interfaces.CommandContext) error {
-    ctx.Emitter.Emit(ctx.Context(), "myplugin.custom_event", map[string]any{
-        "user_id": ctx.Message.UserID,
-        "data":    "custom data",
-    })
-    return nil
-}
+## Building
+
+Go plugins only load when the plugin and the bot agree on the Go version and every shared package. Build inside a workspace with the same Go version as the release (currently 1.25.14) and `-trimpath`:
+
+```bash
+go work init . /path/to/PaperValet
+go build -trimpath -buildmode=plugin -o hello.so .
 ```
 
-## Version Compatibility
+Building through a `replace` directive instead fails with "plugin was built with a different version of package".
 
-- Set `MinVersion` in Metadata to require minimum PaperValet version
-- Plugin loader validates version before loading
-- Use semantic versioning (e.g., "0.1.0", "1.0.0")
+Copy the `.so` into `plugins/` and run `.restart`. Plugins only load on linux/amd64 builds with cgo, which is what the release ships.
 
-## Best Practices
+## Publishing
 
-1. **Handle errors gracefully** - Return errors from handlers, don't panic
-2. **Use context** - Respect `ctx.Context()` for cancellation
-3. **Don't block** - Use goroutines for long operations
-4. **Clean up** - Implement proper `Stop()` for resources
-5. **Logging** - Use `ctx.Logger` for structured logging
-6. **Dependencies** - Only depend on PaperValet interfaces, not internal packages
-
-## Publishing Plugins
-
-1. Create a GitHub repo for your plugin
-2. Add GitHub Actions for building `.so` on tag push
-3. Publish releases with `.so` artifacts
-4. Users download and place in `plugins/` directory
-
-## Example Release Workflow
-
-```yaml
-# .github/workflows/release.yml
-name: Release
-on:
-  push:
-    tags: ['v*']
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - run: go build -buildmode=plugin -o myplugin.so .
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: myplugin.so
-```
+Add a directory under `plugins-external/` in [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins). Its CI builds every plugin against the latest PaperValet and publishes the `.so` files plus the `plugins.json` index that `apt` reads.
