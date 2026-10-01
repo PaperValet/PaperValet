@@ -32,7 +32,7 @@ func NewLog() *LogPlugin {
 }
 
 func (p *LogPlugin) Name() string        { return "log" }
-func (p *LogPlugin) Description() string { return "运行日志：发送、看尾部、调级别" }
+func (p *LogPlugin) Description() string { return "运行日志" }
 func (p *LogPlugin) DescEN() string      { return "Logs: send, tail, level" }
 
 func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
@@ -40,27 +40,57 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*interfaces.Command{
 		{
 			Name:        "loglevel",
-			Aliases:     []string{"loglvl", "ll"},
-			Description: "看或改运行时日志级别",
-			DescEN:      "Show or change the runtime log level",
-			Usage:       "loglevel [debug|info|warn|error]",
-			UsageEN:     "loglevel [debug|info|warn|error]",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleLogLevel,
+			Description: "调日志级别",
+			DescEN:      "Set log level",
+			Usage: `loglevel [debug|info|warn|error]
+
+<b>机制</b>
+• 不带参数显示当前级别
+• 立即生效，只影响本次运行；重启后回到配置文件里的级别
+• 排查问题时临时切 debug，用完切回 info`,
+			UsageEN: `loglevel [debug|info|warn|error]
+
+<b>How it works</b>
+• No argument shows the current level
+• Applies immediately for this run only; restart returns to the config value
+• Switch to debug while debugging, back to info afterwards`,
+			Plugin:    p.Name(),
+			Category:  "admin",
+			OwnerOnly: true,
+			Handler:   p.handleLogLevel,
 		},
 		{
 			Name:        "sendlog",
-			Aliases:     []string{"logs"},
-			Description: "把日志文件发到收藏夹，tail 直接看尾部",
-			DescEN:      "Send the log file to Saved Messages; tail prints the end",
-			Usage:       "sendlog | sendlog tail [行数]",
-			UsageEN:     "sendlog | sendlog tail [lines]",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleSendLog,
+			Description: "发送日志",
+			DescEN:      "Send logs",
+			Usage: `sendlog · sendlog tail [行数] · sendlog set &lt;me|chatID&gt; · sendlog clean
+
+<b>示例</b>
+• <code>sendlog</code>  把最新日志文件发到收藏夹
+• <code>sendlog tail 50</code>  直接在聊天里看最后 50 行
+• <code>sendlog set -100123</code>  改成发到指定聊天
+• <code>sendlog clean</code>  删除日志文件
+
+<b>机制</b>
+• 在 ./logs、~/.pm2/logs、/var/log/papervalet 里找文件名含 paper 的 .log
+• 超过 50MB 不发送，请用 tail
+• systemd 运行时日志在 journald，用 <code>exec journalctl -u 服务名 -n 50</code> 查看`,
+			UsageEN: `sendlog · sendlog tail [lines] · sendlog set &lt;me|chatID&gt; · sendlog clean
+
+<b>Examples</b>
+• <code>sendlog</code>  send the newest log file to Saved Messages
+• <code>sendlog tail 50</code>  print the last 50 lines here
+• <code>sendlog set -100123</code>  send to another chat instead
+• <code>sendlog clean</code>  delete log files
+
+<b>How it works</b>
+• Looks for *.log files containing "paper" in ./logs, ~/.pm2/logs and /var/log/papervalet
+• Files over 50MB are not sent; use tail
+• Under systemd logs go to journald: <code>exec journalctl -u service -n 50</code>`,
+			Plugin:    p.Name(),
+			Category:  "admin",
+			OwnerOnly: true,
+			Handler:   p.handleSendLog,
 		},
 	}
 	for _, cmd := range cmds {
