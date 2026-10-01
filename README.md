@@ -29,20 +29,20 @@ Full walkthrough including systemd and Docker: **[Installation Guide](docs/insta
 
 | Plugin | Commands | Description |
 |--------|----------|-------------|
-| `core` | `.version`, `.ping`, `.restart` | Core bot management |
+| `core` | `.ping`, `.restart` | Latency check, in-place restart |
 | `help` | `.help` | Command help by category |
-| `status` | `.status` | Runtime status |
+| `status` | `.status` (alias `.version`) | Version, uptime, memory, plugins |
 | `apt` | `.apt list/install/remove/load/unload` | Plugin manager |
-| `info` | `.info`, `.fwd` | Chat/user info + forward |
+| `info` | `.info` | Chat/user IDs (reply targets the sender) |
 | `alias` | `.alias set/del/list` | Runtime command aliases |
 | `exec` | `.exec` | System command execution |
 | `sudo` | `.sudo on/off/add/remove/list` | Permission delegation |
-| `reload` | `.reload` | External plugin hot reload |
+| `reload` | `.reload` | Reload every external plugin |
 | `log` | `.loglevel`, `.sendlog` | Log level + log delivery |
 | `prefix` | `.prefix list/add/del/set` | Command prefix management |
-| `backup` | `.backup` | Config/session backup + restore |
-| `update` | `.update`, `.autofix` | Git sync + restart |
-| `dme` | `.dme`, `.dme all` | Message cleanup |
+| `backup` | `.backup`, `.backup restore` | Pack config to Saved Messages; restore by reply |
+| `update` | `.update`, `.update now` | Upgrade from GitHub Releases |
+| `dme` | `.dme N`, `.dme all`, `.dme others on/off` | Bulk delete with anti-recall |
 | `lang` | `.lang` | Language switching |
 
 ## External Plugins
