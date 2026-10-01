@@ -41,12 +41,12 @@ func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			DescEN:      "Measure latency",
 			Usage: `ping
 
-<b>机制</b>
+**机制**
 • 编辑一次命令消息，计算从发出编辑到 Telegram 返回的耗时
 • 显示的是 机器人 → Telegram 服务器 的往返延迟，不含你的客户端网络`,
 			UsageEN: `ping
 
-<b>How it works</b>
+**How it works**
 • Edits the command once and measures the round trip until Telegram answers
 • Shows bot → Telegram server latency, not your own client network`,
 			Plugin:   p.Name(),
@@ -59,14 +59,14 @@ func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			DescEN:      "Restart the bot",
 			Usage: `restart
 
-<b>机制</b>
+**机制**
 • 先停止所有插件、写盘、刷新日志
 • 在同一进程号上原地重新加载程序，systemd、Docker、tmux 都不会把它当成退出
 • 回来后把这条命令消息改成「重启完成」和用时
 • 已加载的外部插件会随启动自动重新加载`,
 			UsageEN: `restart
 
-<b>How it works</b>
+**How it works**
 • Stops all plugins, flushes state and logs
 • Re-executes in place under the same PID, so systemd, Docker and tmux keep supervising it
 • After boot the command message turns into "Restarted" with the elapsed time
@@ -109,7 +109,7 @@ func (p *CorePlugin) Restart(ctx *interfaces.CommandContext) error { return p.ha
 func (p *CorePlugin) handleRestart(ctx *interfaces.CommandContext) error {
 	exe, err := os.Executable()
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	_ = ctx.Edit(ctx.Tlocal("🔄 正在重启…", "🔄 Restarting…"))
 
