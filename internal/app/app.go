@@ -177,7 +177,7 @@ func (a *App) Run(ctx context.Context) error {
 	a.parser.Start()
 
 	return a.client.Run(ctx, func(ctx context.Context) error {
-		if err := EnsureAuth(ctx, a.client, ""); err != nil {
+		if err := EnsureAuth(ctx, a.client); err != nil {
 			return fmt.Errorf("auth: %w", err)
 		}
 
