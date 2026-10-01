@@ -33,8 +33,6 @@ var dcs = map[int]string{
 	5: "91.108.56.130",   // DC5 Singapore
 }
 
-var dcLocations = map[int]string{1: "Miami", 2: "Amsterdam", 3: "Miami", 4: "Amsterdam", 5: "Singapore"}
-
 func dcNumber(s string) (int, bool) {
 	s = strings.ToLower(s)
 	if len(s) != 3 || !strings.HasPrefix(s, "dc") {
