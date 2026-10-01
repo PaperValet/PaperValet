@@ -47,44 +47,44 @@ func (p *BackupPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "backup",
 		Description: "备份与恢复配置",
 		DescEN:      "Back up and restore config",
-		Usage: `backup · backup restore（回复备份文件）
-
-<b>示例</b>
-• <code>backup</code>  打包配置发到收藏夹
-• 在收藏夹回复那个文件发 <code>backup restore</code>  恢复
-
-<b>备份内容</b>
-• config.json
-• data/ 下的插件配置（别名、前缀、sudo 名单、插件数据等）
-• plugins/ 下已安装的外部插件（单个文件超过 2MB 跳过）
-
-<b>不备份</b>
-• 登录 session 和数据库：恢复到别的机器时需要重新 initialize 登录
-• peer 缓存：会自动重新学习
-
-<b>机制</b>
-• 打包成 tar.gz，文件名带时间戳
-• 恢复时只写入 config.json、data/、plugins/，其他路径一律忽略
-• 恢复完发 <code>restart</code> 生效`,
-		UsageEN: `backup · backup restore (reply to the archive)
-
-<b>Examples</b>
-• <code>backup</code>  pack config to Saved Messages
-• Reply to that file with <code>backup restore</code>  restore
-
-<b>Included</b>
-• config.json
-• plugin settings under data/ (aliases, prefixes, sudo list, plugin data)
-• installed external plugins under plugins/ (files over 2MB skipped)
-
-<b>Not included</b>
-• login session and database: on a new machine run initialize again
-• peer cache: relearned automatically
-
-<b>How it works</b>
-• Packed as a timestamped tar.gz
-• Restore only writes config.json, data/ and plugins/; any other path is ignored
-• Send <code>restart</code> afterwards to apply`,
+		Usage: "backup · backup restore（回复备份文件）\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `backup`  打包配置发到收藏夹\n" +
+			"• 在收藏夹回复那个文件发 `backup restore`  恢复\n" +
+			"\n" +
+			"**备份内容**\n" +
+			"• config.json\n" +
+			"• data/ 下的插件配置（别名、前缀、sudo 名单、插件数据等）\n" +
+			"• plugins/ 下已安装的外部插件（单个文件超过 2MB 跳过）\n" +
+			"\n" +
+			"**不备份**\n" +
+			"• 登录 session 和数据库：恢复到别的机器时需要重新 initialize 登录\n" +
+			"• peer 缓存：会自动重新学习\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 打包成 tar.gz，文件名带时间戳\n" +
+			"• 恢复时只写入 config.json、data/、plugins/，其他路径一律忽略\n" +
+			"• 恢复完发 `restart` 生效",
+		UsageEN: "backup · backup restore (reply to the archive)\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `backup`  pack config to Saved Messages\n" +
+			"• Reply to that file with `backup restore`  restore\n" +
+			"\n" +
+			"**Included**\n" +
+			"• config.json\n" +
+			"• plugin settings under data/ (aliases, prefixes, sudo list, plugin data)\n" +
+			"• installed external plugins under plugins/ (files over 2MB skipped)\n" +
+			"\n" +
+			"**Not included**\n" +
+			"• login session and database: on a new machine run initialize again\n" +
+			"• peer cache: relearned automatically\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Packed as a timestamped tar.gz\n" +
+			"• Restore only writes config.json, data/ and plugins/; any other path is ignored\n" +
+			"• Send `restart` afterwards to apply",
 		Plugin:    p.Name(),
 		Category:  "admin",
 		OwnerOnly: true,
@@ -103,8 +103,8 @@ func (p *BackupPlugin) handleBackup(ctx *interfaces.CommandContext) error {
 		return p.doRestore(ctx)
 	default:
 		return ctx.Edit(ctx.Tlocal(
-			"用法: <code>backup</code> 打包配置发到收藏夹；回复备份文件发 <code>backup restore</code> 恢复",
-			"Usage: <code>backup</code> packs config to Saved Messages; reply to the archive with <code>backup restore</code>",
+			"用法: `backup` 打包配置发到收藏夹；回复备份文件发 `backup restore` 恢复",
+			"Usage: `backup` packs config to Saved Messages; reply to the archive with `backup restore`",
 		))
 	}
 }
@@ -170,7 +170,7 @@ func (p *BackupPlugin) collect() ([]backupEntry, error) {
 func (p *BackupPlugin) doBackup(ctx *interfaces.CommandContext) error {
 	entries, err := p.collect()
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 
 	var buf bytes.Buffer
@@ -179,28 +179,28 @@ func (p *BackupPlugin) doBackup(ctx *interfaces.CommandContext) error {
 	for _, e := range entries {
 		hdr := &tar.Header{Name: e.path, Mode: 0o600, Size: int64(len(e.data)), ModTime: time.Now()}
 		if err := tw.WriteHeader(hdr); err != nil {
-			return ctx.Edit("❌ " + err.Error())
+			return ctx.Edit("❌ " + esc(err.Error()))
 		}
 		if _, err := tw.Write(e.data); err != nil {
-			return ctx.Edit("❌ " + err.Error())
+			return ctx.Edit("❌ " + esc(err.Error()))
 		}
 	}
 	if err := tw.Close(); err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	if err := gz.Close(); err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("papervalet-backup-%s.tar.gz", time.Now().Format(backupStamp)))
 	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	defer os.Remove(path)
 
 	if err := ctx.Media.SendFile(ctx.Context(), 0, path,
 		fmt.Sprintf("PaperValet backup · %s · %d files", time.Now().Format("2006-01-02 15:04"), len(entries)), 0); err != nil {
-		return ctx.Edit(ctx.Tlocal("❌ 发送失败: "+err.Error(), "❌ Send failed: "+err.Error()))
+		return ctx.Edit(ctx.Tlocal("❌ 发送失败: "+esc(err.Error()), "❌ Send failed: "+esc(err.Error())))
 	}
 	return ctx.Edit(ctx.Tlocal(
 		fmt.Sprintf("✅ 备份已发到收藏夹（%d 个文件）。恢复时回复它发 backup restore", len(entries)),
@@ -244,7 +244,7 @@ func (p *BackupPlugin) restoreTarget(ctx *interfaces.CommandContext) (string, []
 func (p *BackupPlugin) doRestore(ctx *interfaces.CommandContext) error {
 	_, raw, err := p.restoreTarget(ctx)
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	gz, err := gzip.NewReader(bytes.NewReader(raw))
 	if err != nil {
@@ -259,7 +259,7 @@ func (p *BackupPlugin) doRestore(ctx *interfaces.CommandContext) error {
 			break
 		}
 		if err != nil {
-			return ctx.Edit(ctx.Tlocal("❌ 备份损坏: "+err.Error(), "❌ Corrupt archive: "+err.Error()))
+			return ctx.Edit(ctx.Tlocal("❌ 备份损坏: "+esc(err.Error()), "❌ Corrupt archive: "+esc(err.Error())))
 		}
 		clean := filepath.Clean(hdr.Name)
 		if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
@@ -284,8 +284,8 @@ func (p *BackupPlugin) doRestore(ctx *interfaces.CommandContext) error {
 	}
 
 	msg := ctx.Tlocal(
-		fmt.Sprintf("✅ 恢复了 %d 个文件:\n<code>%s</code>\n发 restart 生效", len(restored), strings.Join(restored, "\n")),
-		fmt.Sprintf("✅ Restored %d files:\n<code>%s</code>\nSend restart to apply", len(restored), strings.Join(restored, "\n")))
+		fmt.Sprintf("✅ 恢复了 %d 个文件:\n%s\n发 `restart` 生效", len(restored), plugin.Pre(strings.Join(restored, "\n"))),
+		fmt.Sprintf("✅ Restored %d files:\n%s\nSend `restart` to apply", len(restored), plugin.Pre(strings.Join(restored, "\n"))))
 	return ctx.Edit(msg)
 }
 
