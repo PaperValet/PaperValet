@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"html"
 	"os/exec"
 	"strings"
 	"sync"
@@ -35,32 +34,32 @@ func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "exec",
 		Description: "执行 shell 命令",
 		DescEN:      "Run a shell command",
-		Usage: `exec [-t 秒数] &lt;命令&gt;
-
-<b>示例</b>
-• <code>exec uptime</code>
-• <code>exec df -h | head</code>  支持管道、重定向
-• <code>exec -t 120 apt update</code>  最长跑 120 秒
-
-<b>机制</b>
-• 用 sh -c 执行，标准输出和错误输出合并
-• 运行中每 3 秒刷新一次，显示最新输出
-• 默认 60 秒后自动终止，<code>-t</code> 可设 1–600 秒；到时连同子进程整组杀掉，已有输出照常返回
-• 输出太长只保留最后约 3500 字符
-• 结束后显示退出码和用时`,
-		UsageEN: `exec [-t seconds] &lt;command&gt;
-
-<b>Examples</b>
-• <code>exec uptime</code>
-• <code>exec df -h | head</code>  pipes and redirects work
-• <code>exec -t 120 apt update</code>  run for up to 120s
-
-<b>How it works</b>
-• Runs via sh -c with stdout and stderr merged
-• Refreshes every 3s with the latest output while running
-• Killed after 60s by default (<code>-t</code> 1-600); the whole process group dies and partial output is still returned
-• Long output keeps only the last ~3500 characters
-• Shows exit code and elapsed time at the end`,
+		Usage: "exec [-t 秒数] <命令>\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `exec uptime`\n" +
+			"• `exec df -h | head`  支持管道、重定向\n" +
+			"• `exec -t 120 apt update`  最长跑 120 秒\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 用 sh -c 执行，标准输出和错误输出合并\n" +
+			"• 运行中每 3 秒刷新一次，显示最新输出\n" +
+			"• 默认 60 秒后自动终止，`-t` 可设 1–600 秒；到时连同子进程整组杀掉，已有输出照常返回\n" +
+			"• 输出太长只保留最后约 3500 字符\n" +
+			"• 结束后显示退出码和用时",
+		UsageEN: "exec [-t seconds] <command>\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `exec uptime`\n" +
+			"• `exec df -h | head`  pipes and redirects work\n" +
+			"• `exec -t 120 apt update`  run for up to 120s\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Runs via sh -c with stdout and stderr merged\n" +
+			"• Refreshes every 3s with the latest output while running\n" +
+			"• Killed after 60s by default (`-t` 1-600); the whole process group dies and partial output is still returned\n" +
+			"• Long output keeps only the last ~3500 characters\n" +
+			"• Shows exit code and elapsed time at the end",
 		Plugin:    p.Name(),
 		Category:  "admin",
 		OwnerOnly: true,
@@ -73,20 +72,20 @@ func (p *ExecPlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *ExecPlugin) help(ctx *interfaces.CommandContext) error {
 	return ctx.Edit(ctx.Tlocal(
-		`💻 <b>exec</b> 执行 shell 命令
-
-<code>exec uptime</code>
-<code>exec df -h | head</code>
-<code>exec -t 120 apt update</code>  最长跑 120 秒
-
-不会自己结束的命令（如 ping）到时间自动终止，已有输出照常返回。默认 60 秒，最多 600 秒。`,
-		`💻 <b>exec</b> run a shell command
-
-<code>exec uptime</code>
-<code>exec df -h | head</code>
-<code>exec -t 120 apt update</code>  run for up to 120s
-
-Commands that never exit (like ping) are killed at the deadline and their output is still returned. Default 60s, max 600s.`))
+		"💻 **exec** 执行 shell 命令\n"+
+			"\n"+
+			"`exec uptime`\n"+
+			"`exec df -h | head`\n"+
+			"`exec -t 120 apt update`  最长跑 120 秒\n"+
+			"\n"+
+			"不会自己结束的命令（如 ping）到时间自动终止，已有输出照常返回。默认 60 秒，最多 600 秒。",
+		"💻 **exec** run a shell command\n"+
+			"\n"+
+			"`exec uptime`\n"+
+			"`exec df -h | head`\n"+
+			"`exec -t 120 apt update`  run for up to 120s\n"+
+			"\n"+
+			"Commands that never exit (like ping) are killed at the deadline and their output is still returned. Default 60s, max 600s."))
 }
 
 // parseExecArgs splits an optional -t/--timeout flag from the shell line.
@@ -152,8 +151,8 @@ func (p *ExecPlugin) handleExec(ctx *interfaces.CommandContext) error {
 	}
 	timeout, line, err := parseExecArgs(ctx.RawArgs)
 	if err != nil {
-		return ctx.Edit(ctx.Tlocal("❌ 超时要写 1–600 之间的秒数，比如 <code>exec -t 120 …</code>",
-			"❌ Timeout must be 1-600 seconds, e.g. <code>exec -t 120 …</code>"))
+		return ctx.Edit(ctx.Tlocal("❌ 超时要写 1–600 之间的秒数，比如 `exec -t 120 …`",
+			"❌ Timeout must be 1-600 seconds, e.g. `exec -t 120 …`"))
 	}
 	if line == "" {
 		return p.help(ctx)
@@ -167,12 +166,12 @@ func (p *ExecPlugin) handleExec(ctx *interfaces.CommandContext) error {
 	cmd.Stdout = out
 	cmd.Stderr = out
 
-	header := "<code>$ " + html.EscapeString(line) + "</code>"
+	header := plugin.Code("$ " + line)
 	_ = ctx.Edit(header + "\n⏳ " + ctx.Tlocal("运行中…", "running…"))
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
-		return ctx.Edit(header + "\n❌ " + html.EscapeString(err.Error()))
+		return ctx.Edit(header + "\n❌ " + plugin.Escape(err.Error()))
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
@@ -196,7 +195,7 @@ loop:
 			s, _ = tail(s, 800)
 			body := ""
 			if strings.TrimSpace(s) != "" {
-				body = "\n<pre>" + html.EscapeString(s) + "</pre>"
+				body = "\n" + plugin.Pre(s)
 			}
 			_ = ctx.Edit(fmt.Sprintf("%s\n⏳ %s %ds/%ds%s", header,
 				ctx.Tlocal("运行中", "running"), int(time.Since(start).Seconds()), int(timeout.Seconds()), body))
@@ -223,7 +222,7 @@ loop:
 
 	body := ctx.Tlocal("（无输出）", "(no output)")
 	if strings.TrimSpace(s) != "" {
-		body = "<pre>" + html.EscapeString(strings.TrimRight(s, "\n")) + "</pre>"
+		body = plugin.Pre(s)
 	}
 	if cut || dropped {
 		body = ctx.Tlocal("…只显示最后一部分输出\n", "…showing the last part of the output\n") + body
