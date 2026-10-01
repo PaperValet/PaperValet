@@ -141,12 +141,27 @@ func Example() *Config {
 	}
 }
 
+// Save writes the config atomically with owner-only permissions; it holds
+// api_hash, so it must never be world-readable.
 func (c *Config) Save(path string) error {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	data = append(data, '\n')
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, 0o600); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func (c *Config) GetUpdateTimeout() time.Duration {
