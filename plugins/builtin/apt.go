@@ -23,7 +23,7 @@ type registryEntry struct {
 	Version     string `json:"version"`
 }
 
-// AptPlugin manages external plugins: list/search/install/remove/load.
+// AptPlugin manages external plugins. Installed always means loaded.
 type AptPlugin struct {
 	loader *loader.Loader
 	mgr    plugin.Manager
@@ -35,7 +35,7 @@ func NewApt(pluginLoader *loader.Loader) *AptPlugin {
 
 func (p *AptPlugin) Name() string        { return "apt" }
 func (p *AptPlugin) Description() string { return "外部插件管理" }
-func (p *AptPlugin) DescEN() string      { return "Manage external plugins: search, install, load" }
+func (p *AptPlugin) DescEN() string      { return "External plugin manager" }
 
 func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
@@ -43,36 +43,44 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "apt",
 		Description: "外部插件管理",
 		DescEN:      "External plugin manager",
-		Usage: `apt search [关键词] · apt list · apt install|remove|load|unload &lt;名字&gt; · apt info &lt;名字&gt;
+		Usage: `apt &lt;子命令&gt; [参数]
+
+<b>子命令</b>
+• <code>search</code> · <code>s</code>  [关键词]  搜索插件仓库，不带词列出全部
+• <code>install</code> · <code>i</code>  &lt;名字…&gt;  安装并立即启用
+• <code>remove</code> · <code>rm</code>  &lt;名字…&gt;  停用并删除
+• <code>list</code> · <code>ls</code>  已安装的插件
+• <code>info</code>  &lt;名字&gt;  版本、作者、提供的命令
 
 <b>示例</b>
-• <code>apt search</code>  列出仓库里全部插件
-• <code>apt search 翻译</code>  按名字和简介搜索
-• <code>apt install weather</code>  安装并立即加载
-• <code>apt list</code>  已安装的外部插件
-• <code>apt unload weather</code> / <code>apt load weather</code>  停用 / 启用
-• <code>apt remove weather</code>  卸载并删除文件
-• <code>apt info weather</code>  版本、作者、提供的命令
+• <code>apt s</code>
+• <code>apt i weather calc</code>
+• <code>apt rm weather</code>
 
 <b>机制</b>
+• 安装即启用，卸载即删除，没有「装了但没启用」的状态
 • 插件清单实时从 PaperValet-Plugins 的 Release 拉取
-• 插件是 .so 文件，放在 plugins/ 目录，启动时自动加载
-• 状态图标：✅ 已加载 · 📦 已装未载 · ⬜ 未安装`,
-		UsageEN: `apt search [term] · apt list · apt install|remove|load|unload &lt;name&gt; · apt info &lt;name&gt;
+• 插件是 plugins/ 下的 .so 文件，启动时自动加载
+• 插件必须和主程序用同一版本 Go 编译，否则会提示版本不符，此时运行 <code>update</code>`,
+		UsageEN: `apt &lt;subcommand&gt; [args]
+
+<b>Subcommands</b>
+• <code>search</code> · <code>s</code>  [term]  search the repository; bare lists all
+• <code>install</code> · <code>i</code>  &lt;name…&gt;  install and enable
+• <code>remove</code> · <code>rm</code>  &lt;name…&gt;  disable and delete
+• <code>list</code> · <code>ls</code>  installed plugins
+• <code>info</code>  &lt;name&gt;  version, author, commands
 
 <b>Examples</b>
-• <code>apt search</code>  list every plugin in the repository
-• <code>apt search translate</code>  search names and descriptions
-• <code>apt install weather</code>  install and load right away
-• <code>apt list</code>  installed external plugins
-• <code>apt unload weather</code> / <code>apt load weather</code>  stop / start
-• <code>apt remove weather</code>  unload and delete the file
-• <code>apt info weather</code>  version, author, commands
+• <code>apt s</code>
+• <code>apt i weather calc</code>
+• <code>apt rm weather</code>
 
 <b>How it works</b>
+• Installed means enabled, removed means deleted; there is no "installed but off"
 • The index is fetched live from the PaperValet-Plugins release
-• Plugins are .so files in plugins/, loaded automatically on startup
-• Icons: ✅ loaded · 📦 installed · ⬜ available`,
+• Plugins are .so files in plugins/, loaded on startup
+• Plugins must be built with the same Go version as the bot; on a mismatch run <code>update</code>`,
 		Plugin:    p.Name(),
 		Category:  "core",
 		OwnerOnly: true,
@@ -83,68 +91,63 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 func (p *AptPlugin) Start(_ context.Context) error { return nil }
 func (p *AptPlugin) Stop(_ context.Context) error  { return nil }
 
+// aptSubcommands maps every accepted spelling to its canonical action.
+var aptSubcommands = map[string]string{
+	"search": "search", "s": "search", "find": "search",
+	"install": "install", "i": "install", "in": "install", "add": "install",
+	"remove": "remove", "rm": "remove", "r": "remove", "uninstall": "remove", "del": "remove",
+	"list": "list", "ls": "list", "l": "list",
+	"info": "info", "show": "info",
+	"help": "help", "h": "help",
+}
+
 func (p *AptPlugin) help(ctx *interfaces.CommandContext) error {
-	return ctx.Edit(ctx.Tlocal(
-		`📦 <b>apt 插件管理</b>
-
-<code>apt search [关键词]</code>  搜插件仓库（不带词列出全部）
-<code>apt list</code>  已安装和已加载的插件
-<code>apt install 名字</code>  从仓库安装
-<code>apt load 名字</code> · <code>apt unload 名字</code>  加载/停用
-<code>apt remove 名字</code>  删除文件
-<code>reload</code>  重新加载全部外部插件`,
-		`📦 <b>apt plugin manager</b>
-
-<code>apt search [term]</code>  search the repository (bare search lists all)
-<code>apt list</code>  installed and loaded plugins
-<code>apt install name</code>  install from the repository
-<code>apt load name</code> · <code>apt unload name</code>  start/stop
-<code>apt remove name</code>  delete the file
-<code>reload</code>  reload every external plugin`))
+	prefix := p.mgr.Commands().GetPrefix()
+	c := newCard("📦", ctx.Tlocal("apt 插件管理", "apt plugins"))
+	c.blank()
+	c.line(cmdRef(prefix+"apt s") + "  " + ctx.Tlocal("搜索仓库", "search"))
+	c.line(cmdRef(prefix+"apt i 名字") + "  " + ctx.Tlocal("安装", "install"))
+	c.line(cmdRef(prefix+"apt rm 名字") + "  " + ctx.Tlocal("卸载", "remove"))
+	c.line(cmdRef(prefix+"apt ls") + "  " + ctx.Tlocal("已安装", "installed"))
+	c.line(cmdRef(prefix+"apt info 名字") + "  " + ctx.Tlocal("详情", "details"))
+	c.hint(ctx.Tlocal("完整说明 ", "Full guide ") + cmdRef(prefix+"help apt"))
+	return ctx.Edit(c.String())
 }
 
 func (p *AptPlugin) handleApt(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
 		return p.help(ctx)
 	}
-	sub, args := ctx.GetArg(0), ctx.Args[1:]
-	switch sub {
-	case "help", "h", "?":
-		return p.help(ctx)
-	case "list", "ls", "installed":
-		return p.listInstalled(ctx)
-	case "loaded", "active":
-		return p.listLoaded(ctx)
-	case "search", "find", "repo":
-		return p.search(ctx, args)
-	case "info":
-		if len(args) == 0 {
-			return ctx.Edit(ctx.Tlocal("用法: <code>apt info 名字</code>", "Usage: <code>apt info name</code>"))
-		}
-		return p.pluginInfo(ctx, args[0])
-	case "install", "add", "get":
-		if len(args) == 0 {
-			return ctx.Edit(ctx.Tlocal("用法: <code>apt install 名字</code>，先 <code>apt search</code> 找名字", "Usage: <code>apt install name</code>; find names with <code>apt search</code>"))
-		}
-		return p.install(ctx, args)
-	case "remove", "rm", "delete", "uninstall":
-		if len(args) == 0 {
-			return ctx.Edit(ctx.Tlocal("用法: <code>apt remove 名字</code>", "Usage: <code>apt remove name</code>"))
-		}
-		return p.remove(ctx, args)
-	case "load", "enable":
-		if len(args) == 0 {
-			return ctx.Edit(ctx.Tlocal("用法: <code>apt load 名字</code>", "Usage: <code>apt load name</code>"))
-		}
-		return p.load(ctx, args)
-	case "unload", "disable":
-		if len(args) == 0 {
-			return ctx.Edit(ctx.Tlocal("用法: <code>apt unload 名字</code>", "Usage: <code>apt unload name</code>"))
-		}
-		return p.unload(ctx, args)
-	default:
+	sub, ok := aptSubcommands[strings.ToLower(ctx.GetArg(0))]
+	args := ctx.Args[1:]
+	if !ok {
 		return p.help(ctx)
 	}
+	need := func(usage string) error {
+		return ctx.Edit(ctx.Tlocal("用法 ", "Usage ") + cmdRef(p.mgr.Commands().GetPrefix()+usage))
+	}
+	switch sub {
+	case "search":
+		return p.search(ctx, args)
+	case "install":
+		if len(args) == 0 {
+			return need("apt i <name>")
+		}
+		return p.install(ctx, args)
+	case "remove":
+		if len(args) == 0 {
+			return need("apt rm <name>")
+		}
+		return p.remove(ctx, args)
+	case "list":
+		return p.list(ctx)
+	case "info":
+		if len(args) == 0 {
+			return need("apt info <name>")
+		}
+		return p.info(ctx, args[0])
+	}
+	return p.help(ctx)
 }
 
 // fetchRegistry downloads the live plugin index from the release repo.
@@ -154,8 +157,7 @@ func (p *AptPlugin) fetchRegistry(ctx *interfaces.CommandContext) ([]registryEnt
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -170,213 +172,173 @@ func (p *AptPlugin) fetchRegistry(ctx *interfaces.CommandContext) ([]registryEnt
 	return entries, nil
 }
 
+func entryDesc(ctx *interfaces.CommandContext, e registryEntry) string {
+	if ctx.Lang == "en-US" && e.DescEN != "" {
+		return e.DescEN
+	}
+	return e.Description
+}
+
 func (p *AptPlugin) search(ctx *interfaces.CommandContext, args []string) error {
-	_ = ctx.Edit("⏳ …")
+	_ = ctx.Edit("🔍 …")
 	entries, err := p.fetchRegistry(ctx)
 	if err != nil {
-		return ctx.Edit(ctx.Tlocal(
-			"❌ 仓库清单拉取失败: "+err.Error()+"\n稍后再试，或直接 <code>apt install 名字</code>",
-			"❌ Failed to fetch the registry: "+err.Error()+"\nTry later, or <code>apt install name</code> directly"))
+		return ctx.Edit(errText(ctx.Tlocal("拉取插件清单失败：", "Could not fetch the index: ") + htmlEscape(err.Error())))
 	}
 	query := strings.ToLower(strings.Join(args, " "))
-
-	installed, _ := p.loader.GetInstalled()
-	installedSet := map[string]bool{}
-	for _, n := range installed {
-		installedSet[n] = true
-	}
 	loaded := p.loader.GetLoaded()
 
-	var b strings.Builder
+	title := ctx.Tlocal(fmt.Sprintf("插件仓库 · %d 个", len(entries)), fmt.Sprintf("Repository · %d plugins", len(entries)))
 	if query != "" {
-		fmt.Fprintf(&b, "🔍 %s <b>%s</b>\n\n", ctx.Tlocal("搜索", "Search"), strings.Join(args, " "))
-	} else {
-		fmt.Fprintf(&b, "📦 %s (%d)\n\n", ctx.Tlocal("插件仓库", "Plugin repository"), len(entries))
+		title = ctx.Tlocal("搜索 ", "Search ") + htmlEscape(strings.Join(args, " "))
 	}
+	c := newCard("📦", title).blank()
 	found := 0
 	for _, e := range entries {
-		if query != "" &&
-			!strings.Contains(strings.ToLower(e.Name), query) &&
-			!strings.Contains(strings.ToLower(e.Description), query) &&
-			!strings.Contains(strings.ToLower(e.DescEN), query) {
+		desc := entryDesc(ctx, e)
+		if query != "" && !strings.Contains(strings.ToLower(e.Name+" "+e.Description+" "+e.DescEN), query) {
 			continue
 		}
 		found++
-		icon := "⬜"
+		mark := "▫️"
 		if loaded[e.Name] != nil {
-			icon = "✅"
-		} else if installedSet[e.Name] {
-			icon = "📦"
+			mark = "✅"
 		}
-		desc := e.Description
-		if ctx.Lang == "en-US" && e.DescEN != "" {
-			desc = e.DescEN
-		}
-		fmt.Fprintf(&b, "%s <b>%s</b>", icon, e.Name)
-		if e.Version != "" {
-			fmt.Fprintf(&b, " <i>v%s</i>", e.Version)
-		}
-		b.WriteString("\n    " + desc + "\n")
-		if found >= 40 && query == "" {
-			fmt.Fprintf(&b, "\n… (%d more)\n", len(entries)-found)
-			break
-		}
+		c.line(fmt.Sprintf("%s <code>%s</code>  %s", mark, e.Name, htmlEscape(desc)))
 	}
 	if found == 0 {
-		b.WriteString(ctx.Tlocal("没有匹配的插件\n", "No matching plugins\n"))
+		c.line(ctx.Tlocal("没有匹配的插件", "No matching plugins"))
 	}
-	b.WriteString("\n" + ctx.Tlocal(
-		"安装: <code>apt install 名字</code>（✅ 已加载 · 📦 已装未载 · ⬜ 未装）",
-		"Install: <code>apt install name</code> (✅ loaded · 📦 installed · ⬜ available)"))
-	return ctx.Edit(b.String())
+	prefix := p.mgr.Commands().GetPrefix()
+	c.hint(ctx.Tlocal("✅ 已安装 · 安装用 ", "✅ installed · install with ") + cmdRef(prefix+"apt i 名字"))
+	return ctx.Edit(c.String())
 }
 
-func (p *AptPlugin) listInstalled(ctx *interfaces.CommandContext) error {
-	installed, err := p.loader.GetInstalled()
-	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
-	}
+func (p *AptPlugin) list(ctx *interfaces.CommandContext) error {
 	loaded := p.loader.GetLoaded()
-
-	var b strings.Builder
-	b.WriteString("📦 " + ctx.Tlocal("已安装插件", "Installed plugins") + "\n\n")
-	if len(installed) == 0 {
-		b.WriteString(ctx.Tlocal("还没有安装外部插件。", "No external plugins installed yet.\n") + ctx.Tlocal("用 <code>apt search</code> 看仓库", "Browse with <code>apt search</code>"))
-		return ctx.Edit(b.String())
+	prefix := p.mgr.Commands().GetPrefix()
+	if len(loaded) == 0 {
+		c := newCard("📦", ctx.Tlocal("已安装插件", "Installed plugins"))
+		c.blank().line(ctx.Tlocal("还没有安装外部插件", "No external plugins yet"))
+		c.hint(ctx.Tlocal("去仓库看看 ", "Browse ") + cmdRef(prefix+"apt s"))
+		return ctx.Edit(c.String())
 	}
-	sort.Strings(installed)
-	for _, name := range installed {
-		icon := "⚪"
-		note := ctx.Tlocal("未加载", "not loaded")
-		if loaded[name] != nil {
-			icon = "🟢"
-			note = ctx.Tlocal("已加载", "loaded")
-		}
-		fmt.Fprintf(&b, "%s <b>%s</b> — %s\n", icon, name, note)
-	}
-	fmt.Fprintf(&b, "\n⚙️ %s: %d · %s: %d\n", ctx.Tlocal("内建", "built-in"), len(p.mgr.GetAllInfo())-len(loaded),
-		ctx.Tlocal("外部已加载", "external loaded"), len(loaded))
-	return ctx.Edit(b.String())
-}
-
-func (p *AptPlugin) listLoaded(ctx *interfaces.CommandContext) error {
-	loaded := p.loader.GetLoaded()
-	var names []string
-	for name := range loaded {
-		names = append(names, name)
+	names := make([]string, 0, len(loaded))
+	for n := range loaded {
+		names = append(names, n)
 	}
 	sort.Strings(names)
-	var b strings.Builder
-	fmt.Fprintf(&b, "🟢 %s (%d)\n\n", ctx.Tlocal("已加载插件", "Loaded plugins"), len(p.mgr.GetAllInfo()))
-	for _, info := range p.mgr.GetAllInfo() {
-		if info.Status != plugin.StatusActive {
-			continue
+	c := newCard("📦", ctx.Tlocal(fmt.Sprintf("已安装插件 · %d 个", len(names)), fmt.Sprintf("Installed · %d", len(names)))).blank()
+	for _, n := range names {
+		e := loaded[n]
+		desc, ver := "", ""
+		if e.Metadata != nil {
+			desc = e.Metadata.Description
+			if ctx.Lang == "en-US" && e.Metadata.DescEN != "" {
+				desc = e.Metadata.DescEN
+			}
+			ver = " <i>v" + htmlEscape(e.Metadata.Version) + "</i>"
 		}
-		desc := info.Description
-		if ctx.Lang == "en-US" && info.DescEN != "" {
-			desc = info.DescEN
-		}
-		fmt.Fprintf(&b, "• <b>%s</b> — %s\n", info.Name, desc)
+		c.line(fmt.Sprintf("✅ <code>%s</code>%s  %s", n, ver, htmlEscape(desc)))
 	}
-	return ctx.Edit(b.String())
+	c.hint(ctx.Tlocal("卸载用 ", "Remove with ") + cmdRef(prefix+"apt rm 名字"))
+	return ctx.Edit(c.String())
 }
 
-func (p *AptPlugin) pluginInfo(ctx *interfaces.CommandContext, name string) error {
-	if entry, ok := p.loader.GetLoaded()[name]; ok {
-		meta := ""
-		if entry.Metadata != nil {
-			desc := entry.Metadata.Description
-			if ctx.Lang == "en-US" && entry.Metadata.DescEN != "" {
-				desc = entry.Metadata.DescEN
+func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
+	prefix := p.mgr.Commands().GetPrefix()
+	commands := func(plugin string) string {
+		var out []string
+		for n := range p.mgr.Commands().GetByPlugin(plugin) {
+			out = append(out, cmdRef(prefix+n))
+		}
+		sort.Strings(out)
+		if len(out) == 0 {
+			return "—"
+		}
+		return strings.Join(out, " ")
+	}
+	if e, ok := p.loader.GetLoaded()[name]; ok {
+		c := newCard("🔌", htmlEscape(name))
+		if e.Metadata != nil {
+			desc := e.Metadata.Description
+			if ctx.Lang == "en-US" && e.Metadata.DescEN != "" {
+				desc = e.Metadata.DescEN
 			}
-			meta = fmt.Sprintf("\n%s\nv%s · %s", desc, entry.Metadata.Version, entry.Metadata.Author)
+			c.line(htmlEscape(desc)).blank()
+			c.field(ctx.Tlocal("版本", "Version"), e.Metadata.Version)
+			c.field(ctx.Tlocal("作者", "Author"), e.Metadata.Author)
+		} else {
+			c.blank()
 		}
-		cmds := p.mgr.Commands().GetByPlugin(name)
-		var cmdNames []string
-		for n := range cmds {
-			cmdNames = append(cmdNames, n)
-		}
-		sort.Strings(cmdNames)
-		cmdList := strings.Join(cmdNames, ", ")
-		if cmdList == "" {
-			cmdList = "—"
-		}
-		return ctx.Edit(fmt.Sprintf("🔌 <b>%s</b> 🟢%s\n%s: <code>%s</code>",
-			name, meta, ctx.Tlocal("命令", "Commands"), cmdList))
+		c.field(ctx.Tlocal("安装于", "Loaded"), e.LoadedAt.Format("2006-01-02 15:04"))
+		c.rawField(ctx.Tlocal("命令", "Commands"), commands(name))
+		return ctx.Edit(c.String())
 	}
 	if info, ok := p.mgr.GetInfo(name); ok {
-		desc := info.Description
-		if ctx.Lang == "en-US" && info.DescEN != "" {
-			desc = info.DescEN
-		}
-		return ctx.Edit(fmt.Sprintf("🔵 <b>%s</b> %s\n%s", name, ctx.Tlocal("内建", "built-in"), desc))
+		c := newCard("🔵", htmlEscape(name)+ctx.Tlocal(" · 内建", " · built-in"))
+		c.line(htmlEscape(pluginDesc(ctx, info))).blank()
+		c.rawField(ctx.Tlocal("命令", "Commands"), commands(name))
+		return ctx.Edit(c.String())
 	}
-	installed, _ := p.loader.GetInstalled()
-	for _, n := range installed {
-		if n == name {
-			return ctx.Edit(fmt.Sprintf("📦 <b>%s</b> ⚪ %s\n<code>apt load %s</code>", name, ctx.Tlocal("已装未载", "installed, not loaded"), name))
-		}
+	return ctx.Edit(errText(ctx.Tlocal("没装 ", "Not installed: ") + cmdRef(name) +
+		ctx.Tlocal("，用 ", ". Try ") + cmdRef(prefix+"apt s "+name)))
+}
+
+// loadError turns Go plugin loader errors into an actionable message.
+func loadError(ctx *interfaces.CommandContext, err error) string {
+	msg := err.Error()
+	if strings.Contains(msg, "different version of package") {
+		return ctx.Tlocal("和主程序的 Go 版本不一致，先 <code>update now</code> 升级主程序再装",
+			"built with a different Go version; run <code>update now</code> first")
 	}
-	return ctx.Edit(ctx.Tlocal(fmt.Sprintf("没找到 %s。用 apt search 查仓库", name), fmt.Sprintf("%s not found; try apt search", name)))
+	if strings.Contains(msg, "status 404") || strings.Contains(msg, "may not exist") {
+		return ctx.Tlocal("仓库里没有这个插件", "not in the repository")
+	}
+	return htmlEscape(msg)
 }
 
 func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) error {
-	_ = ctx.Edit(fmt.Sprintf("⏳ %s %d…", ctx.Tlocal("安装", "Installing"), len(names)))
-	var results []string
+	_ = ctx.Edit("⏳ " + ctx.Tlocal("安装中…", "Installing…"))
+	var rows []string
 	for _, name := range names {
-		if err := p.loader.Install(ctx.Context(), name); err != nil {
-			results = append(results, fmt.Sprintf("❌ <b>%s</b> %v", name, err))
+		if p.loader.IsLoaded(name) {
+			rows = append(rows, skipLine(name, ctx.Tlocal("已经装过了", "already installed")))
+			continue
+		}
+		if err := p.loader.Install(ctx.Context(), name); err != nil && !strings.Contains(err.Error(), "already installed") {
+			rows = append(rows, failLine(name, loadError(ctx, err)))
 			continue
 		}
 		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-			results = append(results, fmt.Sprintf("📦 <b>%s</b> %s: %v", name, ctx.Tlocal("已下载但加载失败", "downloaded, load failed"), err))
+			// Installed means loaded: never leave a dead file behind.
+			_ = p.loader.Remove(ctx.Context(), name)
+			rows = append(rows, failLine(name, loadError(ctx, err)))
 			continue
 		}
-		results = append(results, fmt.Sprintf("✅ <b>%s</b> %s", name, ctx.Tlocal("已装并加载", "installed and loaded")))
+		cmds := p.mgr.Commands().GetByPlugin(name)
+		var refs []string
+		for n := range cmds {
+			refs = append(refs, cmdRef(p.mgr.Commands().GetPrefix()+n))
+		}
+		sort.Strings(refs)
+		rows = append(rows, okLine(name, strings.Join(refs, " ")))
 	}
-	return ctx.Edit(strings.Join(results, "\n"))
+	return ctx.Edit(strings.Join(rows, "\n"))
 }
 
 func (p *AptPlugin) remove(ctx *interfaces.CommandContext, names []string) error {
-	var results []string
+	var rows []string
 	for _, name := range names {
+		if _, builtin := p.mgr.GetInfo(name); builtin && !p.loader.IsLoaded(name) {
+			rows = append(rows, skipLine(name, ctx.Tlocal("内建插件不能卸载", "built-in, cannot remove")))
+			continue
+		}
 		if err := p.loader.Remove(ctx.Context(), name); err != nil {
-			results = append(results, fmt.Sprintf("❌ <b>%s</b> %v", name, err))
-		} else {
-			results = append(results, fmt.Sprintf("🗑 <b>%s</b> %s", name, ctx.Tlocal("已移除", "removed")))
+			rows = append(rows, failLine(name, ctx.Tlocal("没装这个插件", "not installed")))
+			continue
 		}
+		rows = append(rows, "🗑 <b>"+htmlEscape(name)+"</b>  "+ctx.Tlocal("已卸载", "removed"))
 	}
-	return ctx.Edit(strings.Join(results, "\n"))
-}
-
-func (p *AptPlugin) load(ctx *interfaces.CommandContext, names []string) error {
-	var results []string
-	for _, name := range names {
-		if p.loader.IsLoaded(name) {
-			results = append(results, fmt.Sprintf("⚪ <b>%s</b> %s", name, ctx.Tlocal("本来就加载着", "already loaded")))
-			continue
-		}
-		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-			results = append(results, fmt.Sprintf("❌ <b>%s</b> %v", name, err))
-			continue
-		}
-		results = append(results, fmt.Sprintf("✅ <b>%s</b> %s", name, ctx.Tlocal("已加载", "loaded")))
-	}
-	return ctx.Edit(strings.Join(results, "\n"))
-}
-
-func (p *AptPlugin) unload(ctx *interfaces.CommandContext, names []string) error {
-	var results []string
-	for _, name := range names {
-		if !p.loader.IsLoaded(name) {
-			results = append(results, fmt.Sprintf("⚪ <b>%s</b> %s", name, ctx.Tlocal("本来就没加载", "not loaded")))
-			continue
-		}
-		if err := p.loader.Unload(ctx.Context(), name); err != nil {
-			results = append(results, fmt.Sprintf("❌ <b>%s</b> %v", name, err))
-			continue
-		}
-		results = append(results, fmt.Sprintf("⏹ <b>%s</b> %s", name, ctx.Tlocal("已停用", "unloaded")))
-	}
-	return ctx.Edit(strings.Join(results, "\n"))
+	return ctx.Edit(strings.Join(rows, "\n"))
 }
