@@ -194,6 +194,7 @@ func (a *App) Run(ctx context.Context) error {
 			a.cfg.Bot.OwnerID = self.ID
 		}
 		a.commands.SetOwnerID(a.cfg.Bot.OwnerID)
+		a.commands.SetSelfID(self.ID)
 		a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 
 		if err := a.plugins.InitAll(ctx); err != nil {
