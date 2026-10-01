@@ -104,9 +104,7 @@ func (l *Loader) Load(ctx context.Context, path string) error {
 
 	var meta *pkgplugin.PluginMetadata
 	if metaSym, err := p.Lookup("Metadata"); err == nil {
-		if m, ok := metaSym.(*pkgplugin.PluginMetadata); ok {
-			meta = m
-		}
+		meta = metadataOf(metaSym)
 	}
 
 	if err := l.manager.RegisterPlugin(plug); err != nil {
