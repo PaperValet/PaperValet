@@ -63,6 +63,13 @@ func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, 
 	return r
 }
 
+// SetSelfID records the logged-in account id exposed as ctx.SelfID.
+func (r *Registry) SetSelfID(id int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.selfID = id
+}
+
 // SetOwnerID updates the owner ID after initial resolution.
 func (r *Registry) SetOwnerID(id int64) {
 	r.mu.Lock()
@@ -78,10 +85,19 @@ func (r *Registry) SetSudoChecker(f func(int64) bool) {
 	r.sudoChecker = f
 }
 
+func (r *Registry) getSelfID() int64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.selfID
+}
+
 // CanUseCommands reports whether a user may trigger commands at all:
 // the owner (outgoing messages) or a sudo-enabled delegated user.
 func (r *Registry) CanUseCommands(userID int64) bool {
-	if r.ownerID != 0 && userID == r.ownerID {
+	r.mu.RLock()
+	owner := r.ownerID
+	r.mu.RUnlock()
+	if owner != 0 && userID == owner {
 		return true
 	}
 	return r.isSudoUser(userID)
@@ -337,7 +353,7 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 		Args:         args,
 		RawArgs:      strings.Join(args, " "),
 		Message:      msg,
-		SelfID:       r.selfID,
+		SelfID:       r.getSelfID(),
 		Session:      interfaces.NewSessionContext(&interfaces.Session{UserID: msg.UserID, ChatID: msg.ChatID}, ctx),
 		API:          r.api,
 		PeerResolver: r.resolver,
