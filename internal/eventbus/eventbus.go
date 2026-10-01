@@ -140,8 +140,10 @@ func (b *Bus) emitEvent(ctx context.Context, event *Event) error {
 			continue
 		}
 
-		// Run each handler with a per-handler timeout (30s) derived from the parent ctx
-		handlerCtx, cancel := context.WithTimeoutCause(ctx, 30*time.Second, ErrHandlerTimeout)
+		// Run each handler with a per-handler timeout (5m) derived from the
+		// parent ctx. Long jobs (dme batches, exec, backups) legitimately
+		// exceed 30s; killing them mid-flight orphaned status edits.
+		handlerCtx, cancel := context.WithTimeoutCause(ctx, 5*time.Minute, ErrHandlerTimeout)
 		err := sub.handler(handlerCtx, event)
 		cancel()
 		if err != nil {
