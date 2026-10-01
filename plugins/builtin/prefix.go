@@ -28,7 +28,8 @@ func NewPrefix() *PrefixPlugin {
 }
 
 func (p *PrefixPlugin) Name() string        { return "prefix" }
-func (p *PrefixPlugin) Description() string { return "命令前缀管理（多前缀支持）" }
+func (p *PrefixPlugin) Description() string { return "管理命令前缀" }
+func (p *PrefixPlugin) DescEN() string      { return "Manage command prefixes" }
 
 func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
@@ -38,8 +39,10 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "prefix",
 		Aliases:     []string{"pfx", "cmdprefix"},
-		Description: "命令前缀管理",
-		Usage:       "prefix [list|add|del|set] [前缀]",
+		Description: "改命令触发符号，比如把 . 换成 !",
+		DescEN:      "Change the command trigger symbol, e.g. . to !",
+		Usage:       "prefix add|del|set <符号>",
+		UsageEN:     "prefix add|del|set <symbol>",
 		Plugin:      p.Name(),
 		Category:    "admin",
 		OwnerOnly:   true,
@@ -80,17 +83,11 @@ func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
 	args := ctx.Args
 	if len(args) == 0 {
 		mainPrefix := p.prefixes[0]
-		return ctx.Edit(fmt.Sprintf(
-			"🔧 <b>前缀管理</b>\n\n"+
-				"当前主前缀: <code>%s</code>\n"+
-				"所有前缀: <code>%s</code>\n\n"+
-				"<b>用法:</b>\n"+
-				"<code>prefix list</code> — 列出所有前缀\n"+
-				"<code>prefix add &lt;前缀&gt;</code> — 添加前缀\n"+
-				"<code>prefix del &lt;前缀&gt;</code> — 删除前缀\n"+
-				"<code>prefix set &lt;前缀&gt;</code> — 设置为主前缀",
-			html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes),
-		))
+		return ctx.Edit(ctx.Tlocal(
+			fmt.Sprintf("🔧 <b>前缀</b>\n\n主前缀: <code>%s</code>\n全部: <code>%s</code>\n\n<code>prefix add !</code> 添加\n<code>prefix del !</code> 删除\n<code>prefix set !</code> 设为主前缀",
+				html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes)),
+			fmt.Sprintf("🔧 <b>Prefixes</b>\n\nMain: <code>%s</code>\nAll: <code>%s</code>\n\n<code>prefix add !</code> add\n<code>prefix del !</code> remove\n<code>prefix set !</code> make main",
+				html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes))))
 	}
 
 	sub := strings.ToLower(ctx.GetArg(0))
