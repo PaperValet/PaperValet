@@ -55,7 +55,7 @@ func (p *HelpPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"**示例**\n" +
 			"• `help`  按插件列出全部命令和别名\n" +
 			"• `help dme`  看 dme 的详细用法和机制\n" +
-			"• `help core`  看一个插件下的所有命令\n" +
+			"• `help apt`  看一个插件下的所有命令\n" +
 			"\n" +
 			"别名 `h`",
 		UsageEN: "help [command|plugin]\n" +
@@ -63,7 +63,7 @@ func (p *HelpPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"**Examples**\n" +
 			"• `help`  every command and alias, grouped by plugin\n" +
 			"• `help dme`  detailed usage and behavior of dme\n" +
-			"• `help core`  all commands of one plugin\n" +
+			"• `help apt`  all commands of one plugin\n" +
 			"\n" +
 			"Alias `h`",
 		Plugin:   p.Name(),
@@ -164,8 +164,8 @@ func (p *HelpPlugin) groups() ([]string, map[string][]*interfaces.Command) {
 
 // builtinOrder groups related built-ins: everyday tools first, admin last.
 var builtinOrder = []string{
-	"help", "core", "status", "info", "re", "dme", "exec",
-	"apt", "reload", "update", "backup", "sudo", "alias", "prefix", "lang", "log",
+	"help", "ping", "status", "info", "re", "dme", "exec",
+	"apt", "reload", "restart", "update", "backup", "sudo", "alias", "prefix", "lang", "log",
 }
 
 func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) string {
