@@ -36,23 +36,59 @@ func (p *BackupPlugin) SetConfig(path string) { p.configPath = path }
 
 func (p *BackupPlugin) Name() string { return "backup" }
 func (p *BackupPlugin) Description() string {
-	return "备份/恢复机器人配置（发到收藏夹）"
+	return "备份与恢复配置"
 }
 func (p *BackupPlugin) DescEN() string {
-	return "Back up / restore bot configuration (to Saved Messages)"
+	return "Back up and restore config"
 }
 
 func (p *BackupPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "backup",
-		Description: "打包配置发到收藏夹；回复那个文件 backup restore 即可恢复",
-		DescEN:      "Pack config to Saved Messages; reply to it with backup restore",
-		Usage:       "backup | backup restore（回复备份文件）",
-		UsageEN:     "backup | backup restore (reply to the archive)",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleBackup,
+		Description: "备份与恢复配置",
+		DescEN:      "Back up and restore config",
+		Usage: `backup · backup restore（回复备份文件）
+
+<b>示例</b>
+• <code>backup</code>  打包配置发到收藏夹
+• 在收藏夹回复那个文件发 <code>backup restore</code>  恢复
+
+<b>备份内容</b>
+• config.json
+• data/ 下的插件配置（别名、前缀、sudo 名单、插件数据等）
+• plugins/ 下已安装的外部插件（单个文件超过 2MB 跳过）
+
+<b>不备份</b>
+• 登录 session 和数据库：恢复到别的机器时需要重新 initialize 登录
+• peer 缓存：会自动重新学习
+
+<b>机制</b>
+• 打包成 tar.gz，文件名带时间戳
+• 恢复时只写入 config.json、data/、plugins/，其他路径一律忽略
+• 恢复完发 <code>restart</code> 生效`,
+		UsageEN: `backup · backup restore (reply to the archive)
+
+<b>Examples</b>
+• <code>backup</code>  pack config to Saved Messages
+• Reply to that file with <code>backup restore</code>  restore
+
+<b>Included</b>
+• config.json
+• plugin settings under data/ (aliases, prefixes, sudo list, plugin data)
+• installed external plugins under plugins/ (files over 2MB skipped)
+
+<b>Not included</b>
+• login session and database: on a new machine run initialize again
+• peer cache: relearned automatically
+
+<b>How it works</b>
+• Packed as a timestamped tar.gz
+• Restore only writes config.json, data/ and plugins/; any other path is ignored
+• Send <code>restart</code> afterwards to apply`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleBackup,
 	})
 }
 
