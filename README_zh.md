@@ -33,7 +33,8 @@ papervalet run          # 前台启动（已注册服务可跳过）
 | `help` | `.help` | 按分类显示帮助 |
 | `status` | `.status`（别名 `.version`） | 版本、运行时长、内存、插件数 |
 | `apt` | `.apt list/install/remove/load/unload` | 插件管理器 |
-| `info` | `.info` | 查看 ID（回复可看对方） |
+| `info` | `.info`（别名 `.ids`） | ID 与跳转链接，回复可看对方 |
+| `re` | `.re [条数] [次数]` | 复读回复的消息 |
 | `alias` | `.alias set/del/list` | 运行时命令别名 |
 | `exec` | `.exec` | 执行系统命令 |
 | `sudo` | `.sudo on/off/add/remove/list` | 权限委派 |
