@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
@@ -16,25 +17,22 @@ import (
 // PrefixPlugin manages command prefixes with persistent storage.
 type PrefixPlugin struct {
 	mgr      plugin.Manager
+	mu       sync.Mutex
 	prefixes []string
 	file     string
 }
 
 func NewPrefix() *PrefixPlugin {
-	return &PrefixPlugin{
-		prefixes: []string{"."},
-		file:     "data/prefixes.json",
-	}
+	return &PrefixPlugin{prefixes: []string{"."}, file: "data/prefixes.json"}
 }
 
 func (p *PrefixPlugin) Name() string        { return "prefix" }
-func (p *PrefixPlugin) Description() string { return "命令前缀" }
+func (p *PrefixPlugin) Description() string { return "管理命令前缀" }
 func (p *PrefixPlugin) DescEN() string      { return "Manage command prefixes" }
 
 func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	p.load()
-	// Apply persisted prefixes to the command registry immediately.
 	p.mgr.Commands().SetPrefixes(p.prefixes)
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "prefix",
@@ -74,116 +72,91 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 func (p *PrefixPlugin) Start(_ context.Context) error { return nil }
 func (p *PrefixPlugin) Stop(_ context.Context) error  { return nil }
 
-func escapedPrefixes(prefixes []string) string {
-	out := make([]string, 0, len(prefixes))
-	for _, p := range prefixes {
-		out = append(out, html.EscapeString(p))
-	}
-	return strings.Join(out, "</code> <code>")
-}
-
 func (p *PrefixPlugin) load() {
 	data, err := os.ReadFile(p.file)
 	if err != nil {
 		return
 	}
 	var prefixes []string
-	if err := json.Unmarshal(data, &prefixes); err == nil && len(prefixes) > 0 {
+	if json.Unmarshal(data, &prefixes) == nil && len(prefixes) > 0 {
 		p.prefixes = prefixes
 	}
 }
 
 func (p *PrefixPlugin) save() {
-	os.MkdirAll(filepath.Dir(p.file), 0o755)
+	_ = os.MkdirAll(filepath.Dir(p.file), 0o700)
 	data, _ := json.MarshalIndent(p.prefixes, "", "  ")
-	os.WriteFile(p.file, data, 0o644)
+	_ = os.WriteFile(p.file, data, 0o600)
 	p.mgr.Commands().SetPrefixes(p.prefixes)
 }
 
-func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
-	args := ctx.Args
-	if len(args) == 0 {
-		mainPrefix := p.prefixes[0]
-		return ctx.Edit(ctx.Tlocal(
-			fmt.Sprintf("🔧 <b>前缀</b>\n\n主前缀: <code>%s</code>\n全部: <code>%s</code>\n\n<code>prefix add !</code> 添加\n<code>prefix del !</code> 删除\n<code>prefix set !</code> 设为主前缀",
-				html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes)),
-			fmt.Sprintf("🔧 <b>Prefixes</b>\n\nMain: <code>%s</code>\nAll: <code>%s</code>\n\n<code>prefix add !</code> add\n<code>prefix del !</code> remove\n<code>prefix set !</code> make main",
-				html.EscapeString(mainPrefix), escapedPrefixes(p.prefixes))))
+func prefixList(prefixes []string) string {
+	parts := make([]string, len(prefixes))
+	for i, p := range prefixes {
+		parts[i] = "<code>" + htmlEscape(p) + "</code>"
 	}
+	return strings.Join(parts, " ")
+}
 
+func (p *PrefixPlugin) handlePrefix(ctx *interfaces.CommandContext) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	sub := strings.ToLower(ctx.GetArg(0))
-	switch sub {
-	case "get":
-		return ctx.Edit(fmt.Sprintf("当前主前缀: <code>%s</code>", html.EscapeString(p.prefixes[0])))
+	arg := ctx.GetArg(1)
 
-	case "list", "ls":
-		return ctx.Edit(fmt.Sprintf(
-			"🔧 <b>支持的前缀</b> (%d 个)\n\n<code>%s</code>",
-			len(p.prefixes), escapedPrefixes(p.prefixes),
-		))
+	switch sub {
+	case "", "list", "ls":
+		c := newCard("🔧", ctx.Tlocal("命令前缀", "Prefixes"))
+		c.blank().rawField(ctx.Tlocal("主前缀", "Main"), "<code>"+htmlEscape(p.prefixes[0])+"</code>")
+		c.rawField(ctx.Tlocal("全部", "All"), prefixList(p.prefixes))
+		c.hint(ctx.Tlocal(cmdRef(".prefix add !")+" 添加", cmdRef(".prefix add !")+" to add"))
+		return ctx.Edit(c.String())
 
 	case "add":
-		if len(args) < 2 {
-			return ctx.Edit("用法: prefix add <前缀>")
+		if arg == "" {
+			return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef("prefix add <符号>")))
 		}
-		newPrefix := args[1]
-		for _, existing := range p.prefixes {
-			if existing == newPrefix {
-				return ctx.Edit(fmt.Sprintf("⚠️ 前缀 <code>%s</code> 已存在", html.EscapeString(newPrefix)))
+		for _, x := range p.prefixes {
+			if x == arg {
+				return ctx.Edit(skipLine(arg, ctx.Tlocal("已经在了", "already present")))
 			}
 		}
-		prefixes := p.mgr.Commands().GetPrefixes()
-		prefixes = append(prefixes, newPrefix)
-		p.mgr.Commands().SetPrefixes(prefixes)
-		p.prefixes = prefixes
+		p.prefixes = append(p.prefixes, arg)
+		sort.Slice(p.prefixes, func(i, j int) bool { return len(p.prefixes[i]) > len(p.prefixes[j]) })
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ 已添加前缀 <code>%s</code>", html.EscapeString(newPrefix)))
+		return ctx.Edit(okLine(arg, ctx.Tlocal("已添加", "added")))
 
-	case "del", "delete", "remove":
-		if len(args) < 2 {
-			return ctx.Edit("用法: prefix del <前缀>")
+	case "del", "rm":
+		if arg == "" {
+			return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef("prefix del <符号>")))
 		}
-		target := args[1]
 		if len(p.prefixes) <= 1 {
-			return ctx.Edit("⚠️ 至少保留一个前缀")
+			return ctx.Edit(errText(ctx.Tlocal("至少保留一个前缀", "at least one prefix must stay")))
 		}
-		for i, pref := range p.prefixes {
-			if pref == target {
-				prefixes := p.mgr.Commands().GetPrefixes()
-				prefixes = append(prefixes[:i], prefixes[i+1:]...)
-				p.mgr.Commands().SetPrefixes(prefixes)
-				p.prefixes = prefixes
+		for i, x := range p.prefixes {
+			if x == arg {
+				p.prefixes = append(p.prefixes[:i], p.prefixes[i+1:]...)
 				p.save()
-				return ctx.Edit(fmt.Sprintf("🗑 已删除前缀 <code>%s</code>", html.EscapeString(target)))
+				return ctx.Edit("🗑 <b>" + htmlEscape(arg) + "</b>  " + ctx.Tlocal("已删除", "removed"))
 			}
 		}
-		return ctx.Edit(fmt.Sprintf("❌ 未找到前缀 <code>%s</code>", html.EscapeString(target)))
+		return ctx.Edit(errText(ctx.Tlocal("没有这个前缀 ", "no such prefix: ") + cmdRef(arg)))
 
 	case "set", "main":
-		if len(args) < 2 {
-			return ctx.Edit("用法: prefix set <前缀>")
+		if arg == "" {
+			return ctx.Edit(errText(ctx.Tlocal("用法 ", "Usage ") + cmdRef("prefix set <符号>")))
 		}
-		target := args[1]
-		for i, pref := range p.prefixes {
-			if pref == target {
-				// Move to front
-				prefixes := p.mgr.Commands().GetPrefixes()
-				prefixes = append([]string{target}, append(prefixes[:i], prefixes[i+1:]...)...)
-				p.mgr.Commands().SetPrefixes(prefixes)
-				p.prefixes = prefixes
-				p.save()
-				return ctx.Edit(fmt.Sprintf("✅ 主前缀已设置为 <code>%s</code>", html.EscapeString(target)))
+		rest := p.prefixes[:0]
+		for _, x := range p.prefixes {
+			if x != arg {
+				rest = append(rest, x)
 			}
 		}
-		// Not found, add it and promote it to main
-		prefixes := p.mgr.Commands().GetPrefixes()
-		prefixes = append([]string{target}, prefixes...)
-		p.mgr.Commands().SetPrefixes(prefixes)
-		p.prefixes = prefixes
+		p.prefixes = append([]string{arg}, rest...)
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ 已添加并设置为主前缀 <code>%s</code>", target))
-
-	default:
-		return ctx.Edit(fmt.Sprintf("❌ 未知子命令: %s\n\n用法: prefix [list|add|del|set]", sub))
+		return ctx.Edit(okLine(arg, ctx.Tlocal("已设为主前缀", "is now the main prefix")))
 	}
+	return ctx.Edit(errText(ctx.Tlocal("未知子命令 ", "Unknown subcommand ") + cmdRef(sub)))
 }
+
+var _ = fmt.Sprintf
