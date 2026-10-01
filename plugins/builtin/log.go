@@ -32,7 +32,8 @@ func NewLog() *LogPlugin {
 }
 
 func (p *LogPlugin) Name() string        { return "log" }
-func (p *LogPlugin) Description() string { return "日志管理（级别/发送/清理）" }
+func (p *LogPlugin) Description() string { return "运行日志：发送、看尾部、调级别" }
+func (p *LogPlugin) DescEN() string      { return "Logs: send, tail, level" }
 
 func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.loadConfig()
@@ -40,8 +41,10 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		{
 			Name:        "loglevel",
 			Aliases:     []string{"loglvl", "ll"},
-			Description: "查看/设置运行时日志级别",
+			Description: "看或改运行时日志级别",
+			DescEN:      "Show or change the runtime log level",
 			Usage:       "loglevel [debug|info|warn|error]",
+			UsageEN:     "loglevel [debug|info|warn|error]",
 			Plugin:      p.Name(),
 			Category:    "admin",
 			OwnerOnly:   true,
@@ -50,8 +53,10 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		{
 			Name:        "sendlog",
 			Aliases:     []string{"logs"},
-			Description: "发送最新日志文件到收藏夹或指定目标",
-			Usage:       "sendlog [tail [行数]|set <me|chatID>|clean]",
+			Description: "把日志文件发到收藏夹，tail 直接看尾部",
+			DescEN:      "Send the log file to Saved Messages; tail prints the end",
+			Usage:       "sendlog | sendlog tail [行数]",
+			UsageEN:     "sendlog | sendlog tail [lines]",
 			Plugin:      p.Name(),
 			Category:    "admin",
 			OwnerOnly:   true,
