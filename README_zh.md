@@ -12,11 +12,14 @@
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
 ```
 
-安装器会依次询问 `api_id`、`api_hash`（在 [my.telegram.org](https://my.telegram.org) 申请）和手机号，装到 `~/.papervalet`，然后：
+安装器只负责放好程序并注册 `papervalet` 命令，接着：
 
 ```bash
-~/.papervalet/run.sh    # 输入 Telegram 验证码即可
+papervalet initialize   # 选语言、填 api_id/api_hash、手机号、验证码，可选注册 systemd 服务
+papervalet run          # 前台启动（已注册服务可跳过）
 ```
+
+`api_id` / `api_hash` 在 [my.telegram.org](https://my.telegram.org/apps) 申请。
 
 随便找个对话给自己发 `.ping`，机器人回 `🏓 Pong!` 就跑通了。
 
@@ -54,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 
 ## 配置说明
 
-`config.json`（安装器自动生成，模板见 `config.example.json`）：
+`~/.papervalet/config.json`（由 `papervalet initialize` 生成，模板见 `config.example.json`）：
 
 ```json
 {
@@ -80,14 +83,15 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 - `owner_id` — 所有者用户 ID，仅所有者指令需要（`0` 则自动以首个登录用户为准）
 - `logger.level` — DEBUG、INFO、WARN、ERROR
 
-## 无终端 / 容器登录
+## 环境变量
 
 | 环境变量 | 用途 |
 |----------|------|
-| `PAPERVALET_PHONE` | E.164 手机号，如 `+8613800138000` |
-| `PAPERVALET_CODE` | Telegram 发的一次性验证码 |
-| `PAPERVALET_2FA_PASSWORD` | 两步验证密码 |
-| `PAPERVALET_NONINTERACTIVE` | 设为 `1`/`true` 时缺值直接报错，不再等 stdin |
+| `PAPERVALET_HOME` | 数据目录（默认 `~/.papervalet`），每个注册的命令各有一份 |
+| `PAPERVALET_CONFIG` | 显式指定配置路径，不切换工作目录（Docker 用） |
+| `PAPERVALET_PHONE` | 无终端登录：E.164 手机号，如 `+8613800138000` |
+| `PAPERVALET_CODE` | 无终端登录：Telegram 发的一次性验证码 |
+| `PAPERVALET_2FA_PASSWORD` | 无终端登录：两步验证密码 |
 
 ## 架构
 
