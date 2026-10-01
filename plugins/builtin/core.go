@@ -30,29 +30,51 @@ func NewCore(version string) *CorePlugin {
 }
 
 func (p *CorePlugin) Name() string        { return "core" }
-func (p *CorePlugin) Description() string { return "ping / restart 基础命令" }
+func (p *CorePlugin) Description() string { return "延迟检测与重启" }
 func (p *CorePlugin) DescEN() string      { return "ping / restart basics" }
 
 func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	cmds := []*interfaces.Command{
 		{
 			Name:        "ping",
-			Description: "测量响应延迟",
-			DescEN:      "Measure response latency",
-			Usage:       "ping",
-			Plugin:      p.Name(),
-			Category:    "core",
-			Handler:     p.handlePing,
+			Description: "测延迟",
+			DescEN:      "Measure latency",
+			Usage: `ping
+
+<b>机制</b>
+• 编辑一次命令消息，计算从发出编辑到 Telegram 返回的耗时
+• 显示的是 机器人 → Telegram 服务器 的往返延迟，不含你的客户端网络`,
+			UsageEN: `ping
+
+<b>How it works</b>
+• Edits the command once and measures the round trip until Telegram answers
+• Shows bot → Telegram server latency, not your own client network`,
+			Plugin:   p.Name(),
+			Category: "core",
+			Handler:  p.handlePing,
 		},
 		{
 			Name:        "restart",
-			Description: "重启 PaperValet 进程，完成后在原消息报到",
-			DescEN:      "Restart PaperValet; the message updates when it is back",
-			Usage:       "restart",
-			Plugin:      p.Name(),
-			Category:    "admin",
-			OwnerOnly:   true,
-			Handler:     p.handleRestart,
+			Description: "重启机器人",
+			DescEN:      "Restart the bot",
+			Usage: `restart
+
+<b>机制</b>
+• 先停止所有插件、写盘、刷新日志
+• 在同一进程号上原地重新加载程序，systemd、Docker、tmux 都不会把它当成退出
+• 回来后把这条命令消息改成「重启完成」和用时
+• 已加载的外部插件会随启动自动重新加载`,
+			UsageEN: `restart
+
+<b>How it works</b>
+• Stops all plugins, flushes state and logs
+• Re-executes in place under the same PID, so systemd, Docker and tmux keep supervising it
+• After boot the command message turns into "Restarted" with the elapsed time
+• Installed external plugins are loaded again on startup`,
+			Plugin:    p.Name(),
+			Category:  "admin",
+			OwnerOnly: true,
+			Handler:   p.handleRestart,
 		},
 	}
 	for _, cmd := range cmds {
