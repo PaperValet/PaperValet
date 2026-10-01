@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,13 +43,13 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			DescEN:      "Set log level",
 			Usage: `loglevel [debug|info|warn|error]
 
-<b>机制</b>
+**机制**
 • 不带参数显示当前级别
 • 立即生效，只影响本次运行；重启后回到配置文件里的级别
 • 排查问题时临时切 debug，用完切回 info`,
 			UsageEN: `loglevel [debug|info|warn|error]
 
-<b>How it works</b>
+**How it works**
 • No argument shows the current level
 • Applies immediately for this run only; restart returns to the config value
 • Switch to debug while debugging, back to info afterwards`,
@@ -63,30 +62,30 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			Name:        "sendlog",
 			Description: "发送日志",
 			DescEN:      "Send logs",
-			Usage: `sendlog · sendlog tail [行数] · sendlog set &lt;me|chatID&gt; · sendlog clean
-
-<b>示例</b>
-• <code>sendlog</code>  把最新日志文件发到收藏夹
-• <code>sendlog tail 50</code>  直接在聊天里看最后 50 行
-• <code>sendlog set -100123</code>  改成发到指定聊天
-• <code>sendlog clean</code>  删除日志文件
-
-<b>机制</b>
-• 在 ./logs、~/.pm2/logs、/var/log/papervalet 里找文件名含 paper 的 .log
-• 超过 50MB 不发送，请用 tail
-• systemd 运行时日志在 journald，用 <code>exec journalctl -u 服务名 -n 50</code> 查看`,
-			UsageEN: `sendlog · sendlog tail [lines] · sendlog set &lt;me|chatID&gt; · sendlog clean
-
-<b>Examples</b>
-• <code>sendlog</code>  send the newest log file to Saved Messages
-• <code>sendlog tail 50</code>  print the last 50 lines here
-• <code>sendlog set -100123</code>  send to another chat instead
-• <code>sendlog clean</code>  delete log files
-
-<b>How it works</b>
-• Looks for *.log files containing "paper" in ./logs, ~/.pm2/logs and /var/log/papervalet
-• Files over 50MB are not sent; use tail
-• Under systemd logs go to journald: <code>exec journalctl -u service -n 50</code>`,
+			Usage: "sendlog · sendlog tail [行数] · sendlog set <me|chatID> · sendlog clean\n" +
+				"\n" +
+				"**示例**\n" +
+				"• `sendlog`  把最新日志文件发到收藏夹\n" +
+				"• `sendlog tail 50`  直接在聊天里看最后 50 行\n" +
+				"• `sendlog set -100123`  改成发到指定聊天\n" +
+				"• `sendlog clean`  删除日志文件\n" +
+				"\n" +
+				"**机制**\n" +
+				"• 在 ./logs、~/.pm2/logs、/var/log/papervalet 里找文件名含 paper 的 .log\n" +
+				"• 超过 50MB 不发送，请用 tail\n" +
+				"• systemd 运行时日志在 journald，用 `exec journalctl -u 服务名 -n 50` 查看",
+			UsageEN: "sendlog · sendlog tail [lines] · sendlog set <me|chatID> · sendlog clean\n" +
+				"\n" +
+				"**Examples**\n" +
+				"• `sendlog`  send the newest log file to Saved Messages\n" +
+				"• `sendlog tail 50`  print the last 50 lines here\n" +
+				"• `sendlog set -100123`  send to another chat instead\n" +
+				"• `sendlog clean`  delete log files\n" +
+				"\n" +
+				"**How it works**\n" +
+				"• Looks for *.log files containing \"paper\" in ./logs, ~/.pm2/logs and /var/log/papervalet\n" +
+				"• Files over 50MB are not sent; use tail\n" +
+				"• Under systemd logs go to journald: `exec journalctl -u service -n 50`",
 			Plugin:    p.Name(),
 			Category:  "admin",
 			OwnerOnly: true,
@@ -125,7 +124,7 @@ func (p *LogPlugin) saveConfig() {
 
 func (p *LogPlugin) handleLogLevel(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
-		return ctx.Edit(fmt.Sprintf("📝 <b>日志级别</b>\n\n当前: <code>%s</code>\n\n用法: <code>loglevel debug|info|warn|error</code>", logger.GetLevel()))
+		return ctx.Edit(fmt.Sprintf("📝 **日志级别**\n\n当前: `%s`\n\n用法: `loglevel debug|info|warn|error`", logger.GetLevel()))
 	}
 
 	levelStr := strings.ToLower(ctx.GetArg(0))
@@ -134,9 +133,9 @@ func (p *LogPlugin) handleLogLevel(ctx *interfaces.CommandContext) error {
 	}
 
 	if err := logger.SetLevel(levelStr); err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 设置失败: %v", err))
+		return ctx.Edit("❌ 设置失败: " + esc(err.Error()))
 	}
-	return ctx.Edit(fmt.Sprintf("✅ 日志级别已切换为: <b>%s</b>", levelStr))
+	return ctx.Edit(fmt.Sprintf("✅ 日志级别已切换为: **%s**", levelStr))
 }
 
 func (p *LogPlugin) handleSendLog(ctx *interfaces.CommandContext) error {
@@ -157,12 +156,12 @@ func (p *LogPlugin) handleSendLog(ctx *interfaces.CommandContext) error {
 		if target != "me" {
 			var id int64
 			if _, err := fmt.Sscanf(target, "%d", &id); err != nil || id == 0 {
-				return ctx.Edit("❌ 目标无效: 只支持 <code>me</code> 或数字 chatID")
+				return ctx.Edit("❌ 目标无效: 只支持 `me` 或数字 chatID")
 			}
 		}
 		p.target = target
 		p.saveConfig()
-		return ctx.Edit(fmt.Sprintf("✅ 日志发送目标已设为: <code>%s</code>", target))
+		return ctx.Edit(fmt.Sprintf("✅ 日志发送目标已设为: `%s`", target))
 	case "clean":
 		return p.cleanLogs(ctx)
 	case "":
@@ -183,26 +182,26 @@ func (p *LogPlugin) sendFile(ctx *interfaces.CommandContext) error {
 	}
 	info, err := os.Stat(logFile)
 	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 读取失败: %v", err))
+		return ctx.Edit("❌ 读取失败: " + esc(err.Error()))
 	}
 	if info.Size() > 50*1024*1024 {
-		return ctx.Edit(fmt.Sprintf("⚠️ 日志过大 (%dKB)，请用 <code>sendlog tail</code> 查看尾部", info.Size()/1024))
+		return ctx.Edit(fmt.Sprintf("⚠️ 日志过大 (%dKB)，请用 `sendlog tail` 查看尾部", info.Size()/1024))
 	}
 
 	chatID := ctx.Message.UserID
 	if p.target != "me" {
 		var id int64
 		if _, err := fmt.Sscanf(p.target, "%d", &id); err != nil || id == 0 {
-			return ctx.Edit("❌ 目标配置无效，请用 <code>sendlog set</code> 重新设置")
+			return ctx.Edit("❌ 目标配置无效，请用 `sendlog set` 重新设置")
 		}
 		chatID = id
 	}
 
 	if err := ctx.Media.SendFile(ctx.Context(), chatID, logFile,
 		fmt.Sprintf("📋 %s (%dKB)", filepath.Base(logFile), info.Size()/1024), 0); err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 发送失败: %v", err))
+		return ctx.Edit("❌ 发送失败: " + esc(err.Error()))
 	}
-	return ctx.Edit(fmt.Sprintf("✅ 日志已发送到 <code>%s</code>", p.target))
+	return ctx.Edit(fmt.Sprintf("✅ 日志已发送到 `%s`", p.target))
 }
 
 // sendTail prints the last N lines of the newest log file into the chat.
@@ -213,12 +212,12 @@ func (p *LogPlugin) sendTail(ctx *interfaces.CommandContext, lines int) error {
 	}
 	data, err := readTail(logFile, lines, 3500)
 	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 读取日志失败: %v", err))
+		return ctx.Edit("❌ 读取日志失败: " + esc(err.Error()))
 	}
 	if strings.TrimSpace(data) == "" {
-		return ctx.Edit(fmt.Sprintf("📋 日志文件为空: <code>%s</code>", html.EscapeString(logFile)))
+		return ctx.Edit("📋 日志文件为空: " + plugin.Code(logFile))
 	}
-	return ctx.Edit(fmt.Sprintf("📋 <b>日志尾部</b> (<code>%s</code>)\n\n<pre>%s</pre>", html.EscapeString(filepath.Base(logFile)), html.EscapeString(data)))
+	return ctx.Edit("📋 **日志尾部** (" + plugin.Code(filepath.Base(logFile)) + ")\n\n" + plugin.Pre(data))
 }
 
 func (p *LogPlugin) cleanLogs(ctx *interfaces.CommandContext) error {
@@ -241,7 +240,7 @@ func (p *LogPlugin) cleanLogs(ctx *interfaces.CommandContext) error {
 			cleaned++
 		}
 	}
-	return ctx.Edit(fmt.Sprintf("🗑️ <b>日志清理完成</b>\n\n%s\n\n📊 已清理 %d 个文件", strings.Join(results, "\n"), cleaned))
+	return ctx.Edit(fmt.Sprintf("🗑️ **日志清理完成**\n\n%s\n\n📊 已清理 %d 个文件", strings.Join(results, "\n"), cleaned))
 }
 
 // findLatestLog returns the most recently modified matching log file.
