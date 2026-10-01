@@ -175,8 +175,6 @@ jobs:
             else
               cp "$bin" "$root/bin/papervalet"
               chmod +x "$root/bin/papervalet"
-              cp run.sh "$root/run.sh"
-              chmod +x "$root/run.sh"
             fi
             cp config.example.json LICENSE README.md "$root/"
             touch "$root/plugins/.gitkeep"
