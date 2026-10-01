@@ -169,6 +169,11 @@ func (m *Manager) StopAll(ctx context.Context) error {
 	return nil
 }
 
+// Host returns long-lived runtime services for plugins.
+func (m *Manager) Host() plugin.Host {
+	return m.commands.Host()
+}
+
 // Commands returns the registry provider.
 func (m *Manager) Commands() plugin.RegistryProvider {
 	return m.commands
