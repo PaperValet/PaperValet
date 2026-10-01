@@ -41,11 +41,15 @@ func (m *Manager) RegisterPlugin(p plugin.Plugin) error {
 		return fmt.Errorf("plugin %s already registered", name)
 	}
 	m.plugins[name] = p
-	m.infos[name] = plugin.PluginInfo{
+	info := plugin.PluginInfo{
 		Name:        name,
 		Description: p.Description(),
 		Status:      plugin.StatusInactive,
 	}
+	if en, ok := p.(plugin.DescENProvider); ok {
+		info.DescEN = en.DescEN()
+	}
+	m.infos[name] = info
 	return nil
 }
 
