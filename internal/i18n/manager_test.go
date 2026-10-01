@@ -29,3 +29,18 @@ func TestContextLang(t *testing.T) {
 		t.Fatalf("ctx lang: %q", got)
 	}
 }
+
+func TestClearUserLangs(t *testing.T) {
+	cat := New(ZhCN)
+	m := NewManager(cat)
+	m.SetUserLang(1, EnUS)
+	cat.SetDefault(EnUS)
+	m.ClearUserLangs()
+	if m.UserLang(1) != EnUS {
+		t.Fatal("cleared user must follow the default")
+	}
+	cat.SetDefault(ZhCN)
+	if m.UserLang(1) != ZhCN {
+		t.Fatal("default switch must apply after clear")
+	}
+}
