@@ -41,3 +41,18 @@ func instantiate(sym interface{}) (pkgplugin.Plugin, error) {
 	}
 	return plug, nil
 }
+
+// metadataOf unwraps the Metadata symbol. Lookup returns a pointer to the
+// variable, so `var Metadata = &plugin.PluginMetadata{...}` arrives as
+// **PluginMetadata; a value variable arrives as *PluginMetadata.
+func metadataOf(sym interface{}) *pkgplugin.PluginMetadata {
+	switch m := sym.(type) {
+	case **pkgplugin.PluginMetadata:
+		if m != nil {
+			return *m
+		}
+	case *pkgplugin.PluginMetadata:
+		return m
+	}
+	return nil
+}
