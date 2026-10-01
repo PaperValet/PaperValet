@@ -34,14 +34,14 @@ func (p *ReloadPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"\n" +
 			"**机制**\n" +
 			"• 把已加载的外部插件逐个卸载再加载，重新读取各自的配置\n" +
-			"• 不带参数，只有这一种用法；单个插件用 `apt unload` / `apt load`\n" +
+			"• 不带参数，只有这一种用法；单个插件用 `apt rm` / `apt i`\n" +
 			"• 内建插件不受影响\n" +
 			"• 注意：Go 插件文件被替换后无法在同一进程里换新代码，更新插件文件后请用 `restart`",
 		UsageEN: "reload\n" +
 			"\n" +
 			"**How it works**\n" +
 			"• Unloads and reloads every loaded external plugin, re-reading their settings\n" +
-			"• Takes no arguments; for a single plugin use `apt unload` / `apt load`\n" +
+			"• Takes no arguments; for a single plugin use `apt rm` / `apt i`\n" +
 			"• Built-in plugins are untouched\n" +
 			"• Note: Go cannot swap a replaced .so inside the same process; after updating plugin files use `restart`",
 		Plugin:    p.Name(),
@@ -57,8 +57,8 @@ func (p *ReloadPlugin) Stop(_ context.Context) error  { return nil }
 func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() > 0 {
 		return ctx.Edit(ctx.Tlocal(
-			"reload 不带参数：重新加载所有外部插件。单个插件的装卸用 `apt load/unload`",
-			"reload takes no arguments: it reloads every external plugin. For a single plugin use `apt load/unload`",
+			"reload 不带参数：重新加载所有外部插件。单个插件的装卸用 `apt i` / `apt rm`",
+			"reload takes no arguments: it reloads every external plugin. For a single plugin use `apt i` / `apt rm`",
 		))
 	}
 
@@ -70,8 +70,8 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 	sort.Strings(names)
 	if len(names) == 0 {
 		return ctx.Edit(ctx.Tlocal(
-			"没有已加载的外部插件。用 `apt install <名字>` 安装，或 `apt search` 看仓库里有什么",
-			"No external plugins are loaded. Install with `apt install <name>` or browse with `apt search`",
+			"没有已加载的外部插件。用 `apt i 名字` 安装，或 `apt s` 看仓库里有什么",
+			"No external plugins are loaded. Install with `apt i <name>` or browse with `apt s`",
 		))
 	}
 
