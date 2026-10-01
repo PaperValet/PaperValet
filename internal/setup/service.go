@@ -57,7 +57,6 @@ func (s Service) Unit() string {
 	fmt.Fprintf(&b, "Type=simple\n")
 	fmt.Fprintf(&b, "Environment=%s\n", quoteEnv("PAPERVALET_HOME="+s.Home))
 	fmt.Fprintf(&b, "Environment=%s\n", quoteEnv("PAPERVALET_CMD="+s.Command))
-	fmt.Fprintf(&b, "Environment=PAPERVALET_NONINTERACTIVE=1\n")
 	fmt.Fprintf(&b, "WorkingDirectory=%s\n", s.Home)
 	fmt.Fprintf(&b, "ExecStart=%s run\n", s.Binary)
 	fmt.Fprintf(&b, "Restart=on-failure\n")
