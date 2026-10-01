@@ -43,44 +43,44 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "apt",
 		Description: "外部插件管理",
 		DescEN:      "External plugin manager",
-		Usage: `apt &lt;子命令&gt; [参数]
-
-<b>子命令</b>
-• <code>search</code> · <code>s</code>  [关键词]  搜索插件仓库，不带词列出全部
-• <code>install</code> · <code>i</code>  &lt;名字…&gt;  安装并立即启用
-• <code>remove</code> · <code>rm</code>  &lt;名字…&gt;  停用并删除
-• <code>list</code> · <code>ls</code>  已安装的插件
-• <code>info</code>  &lt;名字&gt;  版本、作者、提供的命令
-
-<b>示例</b>
-• <code>apt s</code>
-• <code>apt i weather calc</code>
-• <code>apt rm weather</code>
-
-<b>机制</b>
-• 安装即启用，卸载即删除，没有「装了但没启用」的状态
-• 插件清单实时从 PaperValet-Plugins 的 Release 拉取
-• 插件是 plugins/ 下的 .so 文件，启动时自动加载
-• 插件必须和主程序用同一版本 Go 编译，否则会提示版本不符，此时运行 <code>update</code>`,
-		UsageEN: `apt &lt;subcommand&gt; [args]
-
-<b>Subcommands</b>
-• <code>search</code> · <code>s</code>  [term]  search the repository; bare lists all
-• <code>install</code> · <code>i</code>  &lt;name…&gt;  install and enable
-• <code>remove</code> · <code>rm</code>  &lt;name…&gt;  disable and delete
-• <code>list</code> · <code>ls</code>  installed plugins
-• <code>info</code>  &lt;name&gt;  version, author, commands
-
-<b>Examples</b>
-• <code>apt s</code>
-• <code>apt i weather calc</code>
-• <code>apt rm weather</code>
-
-<b>How it works</b>
-• Installed means enabled, removed means deleted; there is no "installed but off"
-• The index is fetched live from the PaperValet-Plugins release
-• Plugins are .so files in plugins/, loaded on startup
-• Plugins must be built with the same Go version as the bot; on a mismatch run <code>update</code>`,
+		Usage: "apt <子命令> [参数]\n" +
+			"\n" +
+			"**子命令**\n" +
+			"• `search` · `s`  [关键词]  搜索插件仓库，不带词列出全部\n" +
+			"• `install` · `i`  <名字…>  安装并立即启用\n" +
+			"• `remove` · `rm`  <名字…>  停用并删除\n" +
+			"• `list` · `ls`  已安装的插件\n" +
+			"• `info`  <名字>  版本、作者、提供的命令\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `apt s`\n" +
+			"• `apt i weather calc`\n" +
+			"• `apt rm weather`\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 安装即启用，卸载即删除，没有「装了但没启用」的状态\n" +
+			"• 插件清单实时从 PaperValet-Plugins 的 Release 拉取\n" +
+			"• 插件是 plugins/ 下的 .so 文件，启动时自动加载\n" +
+			"• 插件必须和主程序用同一版本 Go 编译，否则会提示版本不符，此时运行 `update`",
+		UsageEN: "apt <subcommand> [args]\n" +
+			"\n" +
+			"**Subcommands**\n" +
+			"• `search` · `s`  [term]  search the repository; bare lists all\n" +
+			"• `install` · `i`  <name…>  install and enable\n" +
+			"• `remove` · `rm`  <name…>  disable and delete\n" +
+			"• `list` · `ls`  installed plugins\n" +
+			"• `info`  <name>  version, author, commands\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `apt s`\n" +
+			"• `apt i weather calc`\n" +
+			"• `apt rm weather`\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Installed means enabled, removed means deleted; there is no \"installed but off\"\n" +
+			"• The index is fetched live from the PaperValet-Plugins release\n" +
+			"• Plugins are .so files in plugins/, loaded on startup\n" +
+			"• Plugins must be built with the same Go version as the bot; on a mismatch run `update`",
 		Plugin:    p.Name(),
 		Category:  "core",
 		OwnerOnly: true,
@@ -183,14 +183,14 @@ func (p *AptPlugin) search(ctx *interfaces.CommandContext, args []string) error 
 	_ = ctx.Edit("🔍 …")
 	entries, err := p.fetchRegistry(ctx)
 	if err != nil {
-		return ctx.Edit(errText(ctx.Tlocal("拉取插件清单失败：", "Could not fetch the index: ") + htmlEscape(err.Error())))
+		return ctx.Edit(errText(ctx.Tlocal("拉取插件清单失败：", "Could not fetch the index: ") + esc(err.Error())))
 	}
 	query := strings.ToLower(strings.Join(args, " "))
 	loaded := p.loader.GetLoaded()
 
 	title := ctx.Tlocal(fmt.Sprintf("插件仓库 · %d 个", len(entries)), fmt.Sprintf("Repository · %d plugins", len(entries)))
 	if query != "" {
-		title = ctx.Tlocal("搜索 ", "Search ") + htmlEscape(strings.Join(args, " "))
+		title = ctx.Tlocal("搜索 ", "Search ") + esc(strings.Join(args, " "))
 	}
 	c := newCard("📦", title).blank()
 	found := 0
@@ -204,7 +204,7 @@ func (p *AptPlugin) search(ctx *interfaces.CommandContext, args []string) error 
 		if loaded[e.Name] != nil {
 			mark = "✅"
 		}
-		c.line(fmt.Sprintf("%s <code>%s</code>  %s", mark, e.Name, htmlEscape(desc)))
+		c.line(fmt.Sprintf("%s `%s`  %s", mark, e.Name, esc(desc)))
 	}
 	if found == 0 {
 		c.line(ctx.Tlocal("没有匹配的插件", "No matching plugins"))
@@ -237,9 +237,9 @@ func (p *AptPlugin) list(ctx *interfaces.CommandContext) error {
 			if ctx.Lang == "en-US" && e.Metadata.DescEN != "" {
 				desc = e.Metadata.DescEN
 			}
-			ver = " <i>v" + htmlEscape(e.Metadata.Version) + "</i>"
+			ver = " _v" + esc(e.Metadata.Version) + "_"
 		}
-		c.line(fmt.Sprintf("✅ <code>%s</code>%s  %s", n, ver, htmlEscape(desc)))
+		c.line(fmt.Sprintf("✅ `%s`%s  %s", n, ver, esc(desc)))
 	}
 	c.hint(ctx.Tlocal("卸载用 ", "Remove with ") + cmdRef(prefix+"apt rm 名字"))
 	return ctx.Edit(c.String())
@@ -259,13 +259,13 @@ func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
 		return strings.Join(out, " ")
 	}
 	if e, ok := p.loader.GetLoaded()[name]; ok {
-		c := newCard("🔌", htmlEscape(name))
+		c := newCard("🔌", esc(name))
 		if e.Metadata != nil {
 			desc := e.Metadata.Description
 			if ctx.Lang == "en-US" && e.Metadata.DescEN != "" {
 				desc = e.Metadata.DescEN
 			}
-			c.line(htmlEscape(desc)).blank()
+			c.line(esc(desc)).blank()
 			c.field(ctx.Tlocal("版本", "Version"), e.Metadata.Version)
 			c.field(ctx.Tlocal("作者", "Author"), e.Metadata.Author)
 		} else {
@@ -276,8 +276,8 @@ func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
 		return ctx.Edit(c.String())
 	}
 	if info, ok := p.mgr.GetInfo(name); ok {
-		c := newCard("🔵", htmlEscape(name)+ctx.Tlocal(" · 内建", " · built-in"))
-		c.line(htmlEscape(pluginDesc(ctx, info))).blank()
+		c := newCard("🔵", esc(name)+ctx.Tlocal(" · 内建", " · built-in"))
+		c.line(esc(pluginDesc(ctx, info))).blank()
 		c.rawField(ctx.Tlocal("命令", "Commands"), commands(name))
 		return ctx.Edit(c.String())
 	}
@@ -289,13 +289,13 @@ func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
 func loadError(ctx *interfaces.CommandContext, err error) string {
 	msg := err.Error()
 	if strings.Contains(msg, "different version of package") {
-		return ctx.Tlocal("和主程序的 Go 版本不一致，先 <code>update now</code> 升级主程序再装",
-			"built with a different Go version; run <code>update now</code> first")
+		return ctx.Tlocal("和主程序的 Go 版本不一致，先 `update now` 升级主程序再装",
+			"built with a different Go version; run `update now` first")
 	}
 	if strings.Contains(msg, "status 404") || strings.Contains(msg, "may not exist") {
 		return ctx.Tlocal("仓库里没有这个插件", "not in the repository")
 	}
-	return htmlEscape(msg)
+	return esc(msg)
 }
 
 func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) error {
@@ -338,7 +338,7 @@ func (p *AptPlugin) remove(ctx *interfaces.CommandContext, names []string) error
 			rows = append(rows, failLine(name, ctx.Tlocal("没装这个插件", "not installed")))
 			continue
 		}
-		rows = append(rows, "🗑 <b>"+htmlEscape(name)+"</b>  "+ctx.Tlocal("已卸载", "removed"))
+		rows = append(rows, "🗑 **"+esc(name)+"**  "+ctx.Tlocal("已卸载", "removed"))
 	}
 	return ctx.Edit(strings.Join(rows, "\n"))
 }
