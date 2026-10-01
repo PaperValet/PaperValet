@@ -34,22 +34,49 @@ func NewApt(pluginLoader *loader.Loader) *AptPlugin {
 }
 
 func (p *AptPlugin) Name() string        { return "apt" }
-func (p *AptPlugin) Description() string { return "外部插件管理：搜索、安装、加载" }
+func (p *AptPlugin) Description() string { return "外部插件管理" }
 func (p *AptPlugin) DescEN() string      { return "Manage external plugins: search, install, load" }
 
 func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "apt",
-		Aliases:     []string{"plugin", "plugins", "pkg"},
-		Description: "插件管理：<code>search</code> 搜仓库、<code>list</code> 已装、<code>install/remove/load/unload</code>",
-		DescEN:      "Plugins: <code>search</code> the repo, <code>list</code> installed, <code>install/remove/load/unload</code>",
-		Usage:       "apt search [词] | list | install <名> | remove <名> | load <名> | unload <名>",
-		UsageEN:     "apt search [term] | list | install <name> | remove <name> | load <name> | unload <name>",
-		Plugin:      p.Name(),
-		Category:    "core",
-		OwnerOnly:   true,
-		Handler:     p.handleApt,
+		Description: "外部插件管理",
+		DescEN:      "External plugin manager",
+		Usage: `apt search [关键词] · apt list · apt install|remove|load|unload &lt;名字&gt; · apt info &lt;名字&gt;
+
+<b>示例</b>
+• <code>apt search</code>  列出仓库里全部插件
+• <code>apt search 翻译</code>  按名字和简介搜索
+• <code>apt install weather</code>  安装并立即加载
+• <code>apt list</code>  已安装的外部插件
+• <code>apt unload weather</code> / <code>apt load weather</code>  停用 / 启用
+• <code>apt remove weather</code>  卸载并删除文件
+• <code>apt info weather</code>  版本、作者、提供的命令
+
+<b>机制</b>
+• 插件清单实时从 PaperValet-Plugins 的 Release 拉取
+• 插件是 .so 文件，放在 plugins/ 目录，启动时自动加载
+• 状态图标：✅ 已加载 · 📦 已装未载 · ⬜ 未安装`,
+		UsageEN: `apt search [term] · apt list · apt install|remove|load|unload &lt;name&gt; · apt info &lt;name&gt;
+
+<b>Examples</b>
+• <code>apt search</code>  list every plugin in the repository
+• <code>apt search translate</code>  search names and descriptions
+• <code>apt install weather</code>  install and load right away
+• <code>apt list</code>  installed external plugins
+• <code>apt unload weather</code> / <code>apt load weather</code>  stop / start
+• <code>apt remove weather</code>  unload and delete the file
+• <code>apt info weather</code>  version, author, commands
+
+<b>How it works</b>
+• The index is fetched live from the PaperValet-Plugins release
+• Plugins are .so files in plugins/, loaded automatically on startup
+• Icons: ✅ loaded · 📦 installed · ⬜ available`,
+		Plugin:    p.Name(),
+		Category:  "core",
+		OwnerOnly: true,
+		Handler:   p.handleApt,
 	})
 }
 
