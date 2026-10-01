@@ -10,6 +10,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	pluginmgr "github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
 // newHelpFixture registers the real built-ins whose Init needs no I/O.
@@ -20,7 +21,8 @@ func newHelpFixture(t *testing.T) (*HelpPlugin, *pluginmgr.Manager) {
 	reg := command.NewRegistry([]string{"."}, bus, nil, nil, 1, i18n.NewManager(i18n.CoreCatalog()))
 	mgr := pluginmgr.NewManager(reg, bus)
 	help := NewHelp()
-	for _, p := range []interfaces.Plugin{help, NewCore("test"), NewExec(), NewPrune(), NewRe(), NewInfo(), NewAlias()} {
+	for _, p := range []interfaces.Plugin{help, NewCore("test"), NewExec(), NewPrune(), NewRe(), NewInfo(), NewAlias(),
+		NewApt(nil), NewBackup(), NewLog(), NewPrefix(), NewReload(nil), NewStatus("test", nil), NewSudo(), NewUpdate("test", nil)} {
 		if err := mgr.RegisterPlugin(p); err != nil {
 			t.Fatal(err)
 		}
@@ -39,23 +41,23 @@ func TestHelpOverviewListsEveryCommandAndAlias(t *testing.T) {
 	for name := range mgr.Commands().GetAll() {
 		// Single-command plugins whose command shares the plugin name may be
 		// collapsed into the plugin header line.
-		if strings.Contains(out, "<b>"+name+"</b> ·") {
+		if strings.Contains(out, "**"+name+"** ·") {
 			continue
 		}
-		if !strings.Contains(out, "<code>."+name+"</code>") {
+		if !strings.Contains(out, "`."+name+"`") {
 			t.Errorf("overview misses .%s", name)
 		}
 	}
 	for _, alias := range []string{".h", ".p"} {
-		if !strings.Contains(out, "<code>"+alias+"</code>") {
+		if !strings.Contains(out, "`"+alias+"`") {
 			t.Errorf("overview misses alias %s", alias)
 		}
 	}
 	// Overview must stay terse: no multi-line usage leaks into it.
-	if strings.Contains(out, "<b>机制</b>") {
+	if strings.Contains(out, "**机制**") {
 		t.Error("overview must not include detailed usage")
 	}
-	if strings.Index(out, "<b>help</b>") > strings.Index(out, "<b>exec</b>") {
+	if strings.Index(out, "**help**") > strings.Index(out, "**exec**") {
 		t.Error("built-ins must follow builtinOrder")
 	}
 }
@@ -64,7 +66,7 @@ func TestHelpCommandPageIsDetailedAndLocalized(t *testing.T) {
 	help, mgr := newHelpFixture(t)
 	cmd, _ := mgr.Commands().Get("dme")
 	zh := help.commandPage(&interfaces.CommandContext{Lang: "zh-CN"}, ".", cmd)
-	if !strings.Contains(zh, "<b>机制</b>") || !strings.Contains(zh, "-f") {
+	if !strings.Contains(zh, "**机制**") || !strings.Contains(zh, "-f") {
 		t.Errorf("zh page lacks mechanism section:\n%s", zh)
 	}
 	en := help.commandPage(&interfaces.CommandContext{Lang: "en-US"}, ".", cmd)
@@ -73,7 +75,7 @@ func TestHelpCommandPageIsDetailedAndLocalized(t *testing.T) {
 	}
 	h, _ := mgr.Commands().Get("h")
 	page := help.commandPage(&interfaces.CommandContext{Lang: "zh-CN"}, ".", h)
-	if !strings.Contains(page, "<code>.h</code>") || !strings.Contains(page, ".help") {
+	if !strings.Contains(page, "`.h`") || !strings.Contains(page, ".help") {
 		t.Errorf("command page must mention help and its alias:\n%s", page)
 	}
 }
@@ -86,6 +88,29 @@ func TestEveryBuiltinCommandHasBilingualDocs(t *testing.T) {
 		}
 		if strings.ContainsAny(cmd.Description, "，；") {
 			t.Errorf("%s: description should be one short phrase, got %q", name, cmd.Description)
+		}
+	}
+}
+
+// Every page must parse as Telegram Markdown without leaking raw markup.
+func TestHelpPagesRenderAsMarkdown(t *testing.T) {
+	help, mgr := newHelpFixture(t)
+	check := func(where, md string) {
+		plain, _ := plugin.ParseMarkdown(md, nil)
+		for _, bad := range []string{"**", "<b>", "<code>", "&lt;", "```"} {
+			if strings.Contains(plain, bad) {
+				t.Errorf("%s leaks %q:\n%s", where, bad, plain)
+			}
+		}
+		if strings.Count(plain, "`") > 0 {
+			t.Errorf("%s leaks a backtick:\n%s", where, plain)
+		}
+	}
+	for _, lang := range []string{"zh-CN", "en-US"} {
+		ctx := &interfaces.CommandContext{Lang: lang}
+		check("overview "+lang, help.overview(ctx, "."))
+		for name, cmd := range mgr.Commands().GetAll() {
+			check(name+" "+lang, help.commandPage(ctx, ".", cmd))
 		}
 	}
 }
