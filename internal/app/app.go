@@ -42,6 +42,7 @@ type App struct {
 	updates      *UpdateHandler
 	i18n         *i18n.Manager
 	logger       pkgplugin.Logger
+	configPath   string
 }
 
 func New(cfg *config.Config) (*App, error) {
@@ -70,20 +71,7 @@ func New(cfg *config.Config) (*App, error) {
 	bus := eventbus.New(log)
 	updates := NewUpdateHandler(bus)
 
-	client := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionFile},
-		UpdateHandler:  updates,
-		Device: telegram.DeviceConfig{
-			DeviceModel:    "PaperValet",
-			SystemVersion:  "Linux",
-			AppVersion:     Version,
-			SystemLangCode: "en",
-			LangCode:       "en",
-		},
-		RetryInterval: time.Second,
-		MaxRetries:    -1,
-		DialTimeout:   15 * time.Second,
-	})
+	client := NewTelegramClient(cfg, updates)
 
 	api := client.API()
 	accessHash := peer.NewAccessHashManager(api)
@@ -121,9 +109,35 @@ func New(cfg *config.Config) (*App, error) {
 	return app, nil
 }
 
+// NewTelegramClient builds the gotd client with PaperValet's device info.
+// initialize uses it too, so the login session matches what run expects.
+func NewTelegramClient(cfg *config.Config, h telegram.UpdateHandler) *telegram.Client {
+	return telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionFile},
+		UpdateHandler:  h,
+		Device: telegram.DeviceConfig{
+			DeviceModel:    "PaperValet",
+			SystemVersion:  "Linux",
+			AppVersion:     Version,
+			SystemLangCode: "en",
+			LangCode:       "en",
+		},
+		RetryInterval: time.Second,
+		MaxRetries:    -1,
+		DialTimeout:   15 * time.Second,
+	})
+}
+
+// SetConfigPath tells the backup plugin which config file to include.
+func (a *App) SetConfigPath(path string) { a.configPath = path }
+
 func (a *App) registerBuiltins() error {
 	backup := builtin.NewBackup()
-	backup.SetConfig("config.json", a.cfg)
+	cfgPath := a.configPath
+	if cfgPath == "" {
+		cfgPath = config.FileName
+	}
+	backup.SetConfig(cfgPath, a.cfg)
 	for _, p := range []pkgplugin.Plugin{
 		builtin.NewCore(Version),
 		builtin.NewApt(a.pluginLoader),
