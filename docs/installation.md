@@ -48,7 +48,7 @@ Data directory layout:
 
 ## Upgrade and uninstall
 
-From Telegram, `.update now` downloads the latest release and restarts.
+From Telegram, `.update now` downloads the latest release and restarts. `.update -f` reinstalls it even when the version already matches.
 
 From the shell, run the installer again and choose **Upgrade** or **Uninstall**. Upgrading keeps all data. Uninstalling asks before deleting the data directory.
 
@@ -110,6 +110,6 @@ Environment variables:
 
 **No reaction**: the command must come from your account and start with the prefix.
 
-**Plugin fails with "different version"**: the plugin was built with another Go version. Run `.update now`, then install it again.
+**Plugin fails with "different version"**: the plugin was built with another Go version. Run `.update -f`, then install it again.
 
 **Plugins won't load at all**: only the linux/amd64 release can load external plugins.
