@@ -33,7 +33,6 @@ func (p *ExecPlugin) DescEN() string      { return "Run shell commands on the se
 func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "exec",
-		Aliases:     []string{"sh"},
 		Description: "执行 shell 命令",
 		DescEN:      "Run a shell command",
 		Usage: `exec [-t 秒数] &lt;命令&gt;
@@ -48,9 +47,7 @@ func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 • 运行中每 3 秒刷新一次，显示最新输出
 • 默认 60 秒后自动终止，<code>-t</code> 可设 1–600 秒；到时连同子进程整组杀掉，已有输出照常返回
 • 输出太长只保留最后约 3500 字符
-• 结束后显示退出码和用时
-
-别名 <code>sh</code>`,
+• 结束后显示退出码和用时`,
 		UsageEN: `exec [-t seconds] &lt;command&gt;
 
 <b>Examples</b>
@@ -63,9 +60,7 @@ func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 • Refreshes every 3s with the latest output while running
 • Killed after 60s by default (<code>-t</code> 1-600); the whole process group dies and partial output is still returned
 • Long output keeps only the last ~3500 characters
-• Shows exit code and elapsed time at the end
-
-Alias <code>sh</code>`,
+• Shows exit code and elapsed time at the end`,
 		Plugin:    p.Name(),
 		Category:  "admin",
 		OwnerOnly: true,
