@@ -41,7 +41,7 @@ func TestHelpOverviewListsEveryCommandAndAlias(t *testing.T) {
 			t.Errorf("overview misses .%s", name)
 		}
 	}
-	for _, alias := range []string{".sh", ".h", ".p"} {
+	for _, alias := range []string{".h", ".p"} {
 		if !strings.Contains(out, "<code>"+alias+"</code>") {
 			t.Errorf("overview misses alias %s", alias)
 		}
@@ -66,10 +66,10 @@ func TestHelpCommandPageIsDetailedAndLocalized(t *testing.T) {
 	if !strings.Contains(en, "How it works") || strings.Contains(en, "机制") {
 		t.Errorf("en page not localized:\n%s", en)
 	}
-	exec, _ := mgr.Commands().Get("sh")
-	page := help.commandPage(&interfaces.CommandContext{Lang: "zh-CN"}, ".", exec)
-	if !strings.Contains(page, "<code>.sh</code>") {
-		t.Error("command page must list aliases")
+	h, _ := mgr.Commands().Get("h")
+	page := help.commandPage(&interfaces.CommandContext{Lang: "zh-CN"}, ".", h)
+	if !strings.Contains(page, "<code>.h</code>") || !strings.Contains(page, "<b>.help</b>") {
+		t.Error("alias lookup must land on the command page and list aliases")
 	}
 }
 
