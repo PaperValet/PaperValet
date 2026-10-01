@@ -31,9 +31,9 @@ func NewSudo() *SudoPlugin {
 	}
 }
 
-func (p *SudoPlugin) Name() string          { return "sudo" }
-func (p *SudoPlugin) Description() string   { return "授权其他人使用本机器人的命令" }
-func (p *SudoPlugin) DescEN() string        { return "Delegate command access to other users" }
+func (p *SudoPlugin) Name() string        { return "sudo" }
+func (p *SudoPlugin) Description() string { return "授权其他人使用本机器人的命令" }
+func (p *SudoPlugin) DescEN() string      { return "Delegate command access to other users" }
 
 func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.load()
