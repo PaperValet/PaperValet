@@ -27,21 +27,49 @@ type ExecPlugin struct{}
 func NewExec() *ExecPlugin { return &ExecPlugin{} }
 
 func (p *ExecPlugin) Name() string        { return "exec" }
-func (p *ExecPlugin) Description() string { return "在服务器上执行 shell 命令" }
+func (p *ExecPlugin) Description() string { return "执行 shell 命令" }
 func (p *ExecPlugin) DescEN() string      { return "Run shell commands on the server" }
 
 func (p *ExecPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "exec",
-		Aliases:     []string{"sh", "shell"},
-		Description: "执行 shell 命令，实时回显输出，默认 60 秒后自动终止",
-		DescEN:      "Run a shell command with live output; killed after 60s by default",
-		Usage:       "exec [-t 秒数] <命令>",
-		UsageEN:     "exec [-t seconds] <command>",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleExec,
+		Aliases:     []string{"sh"},
+		Description: "执行 shell 命令",
+		DescEN:      "Run a shell command",
+		Usage: `exec [-t 秒数] &lt;命令&gt;
+
+<b>示例</b>
+• <code>exec uptime</code>
+• <code>exec df -h | head</code>  支持管道、重定向
+• <code>exec -t 120 apt update</code>  最长跑 120 秒
+
+<b>机制</b>
+• 用 sh -c 执行，标准输出和错误输出合并
+• 运行中每 3 秒刷新一次，显示最新输出
+• 默认 60 秒后自动终止，<code>-t</code> 可设 1–600 秒；到时连同子进程整组杀掉，已有输出照常返回
+• 输出太长只保留最后约 3500 字符
+• 结束后显示退出码和用时
+
+别名 <code>sh</code>`,
+		UsageEN: `exec [-t seconds] &lt;command&gt;
+
+<b>Examples</b>
+• <code>exec uptime</code>
+• <code>exec df -h | head</code>  pipes and redirects work
+• <code>exec -t 120 apt update</code>  run for up to 120s
+
+<b>How it works</b>
+• Runs via sh -c with stdout and stderr merged
+• Refreshes every 3s with the latest output while running
+• Killed after 60s by default (<code>-t</code> 1-600); the whole process group dies and partial output is still returned
+• Long output keeps only the last ~3500 characters
+• Shows exit code and elapsed time at the end
+
+Alias <code>sh</code>`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleExec,
 	})
 }
 
