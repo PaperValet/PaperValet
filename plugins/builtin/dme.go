@@ -52,46 +52,46 @@ func (p *PrunePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "dme",
 		Description: "批量删除消息",
 		DescEN:      "Bulk-delete messages",
-		Usage: `dme <数量|all> [-f]
-
-<b>参数</b>
-• <code>数量</code>  删除最近 N 条（1–5000）
-• <code>all</code>  删除本聊天全部可见消息
-• <code>-f</code>  连别人的消息一起删（需要删除权限）
-
-<b>示例</b>
-• <code>dme 10</code>  删自己最近 10 条
-• <code>dme all</code>  删自己在这里的全部消息
-• <code>dme 50 -f</code>  删最近 50 条，不分是谁发的
-
-<b>机制</b>
-• 从命令往前翻历史，只处理命令之前的消息
-• 自己的消息（48 小时内）先改写再删：文字替换为一句提示，图片和文件换成 PaperValet logo，对方防撤回客户端只能留下替换后的内容
-• 超过 48 小时的消息 Telegram 不允许编辑，直接删除
-• 贴纸、语音、圆视频无法改写，直接删除
-• 每 100 条一批删除，失败的计入失败数继续往下
-• 完成后命令消息变成总结（删了多少、用时多少），5 秒后自动删除
-• 同一聊天同时只跑一个 dme`,
-		UsageEN: `dme <count|all> [-f]
-
-<b>Arguments</b>
-• <code>count</code>  delete the last N (1-5000)
-• <code>all</code>  delete everything visible in this chat
-• <code>-f</code>  include other people's messages (needs delete rights)
-
-<b>Examples</b>
-• <code>dme 10</code>  delete your last 10
-• <code>dme all</code>  delete all of your messages here
-• <code>dme 50 -f</code>  delete the last 50 regardless of sender
-
-<b>How it works</b>
-• Walks history backwards from the command; only earlier messages are touched
-• Your own messages (last 48h) are overwritten first: text becomes a notice, photos and files become the PaperValet logo, so anti-recall clients only keep the replacement
-• Messages older than 48h cannot be edited and are deleted directly
-• Stickers, voice and round videos cannot be rewritten and are deleted directly
-• Deletes in batches of 100; failures are counted and skipped
-• When done, the command turns into a summary (count and time), removed after 5 seconds
-• One dme run per chat at a time`,
+		Usage: "dme <数量|all> [-f]\n" +
+			"\n" +
+			"**参数**\n" +
+			"• `数量`  删除最近 N 条（1–5000）\n" +
+			"• `all`  删除本聊天全部可见消息\n" +
+			"• `-f`  连别人的消息一起删（需要删除权限）\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `dme 10`  删自己最近 10 条\n" +
+			"• `dme all`  删自己在这里的全部消息\n" +
+			"• `dme 50 -f`  删最近 50 条，不分是谁发的\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 从命令往前翻历史，只处理命令之前的消息\n" +
+			"• 自己的消息（48 小时内）先改写再删：文字替换为一句提示，图片和文件换成 PaperValet logo，对方防撤回客户端只能留下替换后的内容\n" +
+			"• 超过 48 小时的消息 Telegram 不允许编辑，直接删除\n" +
+			"• 贴纸、语音、圆视频无法改写，直接删除\n" +
+			"• 每 100 条一批删除，失败的计入失败数继续往下\n" +
+			"• 完成后命令消息变成总结（删了多少、用时多少），5 秒后自动删除\n" +
+			"• 同一聊天同时只跑一个 dme",
+		UsageEN: "dme <count|all> [-f]\n" +
+			"\n" +
+			"**Arguments**\n" +
+			"• `count`  delete the last N (1-5000)\n" +
+			"• `all`  delete everything visible in this chat\n" +
+			"• `-f`  include other people's messages (needs delete rights)\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `dme 10`  delete your last 10\n" +
+			"• `dme all`  delete all of your messages here\n" +
+			"• `dme 50 -f`  delete the last 50 regardless of sender\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Walks history backwards from the command; only earlier messages are touched\n" +
+			"• Your own messages (last 48h) are overwritten first: text becomes a notice, photos and files become the PaperValet logo, so anti-recall clients only keep the replacement\n" +
+			"• Messages older than 48h cannot be edited and are deleted directly\n" +
+			"• Stickers, voice and round videos cannot be rewritten and are deleted directly\n" +
+			"• Deletes in batches of 100; failures are counted and skipped\n" +
+			"• When done, the command turns into a summary (count and time), removed after 5 seconds\n" +
+			"• One dme run per chat at a time",
 		Plugin:    p.Name(),
 		Category:  "tools",
 		OwnerOnly: true,
@@ -129,8 +129,8 @@ func (p *PrunePlugin) handleDme(ctx *interfaces.CommandContext) error {
 	count, force, err := parseDmeArgs(ctx.Args)
 	if err != nil {
 		return ctx.Edit(ctx.Tlocal(
-			fmt.Sprintf("用法: <code>dme 10</code>、<code>dme all</code>，加 <code>-f</code> 连别人的一起删\n数量 1–%d，详细说明见 <code>help dme</code>", dmeMaxCount),
-			fmt.Sprintf("Usage: <code>dme 10</code>, <code>dme all</code>; add <code>-f</code> to include others\nCount 1-%d; see <code>help dme</code>", dmeMaxCount)))
+			fmt.Sprintf("用法: `dme 10`、`dme all`，加 `-f` 连别人的一起删\n数量 1–%d，详细说明见 `help dme`", dmeMaxCount),
+			fmt.Sprintf("Usage: `dme 10`, `dme all`; add `-f` to include others\nCount 1-%d; see `help dme`", dmeMaxCount)))
 	}
 
 	chatID := ctx.Message.ChatID
@@ -155,7 +155,7 @@ type dmeStats struct{ deleted, rewritten, failed int }
 func (p *PrunePlugin) run(ctx *interfaces.CommandContext, count int, force bool) error {
 	peer, err := ctx.ResolvePeer()
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	start := time.Now()
 	cmdID := ctx.Message.Message.ID
