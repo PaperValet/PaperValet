@@ -178,13 +178,17 @@ func (m *Manager) SendFile(ctx context.Context, chatID int64, path string, capti
 		return fmt.Errorf("upload: %w", err)
 	}
 
-	p, err := m.peer.ResolveFromChatID(ctx, chatID)
-	if err != nil {
+	var peer tg.InputPeerClass
+	if chatID == SelfChatID {
+		peer = &tg.InputPeerSelf{}
+	} else if p, err := m.peer.ResolveFromChatID(ctx, chatID); err == nil {
+		peer = p
+	} else {
 		return fmt.Errorf("resolve peer: %w", err)
 	}
 
 	req := &tg.MessagesSendMediaRequest{
-		Peer:     p,
+		Peer:     peer,
 		Media:    media,
 		Message:  caption,
 		RandomID: time.Now().UnixNano(),
@@ -202,6 +206,10 @@ func (m *Manager) SendFile(ctx context.Context, chatID int64, path string, capti
 	}
 	return nil
 }
+
+// SelfChatID is the chat ID sentinel for Saved Messages. Any message the
+// account sends to itself lands there; no peer resolution needed.
+const SelfChatID int64 = 0
 
 // isImageExt returns true for common image file extensions.
 func isImageExt(ext string) bool {
