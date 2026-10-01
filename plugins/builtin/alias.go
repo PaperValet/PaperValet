@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -21,13 +21,12 @@ type AliasPlugin struct {
 }
 
 func NewAlias() *AliasPlugin {
-	return &AliasPlugin{
-		file: "data/aliases.json",
-	}
+	return &AliasPlugin{file: "data/aliases.json"}
 }
 
 func (p *AliasPlugin) Name() string        { return "alias" }
-func (p *AliasPlugin) Description() string { return "命令别名管理" }
+func (p *AliasPlugin) Description() string { return "给命令起短名字" }
+func (p *AliasPlugin) DescEN() string      { return "Short names for commands" }
 
 func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
@@ -35,8 +34,10 @@ func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "alias",
 		Aliases:     []string{"al"},
-		Description: "管理命令别名",
-		Usage:       "alias [set|del|list] [名称] [命令]",
+		Description: "给长命令起个短名字，例如 .p 代替 .ping",
+		DescEN:      "Give commands short names, e.g. .p for .ping",
+		Usage:       "alias 名字=命令 | alias del 名字 | alias list",
+		UsageEN:     "alias name=command | alias del name | alias list",
 		Plugin:      p.Name(),
 		Category:    "tools",
 		OwnerOnly:   true,
@@ -63,9 +64,29 @@ func (p *AliasPlugin) load() {
 }
 
 func (p *AliasPlugin) save() {
-	_ = os.MkdirAll(filepath.Dir(p.file), 0o755)
+	_ = os.MkdirAll(filepath.Dir(p.file), 0o700)
 	data, _ := json.MarshalIndent(p.mgr.Commands().UserAliases(), "", "  ")
-	_ = os.WriteFile(p.file, data, 0o644)
+	_ = os.WriteFile(p.file, data, 0o600)
+}
+
+func (p *AliasPlugin) help(ctx *interfaces.CommandContext) error {
+	return ctx.Edit(ctx.Tlocal(
+		`🔗 <b>alias 别名</b>
+
+<code>alias p=ping</code>  以后 <code>.p</code> 就是 <code>.ping</code>
+<code>alias d5="dme 5"</code>  带参数也行（设完发 .d5）
+<code>alias list</code>  看全部
+<code>alias del p</code>  删掉
+
+别名只展开一层，命令部分不用写前缀。`,
+		`🔗 <b>alias</b>
+
+<code>alias p=ping</code>  now <code>.p</code> means <code>.ping</code>
+<code>alias d5="dme 5"</code>  fixed args work too (then send .d5)
+<code>alias list</code>  list all
+<code>alias del p</code>  remove one
+
+Aliases expand once; no prefix needed in the command part.`))
 }
 
 func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
@@ -73,63 +94,62 @@ func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
 	if len(args) == 0 {
 		return p.listAliases(ctx)
 	}
+	if args[0] == "help" || args[0] == "h" {
+		return p.help(ctx)
+	}
 
-	sub := args[0]
-	switch sub {
+	switch args[0] {
 	case "set":
 		if len(args) < 3 {
-			return ctx.Edit("用法: alias set <名称> <命令>")
+			return p.help(ctx)
 		}
-		name := args[1]
-		cmd := strings.Join(args[2:], " ")
+		name, cmd := args[1], strings.Join(args[2:], " ")
 		p.mgr.Commands().AddUserAlias(name, cmd)
 		p.save()
-		return ctx.Edit(fmt.Sprintf("✅ 别名已设置: <code>%s</code> → <code>%s</code>", html.EscapeString(name), html.EscapeString(cmd)))
+		return ctx.Edit(fmt.Sprintf("✅ <code>.%s</code> → <code>.%s</code>", name, cmd))
 
 	case "del", "delete", "remove":
 		if len(args) < 2 {
-			return ctx.Edit("用法: alias del <名称>")
+			return p.help(ctx)
 		}
 		name := args[1]
-		aliases := p.mgr.Commands().UserAliases()
-		if _, ok := aliases[name]; !ok {
-			return ctx.Edit("别名不存在: " + name)
+		if _, ok := p.mgr.Commands().UserAliases()[name]; !ok {
+			return ctx.Edit(ctx.Tlocal("没有这个别名: "+name, "No such alias: "+name))
 		}
 		p.mgr.Commands().RemoveUserAlias(name)
 		p.save()
-		return ctx.Edit(fmt.Sprintf("🗑 别名已删除: %s", name))
+		return ctx.Edit(fmt.Sprintf("🗑 <code>.%s</code>", name))
 
 	case "list", "ls":
 		return p.listAliases(ctx)
 
-	case "help", "h":
-		return ctx.Edit(`🔧 <b>别名管理</b>
-
-<b>用法:</b>
-• <code>alias set <名称> <命令></code> - 设置别名
-• <code>alias del <名称></code> - 删除别名
-• <code>alias list</code> - 列出所有别名
-
-<b>示例:</b>
-• <code>alias set p ping</code>
-• <code>alias set deploy exec ./deploy.sh</code>
-
-<b>注意:</b> 别名不支持嵌套，仅展开一次。命令部分不需要带前缀。`)
-
 	default:
-		return ctx.Edit("未知子命令: " + sub)
+		// Sugar: alias p=ping
+		if name, cmd, ok := strings.Cut(args[0], "="); ok && len(args) == 1 {
+			p.mgr.Commands().AddUserAlias(name, cmd)
+			p.save()
+			return ctx.Edit(fmt.Sprintf("✅ <code>.%s</code> → <code>.%s</code>", name, cmd))
+		}
+		return p.help(ctx)
 	}
 }
 
 func (p *AliasPlugin) listAliases(ctx *interfaces.CommandContext) error {
 	aliases := p.mgr.Commands().UserAliases()
 	if len(aliases) == 0 {
-		return ctx.Edit("暂无别名")
+		return ctx.Edit(ctx.Tlocal(
+			"还没有别名。<code>alias p=ping</code> 试一个",
+			"No aliases yet. Try <code>alias p=ping</code>"))
 	}
+	names := make([]string, 0, len(aliases))
+	for name := range aliases {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	var b strings.Builder
-	b.WriteString("🔧 <b>命令别名列表:</b>\n\n")
-	for name, cmd := range aliases {
-		b.WriteString(fmt.Sprintf("• <code>%s</code> → <code>%s</code>\n", html.EscapeString(name), html.EscapeString(cmd)))
+	b.WriteString("🔗 " + ctx.Tlocal("别名", "Aliases") + "\n\n")
+	for _, name := range names {
+		fmt.Fprintf(&b, "<code>.%s</code> → <code>.%s</code>\n", name, aliases[name])
 	}
 	return ctx.Edit(b.String())
 }
