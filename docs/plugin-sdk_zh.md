@@ -1,280 +1,132 @@
-# PaperValet 外部插件 SDK
+# 插件 SDK
 
-[English](plugin-sdk.md) | **中文**
+[English](plugin-sdk.md) · **中文**
 
-本文档说明如何以共享库（`.so`）的形式为 PaperValet 开发外部插件。
+外部插件是 Go plugin（`.so`），只引用 `github.com/TiaraBasori/PaperValet/pkg/plugin`。完整可运行的例子在 [`examples/plugin-example`](../examples/plugin-example)。
 
-## 插件结构
-
-每个插件是一个 Go 包，需要提供 `New()` 函数并返回 `plugin.Plugin` 接口。
-
-### 必须实现的接口
+## 最小插件
 
 ```go
 package main
 
 import (
-    "context"
-    "github.com/TiaraBasori/PaperValet/internal/plugin"
+	"context"
+
+	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// Plugin 是所有插件必须实现的接口
-type Plugin interface {
-    Name() string
-    Description() string
-    Init(ctx context.Context, mgr *plugin.Manager) error
-    Start(ctx context.Context) error
-    Stop(ctx context.Context) error
+var Metadata = &plugin.PluginMetadata{
+	Name:        "hello",
+	Description: "打招呼",
+	DescEN:      "Say hello",
+	Version:     "1.0.0",
+	Author:      "you",
 }
+
+type Hello struct{}
+
+func New() *Hello { return &Hello{} }
+
+func (p *Hello) Name() string        { return "hello" }
+func (p *Hello) Description() string { return Metadata.Description }
+func (p *Hello) DescEN() string      { return Metadata.DescEN }
+
+func (p *Hello) Init(_ context.Context, mgr plugin.Manager) error {
+	return mgr.RegisterCommand(&plugin.Command{
+		Name:        "hello",
+		Description: "打招呼",
+		DescEN:      "Say hello",
+		Usage:       "hello [名字]",
+		UsageEN:     "hello [name]",
+		Plugin:      p.Name(),
+		Handler: func(ctx *plugin.CommandContext) error {
+			return ctx.Edit("👋 " + plugin.Bold(ctx.GetArgs()))
+		},
+	})
+}
+
+func (p *Hello) Start(context.Context) error { return nil }
+func (p *Hello) Stop(context.Context) error  { return nil }
 ```
 
-### 插件元数据（可选）
+加载器查找两个符号：
+
+- `New`：不带参数，返回任何实现了 `plugin.Plugin` 的值，第二个返回值可以是 `error`。
+- `Metadata`（可选）：`*plugin.PluginMetadata`，`apt ls` 和 `apt info` 会显示。
+
+## 生命周期
+
+`New` → `Init`（注册命令）→ `Start` → … → `Stop`。
+
+后台 goroutine 在 `Start` 里启动，在 `Stop` 里退出。`apt rm` 和 `reload` 也会调用 `Stop`，不只是关机时。
+
+## 命令
+
+| 字段 | 含义 |
+|---|---|
+| `Name`、`Aliases` | 命令名和别名，别名越少越好 |
+| `Description`、`DescEN` | `help` 里的一行说明 |
+| `Usage`、`UsageEN` | `help 命令` 显示的用法，可用 Markdown |
+| `Plugin` | 所属插件，`help` 按它分组 |
+| `OwnerOnly` | 只有主人和 sudo 用户能用 |
+| `RateLimit` | 同一用户两次调用的最短间隔（秒） |
+
+## 命令上下文
 
 ```go
-// Metadata 变量可选，供插件加载器读取
-var Metadata = &loader.PluginMetadata{
-    Name:        "my-plugin",
-    Description: "我的自定义插件",
-    Version:     "1.0.0",
-    Author:      "你的名字",
-    MinVersion:  "0.1.0",  // 所需的最低 PaperValet 版本
-}
+ctx.Args, ctx.GetArg(i), ctx.GetArgs(), ctx.ArgCount()
+ctx.Message           // 触发命令的消息（ChatID、UserID、ReplyToID、Message）
+ctx.Edit(md)          // 编辑命令消息
+ctx.Reply(md)         // 回复命令消息
+ctx.ReplyMedia(path, caption)
+ctx.Delete(), ctx.DeleteMessages(ids...)
+ctx.Tlocal(zh, en)    // 按用户语言选字符串
+ctx.API               // *tg.Client
+ctx.PeerResolver, ctx.Media, ctx.Downloader, ctx.Logger
+ctx.Context()         // 关机时取消
 ```
 
-## 完整示例
-
-### myplugin/main.go
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "strings"
-
-    "github.com/TiaraBasori/PaperValet/internal/interfaces"
-    "github.com/TiaraBasori/PaperValet/internal/plugin"
-)
-
-// MyPlugin 实现 plugin.Plugin
-type MyPlugin struct {
-    mgr *plugin.Manager
-}
-
-func (p *MyPlugin) Name() string        { return "myplugin" }
-func (p *MyPlugin) Description() string { return "自定义插件示例" }
-
-// Init 注册指令
-func (p *MyPlugin) Init(ctx context.Context, mgr *plugin.Manager) error {
-    p.mgr = mgr
-
-    return mgr.RegisterCommand(&interfaces.Command{
-        Name:        "hello",
-        Aliases:     []string{"hi"},
-        Description: "打个招呼",
-        Usage:       "hello [name]",
-        Plugin:      p.Name(),
-        Category:    "tools",
-        Handler:     p.handleHello,
-    })
-}
-
-func (p *MyPlugin) Start(ctx context.Context) error { return nil }
-func (p *MyPlugin) Stop(ctx context.Context) error  { return nil }
-
-func (p *MyPlugin) handleHello(ctx *interfaces.CommandContext) error {
-    name := "World"
-    if ctx.ArgCount() > 0 {
-        name = ctx.GetArg(0)
-    }
-    return ctx.Edit(fmt.Sprintf("Hello, %s! 👋", name))
-}
-
-// New 是插件加载器的入口函数
-func New() interface{} {
-    return &MyPlugin{}
-}
-
-// Metadata 供插件加载器读取
-var Metadata = &loader.PluginMetadata{
-    Name:        "myplugin",
-    Description: "自定义插件示例",
-    Version:     "1.0.0",
-    Author:      "你的名字",
-    MinVersion:  "0.1.0",
-}
-```
-
-### 编译插件
-
-以 plugin 模式编译（生成 .so，而非可执行文件）：
-
-```bash
-go build -buildmode=plugin -o myplugin.so ./myplugin
-```
-
-复制到 plugins 目录中：
-
-```bash
-cp myplugin.so /path/to/papervalet/plugins/
-```
-
-## 与 PaperValet 一起构建
-
-### 方法 1：使用示例模板
-
-克隆模板仓库：
-
-```bash
-git clone https://github.com/PaperValet/plugin-template myplugin
-cd myplugin
-```
-
-编辑 `main.go` 实现插件逻辑，然后编译：
-
-```bash
-go build -buildmode=plugin -o myplugin.so .
-```
-
-安装：
-
-```bash
-mkdir -p ~/.config/papervalet/plugins
-cp myplugin.so ~/.config/papervalet/plugins/
-```
-
-### 方法 2：作为 Go module
-
-`go.mod`：
-
-```go
-module github.com/yourname/myplugin
-
-go 1.25
-
-require github.com/TiaraBasori/PaperValet v0.1.0
-```
-
-```bash
-go mod tidy
-go build -buildmode=plugin -o myplugin.so .
-```
-
-## 插件生命周期
-
-1. **加载（Load）** — PaperValet 通过 `plugin.Open()` 加载 `.so` 文件
-2. **创建（New）** — 调用 `New()` 获取 `plugin.Plugin` 实例
-3. **初始化（Init）** — 传入插件管理器，用来注册指令
-4. **启动（Start）** — 所有插件初始化完成后统一调用
-5. **停止（Stop）** — 关闭时调用，释放资源
-
-## Command Context 方法
-
-```go
-ctx.Message    // *interfaces.MessageEvent - 触发指令的消息
-ctx.Args       // []string - 解析后的参数
-ctx.GetArg(i)  // string - 按索引取参数
-ctx.ArgCount() // int - 参数个数
-ctx.Edit(text) // error - 编辑指令消息（userbot 交互方式）
-ctx.Reply(text) // error - 回复消息
-ctx.Delete()   // error - 删除指令消息
-ctx.API        // *tg.Client - Telegram API 客户端
-ctx.PeerResolver // interfaces.PeerResolver - 用于解析账号
-ctx.Emitter    // interfaces.Emitter - 触发事件
-ctx.Session    // *interfaces.SessionContext - 当前会话上下文
-ctx.Logger     // interfaces.Logger - 日志记录器
-```
+`DeleteMessages` 在频道和超级群里也能正确删除。
 
 ## Host 服务
 
-`mgr.Host()` 提供和命令上下文一样的服务，不需要触发消息。在 `Init` 里拿到后可以给定时任务、重启恢复的任务、事件监听使用。网络调用要等 `Start` 之后。
+`mgr.Host()` 提供同样的服务，不需要触发消息，适合定时任务和重启后恢复的任务。在 `Init` 里拿到，网络调用要等 `Start` 之后。
 
 ```go
 h := mgr.Host()
-h.API()                       // *tg.Client
-h.PeerResolver()              // 解析 chat id
-h.Media(), h.Downloader()     // 发送 / 下载文件
-h.SelfID()                    // 当前账号 id（登录前为 0）
-h.Logger("myplugin")          // 带名字的 logger
-h.DataDir("myplugin")         // data/myplugin，按需创建
-h.Send(ctx, chatID, md, 0)    // 发送 Markdown，返回消息 id
-h.Lang(userID)                // "zh-CN" 或 "en-US"
+h.API(), h.PeerResolver(), h.Media(), h.Downloader()
+h.SelfID()                   // 当前账号（登录前为 0）
+h.Logger("hello")
+h.DataDir("hello")           // data/hello，按需创建
+h.Send(ctx, chatID, md, 0)   // 返回新消息 id
+h.Lang(userID)               // "zh-CN" 或 "en-US"
 ```
 
-## 会话用法
+## Markdown
+
+消息文本是 Telegram Markdown。来自用户的内容一律用辅助函数包一下，免得符号被当成格式：
 
 ```go
-func (p *MyPlugin) handleCmd(ctx *interfaces.CommandContext) error {
-    session := ctx.Session
-    if session == nil {
-        return ctx.Edit("无可用会话")
-    }
-
-    // 读写会话数据
-    count, _ := session.Get("counter")
-    if count == nil {
-        count = 0
-    }
-    count = count.(int) + 1
-    session.Set("counter", count)
-
-    return ctx.Edit(fmt.Sprintf("计数器: %d", count))
-}
+plugin.Escape(s)   plugin.Code(v)   plugin.Pre(s)
+plugin.Bold(s)     plugin.Italic(s) plugin.Link(text, url)
+plugin.Mention(text, userID)
 ```
 
-## 事件触发
+代码片段里反斜杠转义无效，要用 `plugin.Code`。
 
-```go
-func (p *MyPlugin) handleCmd(ctx *interfaces.CommandContext) error {
-    ctx.Emitter.Emit(ctx.Context(), "myplugin.custom_event", map[string]any{
-        "user_id": ctx.Message.UserID,
-        "data":    "自定义数据",
-    })
-    return nil
-}
+## 构建
+
+Go plugin 要求插件和主程序的 Go 版本、所有共享包完全一致。用和 Release 相同的 Go 版本（目前 1.25.14），在 workspace 里带 `-trimpath` 编译：
+
+```bash
+go work init . /path/to/PaperValet
+go build -trimpath -buildmode=plugin -o hello.so .
 ```
 
-## 版本兼容性
+如果靠 `replace` 指令编译，加载时会报 plugin was built with a different version of package。
 
-- 在 Metadata 中设置 `MinVersion` 来声明所需的最低 PaperValet 版本
-- 插件加载器会在加载前校验版本
-- 建议使用语义化版本号（如 `"0.1.0"`、`"1.0.0"`）
+把 `.so` 放进 `plugins/`，再 `.restart`。只有带 cgo 的 linux/amd64 构建能加载插件，Release 里的就是这种。
 
-## 最佳实践
+## 发布
 
-1. **优雅处理错误** — 在 handler 中返回 error，不要 panic
-2. **遵循 context 规范** — 尊重 `ctx.Context()` 的取消信号
-3. **不要阻塞主线程** — 耗时任务请放到独立的 goroutine
-4. **正确清理资源** — 在 `Stop()` 中释放所有占用的资源
-5. **使用结构化日志** — 通过 `ctx.Logger` 记录日志，不要用 fmt.Println
-6. **只依赖公开 API** — 只使用 `pkg/plugin` 中的接口，不要依赖 `internal/` 包
-
-## 发布插件
-
-1. 为插件创建 GitHub 仓库
-2. 配置 GitHub Actions，在推送 tag 时自动构建 `.so`
-3. 在 Release 中附带 `.so` 构建产物
-4. 用户下载后放到 `plugins/` 目录即可使用
-
-## 示例发布工作流
-
-```yaml
-# .github/workflows/release.yml
-name: Release
-on:
-  push:
-    tags: ['v*']
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - run: go build -buildmode=plugin -o myplugin.so .
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: myplugin.so
-```
+在 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) 的 `plugins-external/` 下新建目录。仓库 CI 会对着最新的 PaperValet 编译所有插件，发布 `.so` 和 `apt` 读取的 `plugins.json` 索引。
