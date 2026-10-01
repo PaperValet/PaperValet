@@ -10,7 +10,8 @@ import (
 )
 
 // Parser listens for message events and dispatches commands.
-// As a userbot, the Parser only handles outgoing messages (IsOut == true).
+// It handles the owner's outgoing messages plus, when sudo is enabled,
+// messages from delegated users. Other people's traffic is ignored.
 type Parser struct {
 	registry *Registry
 	bus      *eventbus.Bus
@@ -32,7 +33,7 @@ func (p *Parser) Start() {
 		if !ok || msg == nil || msg.Message == nil {
 			return nil
 		}
-		if !msg.IsOut {
+		if !msg.IsOut && !p.registry.CanUseCommands(msg.UserID) {
 			return nil
 		}
 		text := strings.TrimSpace(msg.Text)

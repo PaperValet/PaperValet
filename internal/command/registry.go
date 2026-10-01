@@ -76,6 +76,15 @@ func (r *Registry) SetSudoChecker(f func(int64) bool) {
 	r.sudoChecker = f
 }
 
+// CanUseCommands reports whether a user may trigger commands at all:
+// the owner (outgoing messages) or a sudo-enabled delegated user.
+func (r *Registry) CanUseCommands(userID int64) bool {
+	if r.ownerID != 0 && userID == r.ownerID {
+		return true
+	}
+	return r.isSudoUser(userID)
+}
+
 // SetMediaSender wires the media manager so command handlers can send files.
 func (r *Registry) SetMediaSender(m interfaces.MediaSender) {
 	r.mu.Lock()
