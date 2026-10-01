@@ -153,6 +153,7 @@ func (a *App) registerBuiltins() error {
 		core,
 		builtin.NewApt(a.pluginLoader),
 		builtin.NewInfo(),
+		builtin.NewRe(),
 		builtin.NewAlias(),
 		builtin.NewExec(),
 		builtin.NewSudo(),
