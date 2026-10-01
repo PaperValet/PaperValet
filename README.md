@@ -25,7 +25,7 @@ Everything is triggered by your own messages. `.help` lists all commands, `.help
 
 | Plugin | Command | What it does |
 |---|---|---|
-| ping | `.ping [all\|dc2\|host]` | Latency to Telegram, its DCs or any host |
+| ping | `.ping [host]`, `.pingdc` | Latency to Telegram, a host, or every DC |
 | status | `.status` | Version, host, resources, runtime |
 | info | `.info` | User, chat and message details |
 | re | `.re [count] [times]` | Repeat the replied message |
@@ -34,7 +34,7 @@ Everything is triggered by your own messages. `.help` lists all commands, `.help
 | apt | `.apt s / i / rm / ls / info` | Install and remove external plugins |
 | reload | `.reload` | Reload external plugins |
 | restart | `.restart` | Restart in place |
-| update | `.update [now]` | Upgrade from GitHub Releases |
+| update | `.update [now\|-f]` | Upgrade from GitHub Releases |
 | backup | `.backup [restore]` | Back up config to Saved Messages |
 | sudo | `.sudo add / remove / list` | Let other users run commands |
 | alias | `.alias name=command` | Your own shortcuts |
