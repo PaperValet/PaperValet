@@ -19,52 +19,56 @@ const (
 	reDelay     = 300 * time.Millisecond
 )
 
-// RePlugin repeats replied messages. Promoted from the external plugin
-// repository; forwards without author so media and formatting survive.
+// RePlugin repeats replied messages: delete the command, forward the
+// target into this chat, and copy it verbatim where forwarding is banned.
 type RePlugin struct{}
 
 func NewRe() *RePlugin { return &RePlugin{} }
 
 func (p *RePlugin) Name() string        { return "re" }
-func (p *RePlugin) Description() string { return "复读回复的消息" }
-func (p *RePlugin) DescEN() string      { return "Repeat the replied message" }
+func (p *RePlugin) Description() string { return "复读消息" }
+func (p *RePlugin) DescEN() string      { return "Repeat messages" }
 
 func (p *RePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "re",
-		Description: "复读：回复一条消息发 re，可带条数和次数",
-		DescEN:      "Repeat: reply with re, optionally count and times",
-		Usage:       "re [条数] [次数]（回复消息）",
-		UsageEN:     "re [count] [times] (reply)",
-		Plugin:      p.Name(),
-		Category:    "tools",
-		OwnerOnly:   true,
-		Handler:     p.handleRe,
+		Description: "复读消息",
+		DescEN:      "Repeat messages",
+		Usage: `re [条数] [次数]（回复一条消息）
+
+<b>示例</b>
+• <code>re</code>  复读回复的那条
+• <code>re 3</code>  从那条起连续 3 条一起复读
+• <code>re 1 5</code>  那一条复读 5 次
+
+<b>机制</b>
+• 先删掉命令消息，再把目标消息转发到当前聊天
+• 转发保留图片、贴纸、文件和格式
+• 聊天禁止转发时，改为发送一模一样的消息（文字、格式、媒体都照搬）
+• 在话题群里发到同一个话题
+• 上限 100 条 × 10 次`,
+		UsageEN: `re [count] [times] (reply to a message)
+
+<b>Examples</b>
+• <code>re</code>  repeat the replied message
+• <code>re 3</code>  repeat it and the next 2
+• <code>re 1 5</code>  repeat it 5 times
+
+<b>How it works</b>
+• Deletes the command, then forwards the target into this chat
+• Forwarding keeps photos, stickers, files and formatting
+• When the chat forbids forwarding, sends an identical copy instead (text, formatting and media)
+• In forum groups it posts to the same topic
+• Max 100 messages × 10 times`,
+		Plugin:    p.Name(),
+		Category:  "tools",
+		OwnerOnly: true,
+		Handler:   p.handleRe,
 	})
 }
 
 func (p *RePlugin) Start(_ context.Context) error { return nil }
 func (p *RePlugin) Stop(_ context.Context) error  { return nil }
-
-func (p *RePlugin) help(ctx *interfaces.CommandContext) error {
-	return ctx.Edit(ctx.Tlocal(
-		`🔁 <b>re 复读</b>
-
-回复一条消息再发：
-<code>re</code>  复读这一条
-<code>re 3</code>  从这条起往后 3 条一起复读
-<code>re 1 5</code>  这一条复读 5 次
-
-图片、贴纸、格式都会保留。上限 100 条 × 10 次。`,
-		`🔁 <b>re repeat</b>
-
-Reply to a message, then send:
-<code>re</code>  repeat it
-<code>re 3</code>  repeat it and the next 2
-<code>re 1 5</code>  repeat it 5 times
-
-Media, stickers and formatting are kept. Max 100 messages × 10 times.`))
-}
 
 func randomID() int64 {
 	var b [8]byte
@@ -74,22 +78,22 @@ func randomID() int64 {
 
 func (p *RePlugin) handleRe(ctx *interfaces.CommandContext) error {
 	if ctx.Message == nil || !ctx.Message.IsReply {
-		return p.help(ctx)
+		return ctx.Edit(ctx.Tlocal(
+			"回复一条消息再发 <code>re</code>，详细说明见 <code>help re</code>",
+			"Reply to a message with <code>re</code>; see <code>help re</code>"))
 	}
 	count, repeat := 1, 1
 	if ctx.ArgCount() > 0 {
 		n, err := parseInt(ctx.GetArg(0))
 		if err != nil || n < 1 || n > reMaxCount {
-			return ctx.Edit(ctx.Tlocal(
-				fmt.Sprintf("条数要写 1–%d", reMaxCount), fmt.Sprintf("Count must be 1-%d", reMaxCount)))
+			return ctx.Edit(ctx.Tlocal(fmt.Sprintf("条数要写 1–%d", reMaxCount), fmt.Sprintf("Count must be 1-%d", reMaxCount)))
 		}
 		count = n
 	}
 	if ctx.ArgCount() > 1 {
 		n, err := parseInt(ctx.GetArg(1))
 		if err != nil || n < 1 || n > reMaxRepeat {
-			return ctx.Edit(ctx.Tlocal(
-				fmt.Sprintf("次数要写 1–%d", reMaxRepeat), fmt.Sprintf("Times must be 1-%d", reMaxRepeat)))
+			return ctx.Edit(ctx.Tlocal(fmt.Sprintf("次数要写 1–%d", reMaxRepeat), fmt.Sprintf("Times must be 1-%d", reMaxRepeat)))
 		}
 		repeat = n
 	}
@@ -98,52 +102,120 @@ func (p *RePlugin) handleRe(ctx *interfaces.CommandContext) error {
 	if err != nil {
 		return ctx.Edit("❌ " + err.Error())
 	}
+	ids := p.targetIDs(ctx, peer, count)
+	_ = ctx.Delete()
 
-	// Collect the replied message and the following ones, oldest first,
-	// stopping before the command itself.
-	ids := []int{ctx.Message.ReplyToID}
-	if count > 1 {
-		page, _, err := pageHistory(ctx, peer, ctx.Message.Message.ID, reMaxCount)
-		if err == nil {
-			var after []int
-			for _, m := range page {
-				if m.ID > ctx.Message.ReplyToID {
-					after = append(after, m.ID)
+	top, inTopic := topicOf(ctx)
+	for r := 0; r < repeat; r++ {
+		if err := p.forward(ctx, peer, ids, top, inTopic); err != nil {
+			ctx.Logger.Info("re forward refused, copying", "error", err)
+			for _, id := range ids {
+				if err := p.copyMessage(ctx, peer, id, top, inTopic); err != nil {
+					ctx.Logger.Warn("re copy", "id", id, "error", err)
 				}
+				time.Sleep(reDelay)
 			}
-			// page is newest first; take the ones right after the reply.
-			for i := len(after) - 1; i >= 0 && len(ids) < count; i-- {
-				ids = append(ids, after[i])
-			}
+			continue
+		}
+		time.Sleep(reDelay)
+	}
+	return nil
+}
+
+// targetIDs returns the replied message plus the following count-1, oldest
+// first, all before the command.
+func (p *RePlugin) targetIDs(ctx *interfaces.CommandContext, peer tg.InputPeerClass, count int) []int {
+	ids := []int{ctx.Message.ReplyToID}
+	if count <= 1 {
+		return ids
+	}
+	page, _, err := pageHistory(ctx, peer, ctx.Message.Message.ID, reMaxCount)
+	if err != nil {
+		return ids
+	}
+	for i := len(page) - 1; i >= 0 && len(ids) < count; i-- {
+		if page[i].ID > ctx.Message.ReplyToID {
+			ids = append(ids, page[i].ID)
 		}
 	}
+	return ids
+}
 
-	_ = ctx.Delete()
-	sent := 0
-	for r := 0; r < repeat; r++ {
-		rids := make([]int64, len(ids))
-		for i := range rids {
-			rids[i] = randomID()
+func (p *RePlugin) forward(ctx *interfaces.CommandContext, peer tg.InputPeerClass, ids []int, top int, inTopic bool) error {
+	rids := make([]int64, len(ids))
+	for i := range rids {
+		rids[i] = randomID()
+	}
+	req := &tg.MessagesForwardMessagesRequest{FromPeer: peer, ToPeer: peer, ID: ids, RandomID: rids}
+	if inTopic {
+		req.SetTopMsgID(top)
+	}
+	_, err := ctx.API.MessagesForwardMessages(ctx.Context(), req)
+	return err
+}
+
+// copyMessage sends an identical message: same text, entities and media.
+func (p *RePlugin) copyMessage(ctx *interfaces.CommandContext, peer tg.InputPeerClass, id, top int, inTopic bool) error {
+	msg, _, err := fetchMessage(ctx, id)
+	if err != nil {
+		return err
+	}
+	var reply tg.InputReplyToClass
+	if inTopic {
+		reply = &tg.InputReplyToMessage{ReplyToMsgID: top, TopMsgID: top}
+	}
+	if media := inputMediaOf(msg.Media); media != nil {
+		req := &tg.MessagesSendMediaRequest{Peer: peer, Media: media, Message: msg.Message, RandomID: randomID()}
+		if len(msg.Entities) > 0 {
+			req.SetEntities(msg.Entities)
 		}
-		req := &tg.MessagesForwardMessagesRequest{
-			FromPeer:   peer,
-			ToPeer:     peer,
-			ID:         ids,
-			RandomID:   rids,
-			DropAuthor: true,
+		if reply != nil {
+			req.SetReplyTo(reply)
 		}
-		if top, ok := topicOf(ctx); ok {
-			req.SetTopMsgID(top)
+		_, err = ctx.API.MessagesSendMedia(ctx.Context(), req)
+		return err
+	}
+	if msg.Message == "" {
+		return fmt.Errorf("nothing to copy")
+	}
+	req := &tg.MessagesSendMessageRequest{Peer: peer, Message: msg.Message, RandomID: randomID()}
+	if len(msg.Entities) > 0 {
+		req.SetEntities(msg.Entities)
+	}
+	if reply != nil {
+		req.SetReplyTo(reply)
+	}
+	if _, isWeb := msg.Media.(*tg.MessageMediaWebPage); !isWeb {
+		req.NoWebpage = true
+	}
+	_, err = ctx.API.MessagesSendMessage(ctx.Context(), req)
+	return err
+}
+
+// inputMediaOf turns received media into sendable media by reference.
+// Returns nil for web previews and media that cannot be resent.
+func inputMediaOf(m tg.MessageMediaClass) tg.InputMediaClass {
+	switch v := m.(type) {
+	case *tg.MessageMediaPhoto:
+		if ph, ok := v.Photo.(*tg.Photo); ok {
+			in := &tg.InputMediaPhoto{ID: &tg.InputPhoto{ID: ph.ID, AccessHash: ph.AccessHash, FileReference: ph.FileReference}}
+			in.Spoiler = v.Spoiler
+			return in
 		}
-		if _, err := ctx.API.MessagesForwardMessages(ctx.Context(), req); err != nil {
-			ctx.Logger.Warn("re forward", "error", err)
-			if sent == 0 {
-				return p.fallbackText(ctx, peer, repeat)
-			}
-			return nil
+	case *tg.MessageMediaDocument:
+		if d, ok := v.Document.(*tg.Document); ok {
+			in := &tg.InputMediaDocument{ID: &tg.InputDocument{ID: d.ID, AccessHash: d.AccessHash, FileReference: d.FileReference}}
+			in.Spoiler = v.Spoiler
+			return in
 		}
-		sent++
-		time.Sleep(reDelay)
+	case *tg.MessageMediaGeo:
+		if g, ok := v.Geo.(*tg.GeoPoint); ok {
+			return &tg.InputMediaGeoPoint{GeoPoint: &tg.InputGeoPoint{Lat: g.Lat, Long: g.Long}}
+		}
+	case *tg.MessageMediaContact:
+		return &tg.InputMediaContact{PhoneNumber: v.PhoneNumber, FirstName: v.FirstName, LastName: v.LastName, Vcard: v.Vcard}
+	case *tg.MessageMediaDice:
+		return &tg.InputMediaDice{Emoticon: v.Emoticon}
 	}
 	return nil
 }
@@ -161,27 +233,4 @@ func topicOf(ctx *interfaces.CommandContext) (int, bool) {
 		return top, true
 	}
 	return h.ReplyToMsgID, true
-}
-
-// fallbackText copies plain text when forwarding is restricted
-// (protected chats forbid forwards).
-func (p *RePlugin) fallbackText(ctx *interfaces.CommandContext, peer tg.InputPeerClass, repeat int) error {
-	msg, _, err := fetchMessage(ctx, ctx.Message.ReplyToID)
-	if err != nil || msg.Message == "" {
-		return nil
-	}
-	for r := 0; r < repeat; r++ {
-		req := &tg.MessagesSendMessageRequest{Peer: peer, Message: msg.Message, RandomID: randomID()}
-		if len(msg.Entities) > 0 {
-			req.SetEntities(msg.Entities)
-		}
-		if top, ok := topicOf(ctx); ok {
-			req.SetReplyTo(&tg.InputReplyToMessage{ReplyToMsgID: top, TopMsgID: top})
-		}
-		if _, err := ctx.API.MessagesSendMessage(ctx.Context(), req); err != nil {
-			return nil
-		}
-		time.Sleep(reDelay)
-	}
-	return nil
 }
