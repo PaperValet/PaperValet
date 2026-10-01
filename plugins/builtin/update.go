@@ -31,21 +31,40 @@ func NewUpdate(version string, restart func(*interfaces.CommandContext) error) *
 }
 
 func (p *UpdatePlugin) Name() string        { return "update" }
-func (p *UpdatePlugin) Description() string { return "检查并安装新版本" }
+func (p *UpdatePlugin) Description() string { return "升级版本" }
 func (p *UpdatePlugin) DescEN() string      { return "Check for and install new versions" }
 
 func (p *UpdatePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "update",
-		Aliases:     []string{"upgrade"},
-		Description: "检查新版本；update now 下载替换并重启",
-		DescEN:      "Check for a new version; update now downloads, replaces and restarts",
-		Usage:       "update | update now",
-		UsageEN:     "update | update now",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleUpdate,
+		Description: "升级版本",
+		DescEN:      "Upgrade",
+		Usage: `update · update now
+
+<b>示例</b>
+• <code>update</code>  检查有没有新版本
+• <code>update now</code>  下载并安装，然后自动重启
+
+<b>机制</b>
+• 查询 GitHub 上 PaperValet 的最新 Release
+• 下载与本机系统和架构匹配的安装包，只替换程序本身
+• 先写到临时文件再原子替换，下载失败不会弄坏现有程序
+• 配置、登录和插件都不受影响`,
+		UsageEN: `update · update now
+
+<b>Examples</b>
+• <code>update</code>  check for a new version
+• <code>update now</code>  download, install and restart
+
+<b>How it works</b>
+• Queries the latest PaperValet release on GitHub
+• Downloads the bundle for this OS/arch and replaces only the binary
+• Writes to a temp file then swaps atomically; a failed download leaves the old binary intact
+• Config, login and plugins are untouched`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleUpdate,
 	})
 }
 
