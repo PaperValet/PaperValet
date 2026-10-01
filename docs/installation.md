@@ -5,77 +5,76 @@
 ## Requirements
 
 - Linux (amd64/arm64) or macOS
-- `curl` and `tar` (the installer checks these for you)
+- `curl` and `tar`
 - A Telegram account
-- API credentials (`api_id` / `api_hash`) from [my.telegram.org](https://my.telegram.org) → *API development tools*
+- API credentials (`api_id` / `api_hash`) from [my.telegram.org/apps](https://my.telegram.org/apps)
 
-## One-line Install
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
 ```
 
-An interactive menu opens. Pick `1) install` and you will be asked for three things:
+Pick `1) Install` and choose a command name (Enter gives `papervalet`). The installer only does two things:
 
-| Prompt | What to enter |
-|--------|---------------|
-| `api_id` | Numeric ID from my.telegram.org |
-| `api_hash` | Hash string from my.telegram.org |
-| `phone` | Your phone number in E.164 format, e.g. `+8613800138000` |
+- puts the binary in `~/.papervalet/bin/papervalet`
+- registers the command in `/usr/local/bin` (root) or `~/.local/bin` (other users, added to `PATH` in `~/.bashrc`)
 
-Everything is installed to `~/.papervalet`:
+Each command name is its own instance with its own data directory, so several accounts can live side by side. `papervalet` uses `~/.papervalet`, any other name `<name>` uses `~/.<name>`.
+
+## Setup
+
+```bash
+papervalet initialize
+```
+
+The installer offers to start this right away. Five steps, all in the language you pick first:
+
+1. **Language** — 简体中文 or English; also becomes the bot's default language
+2. **Telegram API** — `api_id` and `api_hash`
+3. **Phone number** — with country code, e.g. `+8613800138000`
+4. **Login** — the code Telegram sends you, plus your 2FA password if you have one
+5. **Keep running** — optionally register a systemd service (Enter gives the command name) that starts on boot
+
+Running `initialize` again keeps your old answers as defaults, and lets you switch accounts.
+
+Send `.ping` to yourself in any chat (Saved Messages works well); the bot answers `🏓 Pong!`.
+
+> The bot only reacts to **your own outgoing messages**.
+
+## Running
+
+Without the service:
+
+```bash
+papervalet run
+```
+
+With the service (root shown; user services add `--user`):
+
+```bash
+systemctl status papervalet
+journalctl -u papervalet -f
+```
 
 ```
 ~/.papervalet
-├── bin/papervalet      # the bot binary
-├── plugins/            # external .so plugins land here
-├── config.json         # generated from your answers
-└── run.sh              # launcher
+├── bin/papervalet
+├── config.json      # written by initialize (0600)
+├── session.json     # your Telegram login
+├── sessions.db
+├── plugins/
+└── data/
 ```
 
-## First Login
+## Upgrade / Uninstall
 
-Start the bot:
+Re-run the installer and pick `2) Upgrade` or `3) Uninstall`.
 
-```bash
-~/.papervalet/run.sh
-```
+- Upgrade replaces the binary, keeps all data, and restarts the instance's service if there is one.
+- Uninstall removes the command and service, then asks whether to delete the data directory too.
 
-Because the installer saved your phone number, only two prompts remain:
-
-1. **Login code** — Telegram sends a code to your app; type it in and press Enter. Codes expire in a few minutes, so do this promptly.
-2. **2FA password** — only if you have two-step verification enabled.
-
-On success you will see `authenticated` in the log followed by plugin loading lines. The bot is now live — send `.ping` to yourself in any chat (Saved Messages works well) and it should answer `🏓 Pong!`.
-
-> The bot only reacts to **your own outgoing messages**. Other people's messages are ignored.
-
-## Running as a Service (systemd)
-
-```bash
-sudo tee /etc/systemd/system/papervalet.service >/dev/null <<EOF
-[Unit]
-Description=PaperValet userbot
-After=network-online.target
-
-[Service]
-User=%i
-WorkingDirectory=$HOME/.papervalet
-EnvironmentFile=$HOME/.papervalet.env
-ExecStart=$HOME/.papervalet/bin/papervalet -config $HOME/.papervalet/config.json
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now papervalet
-journalctl -u papervalet -f        # follow logs
-```
-
-Once the session file exists, restarts never ask for a code again — login data is persisted in `session.json`.
+Non-interactive: `bash install.sh --upgrade --name papervalet -y`.
 
 ## Docker
 
@@ -87,7 +86,7 @@ docker run -d --name papervalet \
   ghcr.io/papervalet/papervalet:latest
 ```
 
-For the first login inside a container, pass credentials through the environment:
+The container reads `/app/config/config.json`. For the first login, pass credentials through the environment:
 
 ```bash
 docker run -it --rm \
@@ -99,14 +98,7 @@ docker run -it --rm \
   ghcr.io/papervalet/papervalet:latest
 ```
 
-The code is single-use; generate a fresh one for the container login.
-
-## Manual Install
-
-1. Download the bundle for your platform from [Releases](https://github.com/PaperValet/PaperValet/releases/latest) — e.g. `papervalet-linux-amd64.tar.gz`.
-2. Extract: `tar -xzf papervalet-linux-amd64.tar.gz && cd papervalet-linux-amd64`
-3. Edit `config.json` (copy from `config.example.json`) and fill in `api_id` / `api_hash`.
-4. Run `./run.sh`.
+The code is single-use; request a fresh one for the container login.
 
 ## From Source
 
@@ -114,29 +106,18 @@ The code is single-use; generate a fresh one for the container login.
 git clone https://github.com/PaperValet/PaperValet
 cd PaperValet
 go build -o papervalet ./cmd/papervalet
-cp config.example.json config.json   # fill in api_id / api_hash
-./papervalet -config config.json
+./papervalet initialize
+./papervalet run
 ```
 
-Go 1.25+ is required.
-
-## Upgrade / Uninstall
-
-Re-run the installer and pick the matching menu item:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
-```
-
-- `3) upgrade` — replaces the binary, keeps `config.json`, `session.json` and `sessions.db`
-- `4) uninstall` — removes the install; you can keep config and session data
+Go 1.25+ is required. `-config path/to/config.json` still works and keeps the current directory as the working directory.
 
 ## Troubleshooting
 
-**`PHONE_CODE_EXPIRED`** — the code expired before you entered it. Press `Ctrl+C`, start again, and enter the fresh code quickly.
+**`papervalet: command not found`** — open a new terminal, or run `source ~/.bashrc`.
 
-**Bot does not respond** — commands must be sent **from your own account** and start with the prefix (default `.`). Check the log level with `.loglevel debug` if needed.
+**Not logged in** — run `papervalet initialize` again.
 
-**arm64 hosts** — prebuilt `.so` plugins in release bundles are amd64-only. The core bot runs natively on arm64; external plugins can be built from the [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repo with `go build -buildmode=plugin`.
+**Bot does not respond** — commands must come **from your own account** and start with the prefix (default `.`).
 
-**Where are my files?** — everything lives under `~/.papervalet`. `session.json` is your Telegram login; back it up if you want to skip future logins.
+**arm64 hosts** — prebuilt `.so` plugins in release bundles are amd64-only. Build them from [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) with `go build -buildmode=plugin`.
