@@ -33,32 +33,32 @@ func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "alias",
 		Description: "命令别名",
 		DescEN:      "Command aliases",
-		Usage: `alias 名字=命令 · alias del 名字 · alias list
-
-<b>示例</b>
-• <code>alias p=ping</code>  以后发 .p 等于 .ping
-• <code>alias set d5 dme 5</code>  带固定参数（之后 .d5）
-• <code>alias list</code>  查看全部
-• <code>alias del p</code>  删除
-
-<b>机制</b>
-• 只展开一层，别名里再写别名不会继续展开
-• 发别名时后面跟的参数会接在固定参数后面
-• 命令部分不用写前缀
-• 保存在 data/aliases.json，重启不丢`,
-		UsageEN: `alias name=command · alias del name · alias list
-
-<b>Examples</b>
-• <code>alias p=ping</code>  .p now means .ping
-• <code>alias set d5 dme 5</code>  fixed arguments (then .d5)
-• <code>alias list</code>  list all
-• <code>alias del p</code>  remove
-
-<b>How it works</b>
-• Expands once; aliases inside aliases are not expanded
-• Extra arguments are appended after the fixed ones
-• No prefix needed in the command part
-• Stored in data/aliases.json, survives restarts`,
+		Usage: "alias 名字=命令 · alias del 名字 · alias list\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `alias p=ping`  以后发 .p 等于 .ping\n" +
+			"• `alias set d5 dme 5`  带固定参数（之后 .d5）\n" +
+			"• `alias list`  查看全部\n" +
+			"• `alias del p`  删除\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 只展开一层，别名里再写别名不会继续展开\n" +
+			"• 发别名时后面跟的参数会接在固定参数后面\n" +
+			"• 命令部分不用写前缀\n" +
+			"• 保存在 data/aliases.json，重启不丢",
+		UsageEN: "alias name=command · alias del name · alias list\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `alias p=ping`  .p now means .ping\n" +
+			"• `alias set d5 dme 5`  fixed arguments (then .d5)\n" +
+			"• `alias list`  list all\n" +
+			"• `alias del p`  remove\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Expands once; aliases inside aliases are not expanded\n" +
+			"• Extra arguments are appended after the fixed ones\n" +
+			"• No prefix needed in the command part\n" +
+			"• Stored in data/aliases.json, survives restarts",
 		Plugin:    p.Name(),
 		Category:  "tools",
 		OwnerOnly: true,
@@ -90,7 +90,7 @@ func (p *AliasPlugin) save() {
 }
 
 func aliasRow(prefix, name, repl string) string {
-	return fmt.Sprintf("<code>%s%s</code> → <code>%s%s</code>", prefix, htmlEscape(name), prefix, htmlEscape(repl))
+	return plugin.Code(prefix+name) + " → " + plugin.Code(prefix+repl)
 }
 
 func (p *AliasPlugin) handleAlias(ctx *interfaces.CommandContext) error {
