@@ -50,7 +50,7 @@ github.com/TiaraBasori/PaperValet/
     │   ├── help.go           # help (categorized, i18n)
     │   ├── status.go         # detailed system status
     │   ├── apt.go            # Plugin package manager (list/install/remove/load/unload)
-    │   ├── info.go           # info / ids
+    │   ├── info.go           # info
     │   ├── re.go             # re (repeat)
     │   ├── alias.go          # runtime alias set/del/list (wired into parsing)
     │   ├── exec.go           # exec/shell (owner)
@@ -368,7 +368,7 @@ func (e *CommandError) Unwrap() error { return e.Err }
 | **help** | help [cmd\|plugin] | core | Help & command discovery |
 | **status** | status | core | Runtime status |
 | **apt** | apt install/remove/load/unload/list/info/search | core | Plugin package manager |
-| **info** | info (ids) | tools | IDs and jump links |
+| **info** | info | tools | IDs and jump links |
 | **re** | re | tools | Repeat replied messages |
 | **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
 | **exec** | exec | admin | Shell commands (owner) |
