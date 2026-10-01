@@ -17,35 +17,21 @@ type InfoPlugin struct{}
 func NewInfo() *InfoPlugin { return &InfoPlugin{} }
 
 func (p *InfoPlugin) Name() string        { return "info" }
-func (p *InfoPlugin) Description() string { return "用户/群组/频道信息查询" }
+func (p *InfoPlugin) Description() string { return "查看用户/群组/频道 ID 信息" }
+func (p *InfoPlugin) DescEN() string      { return "Show user/group/channel IDs" }
 
 func (p *InfoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
-	cmds := []*interfaces.Command{
-		{
-			Name:        "info",
-			Aliases:     []string{"id", "whois"},
-			Description: "显示用户/群组/频道 ID 信息",
-			Usage:       "info [@用户名|回复消息]",
-			Plugin:      p.Name(),
-			Category:    "tools",
-			Handler:     p.handleInfo,
-		},
-		{
-			Name:        "fwd",
-			Aliases:     []string{"forward"},
-			Description: "转发回复的消息到目标",
-			Usage:       "fwd <目标>",
-			Plugin:      p.Name(),
-			Category:    "tools",
-			Handler:     p.handleForward,
-		},
-	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+	return mgr.RegisterCommand(&interfaces.Command{
+		Name:        "info",
+		Aliases:     []string{"id", "whois"},
+		Description: "显示当前聊天或 @用户 的 ID（回复可看对方）",
+		DescEN:      "Show IDs for this chat or @user (reply targets the sender)",
+		Usage:       "info [@用户名] 或回复",
+		UsageEN:     "info [@username] or reply",
+		Plugin:      p.Name(),
+		Category:    "tools",
+		Handler:     p.handleInfo,
+	})
 }
 
 func (p *InfoPlugin) Start(_ context.Context) error { return nil }
@@ -54,102 +40,69 @@ func (p *InfoPlugin) Stop(_ context.Context) error  { return nil }
 func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 	msg := ctx.Message
 	if msg == nil || msg.Message == nil {
-		return ctx.Edit("❌ 无消息上下文")
+		return ctx.Edit("❌ no message")
 	}
 
-	var targetID int64 = msg.UserID
-	var targetName string
-	if ctx.ArgCount() > 0 {
-		arg := ctx.GetArg(0)
-		if strings.HasPrefix(arg, "@") && len(arg) > 1 && ctx.PeerResolver != nil {
-			peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), arg[1:])
-			if err != nil {
-				return ctx.Edit(fmt.Sprintf("❌ 无法解析用户名 %s: %v", arg, err))
-			}
-			switch p := peer.(type) {
-			case *tg.InputPeerUser:
-				targetID, targetName = p.UserID, arg
-			case *tg.InputPeerChat:
-				targetID, targetName = -p.ChatID, arg
-			case *tg.InputPeerChannel:
-				targetID, targetName = -1000000000000-p.ChannelID, arg
+	targetID := msg.UserID
+	targetName := ""
+
+	// Reply shows the replied sender; an explicit @username wins.
+	if ctx.ArgCount() > 0 && strings.HasPrefix(ctx.GetArg(0), "@") && ctx.PeerResolver != nil {
+		peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), ctx.GetArg(0)[1:])
+		if err != nil {
+			return ctx.Edit(ctx.Tlocal("❌ 解析不到这个用户名", "❌ Cannot resolve that username"))
+		}
+		switch pr := peer.(type) {
+		case *tg.InputPeerUser:
+			targetID, targetName = pr.UserID, ctx.GetArg(0)
+		case *tg.InputPeerChat:
+			targetID, targetName = -pr.ChatID, ctx.GetArg(0)
+		case *tg.InputPeerChannel:
+			targetID, targetName = -1000000000000-pr.ChannelID, ctx.GetArg(0)
+		}
+	} else if msg.IsReply && ctx.API != nil {
+		if msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
+			[]tg.InputMessageClass{&tg.InputMessageID{ID: msg.ReplyToID}}); err == nil {
+			for _, m := range historyMessages(msgs) {
+				if rm, ok := m.(*tg.Message); ok && rm.ID == msg.ReplyToID {
+					if pu, ok := rm.FromID.(*tg.PeerUser); ok {
+						targetID = pu.UserID
+						if u := findUserInChats(msgs, pu.UserID); u != nil {
+							targetName = displayName(u)
+						}
+					}
+					break
+				}
 			}
 		}
 	}
 
-	peerType := "👤 用户"
 	chatID := msg.ChatID
-	if chatID < 0 {
-		if chatID > -1000000000000 {
-			peerType = "👥 群组"
-		} else {
-			peerType = "📢 频道/超级群组"
-		}
+	kind := ctx.Tlocal("👤 用户", "👤 User")
+	if chatID < -1000000000000 {
+		kind = ctx.Tlocal("📢 频道/超级群组", "📢 Channel/Supergroup")
+	} else if chatID < 0 {
+		kind = ctx.Tlocal("👥 群组", "👥 Group")
 	}
 
-	text := fmt.Sprintf(
-		"<b>📋 信息</b>\n\n"+
-			"<b>%s:</b> <code>%d</code>\n"+
-			"<b>💬 当前对话:</b> <code>%d</code>\n"+
-			"<b>📨 消息 ID:</b> <code>%d</code>\n",
-		peerType, targetID, chatID, msg.Message.ID,
-	)
-
+	var b strings.Builder
+	fmt.Fprintf(&b, "📋 <b>%s</b>\n\n", ctx.Tlocal("信息", "Info"))
+	fmt.Fprintf(&b, "%s ID: <code>%d</code>\n", ctx.Tlocal("目标", "Target"), targetID)
 	if targetName != "" {
-		text += fmt.Sprintf("<b>🔗 用户名:</b> %s\n", targetName)
+		fmt.Fprintf(&b, "%s: %s\n", ctx.Tlocal("名字", "Name"), htmlEscape(targetName))
 	}
-
-	if msg.IsOut {
-		text += "\n<i>（自己发送的消息）</i>"
-	}
-
-	return ctx.Edit(text)
+	fmt.Fprintf(&b, "%s: <code>%d</code>\n", ctx.Tlocal("本聊天 ID", "This chat"), chatID)
+	fmt.Fprintf(&b, "%s: <code>%d</code> (%s)\n", ctx.Tlocal("消息 ID", "Message"), msg.Message.ID, kind)
+	return ctx.Edit(b.String())
 }
 
-func (p *InfoPlugin) handleForward(ctx *interfaces.CommandContext) error {
-	if !ctx.Message.IsReply {
-		return ctx.Edit("❌ 请回复一条消息后再转发")
+func displayName(u *tg.User) string {
+	name := strings.TrimSpace(strings.Join([]string{u.FirstName, u.LastName}, " "))
+	if name == "" {
+		return fmt.Sprintf("#%d", u.ID)
 	}
-	if ctx.ArgCount() == 0 {
-		return ctx.Edit("用法: fwd <@用户名|chat_id>")
+	if u.Username != "" {
+		return fmt.Sprintf("%s (@%s)", name, u.Username)
 	}
-
-	target := ctx.GetArg(0)
-	var destPeer tg.InputPeerClass
-
-	if strings.HasPrefix(target, "@") && len(target) > 1 {
-		username := target[1:]
-		peer, err := ctx.PeerResolver.ResolveUsername(ctx.Context(), username)
-		if err != nil {
-			return ctx.Edit(fmt.Sprintf("❌ 无法解析用户名 %s: %v", target, err))
-		}
-		destPeer = peer
-	} else {
-		var chatID int64
-		if _, err := fmt.Sscanf(target, "%d", &chatID); err != nil {
-			return ctx.Edit(fmt.Sprintf("❌ 无效的目标: %s\n支持 @用户名 或 chat_id 数字", target))
-		}
-		peer, err := ctx.PeerResolver.ResolveFromChatID(ctx.Context(), chatID)
-		if err != nil {
-			return ctx.Edit(fmt.Sprintf("❌ 无法解析目标: %v", err))
-		}
-		destPeer = peer
-	}
-
-	fromPeer, err := ctx.ResolvePeer()
-	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 解析来源失败: %v", err))
-	}
-
-	_, err = ctx.API.MessagesForwardMessages(ctx.Context(), &tg.MessagesForwardMessagesRequest{
-		FromPeer: fromPeer,
-		ID:       []int{ctx.Message.ReplyToID},
-		ToPeer:   destPeer,
-	})
-
-	if err != nil {
-		return ctx.Edit(fmt.Sprintf("❌ 转发失败: %v", err))
-	}
-
-	return ctx.Edit(fmt.Sprintf("✅ 已转发消息到 %s", target))
+	return name
 }
