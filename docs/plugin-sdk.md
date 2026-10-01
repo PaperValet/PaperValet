@@ -186,6 +186,22 @@ ctx.Session    // *interfaces.SessionContext - per-chat session
 ctx.Logger     // interfaces.Logger - logging
 ```
 
+## Host Services
+
+`mgr.Host()` gives plugins the same services as a command context, without a triggering message. Keep it from `Init` and use it in schedulers, restored jobs or event listeners. Network calls work once `Start` runs.
+
+```go
+h := mgr.Host()
+h.API()                       // *tg.Client
+h.PeerResolver()              // resolve chat ids
+h.Media(), h.Downloader()     // send / download files
+h.SelfID()                    // logged-in account id (0 before login)
+h.Logger("myplugin")          // named logger
+h.DataDir("myplugin")         // data/myplugin, created on demand
+h.Send(ctx, chatID, md, 0)    // send Markdown, returns the message id
+h.Lang(userID)                // "zh-CN" or "en-US"
+```
+
 ## Session Usage
 
 ```go
