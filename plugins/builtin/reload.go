@@ -22,22 +22,33 @@ func NewReload(pluginLoader *loader.Loader) *ReloadPlugin {
 }
 
 func (p *ReloadPlugin) Name() string        { return "reload" }
-func (p *ReloadPlugin) Description() string { return "热重载全部外部插件" }
+func (p *ReloadPlugin) Description() string { return "重载外部插件" }
 func (p *ReloadPlugin) DescEN() string      { return "Hot-reload all external plugins" }
 
 func (p *ReloadPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "reload",
-		Aliases:     []string{"rl"},
-		Description: "重新加载所有外部插件（先卸载再加载）",
-		DescEN:      "Reload every external plugin (unload then load)",
-		Usage:       "reload",
-		UsageEN:     "reload",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleReload,
+		Description: "重载全部外部插件",
+		DescEN:      "Reload all external plugins",
+		Usage: `reload
+
+<b>机制</b>
+• 把已加载的外部插件逐个卸载再加载，重新读取各自的配置
+• 不带参数，只有这一种用法；单个插件用 <code>apt unload</code> / <code>apt load</code>
+• 内建插件不受影响
+• 注意：Go 插件文件被替换后无法在同一进程里换新代码，更新插件文件后请用 <code>restart</code>`,
+		UsageEN: `reload
+
+<b>How it works</b>
+• Unloads and reloads every loaded external plugin, re-reading their settings
+• Takes no arguments; for a single plugin use <code>apt unload</code> / <code>apt load</code>
+• Built-in plugins are untouched
+• Note: Go cannot swap a replaced .so inside the same process; after updating plugin files use <code>restart</code>`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleReload,
 	})
 }
 
