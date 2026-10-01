@@ -138,7 +138,7 @@ func (a *App) registerBuiltins() error {
 	if cfgPath == "" {
 		cfgPath = config.FileName
 	}
-	backup.SetConfig(cfgPath, a.cfg)
+	backup.SetConfig(cfgPath)
 	core := builtin.NewCore(Version)
 	core.BeforeRestart = func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
