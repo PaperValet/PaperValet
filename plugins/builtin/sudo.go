@@ -15,8 +15,8 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// SudoPlugin implements PagerMaid-style permission delegation.
-// Other Telegram users can be granted permission to use the userbot's commands.
+// SudoPlugin implements permission delegation: the owner can let other
+// Telegram users run the userbot's commands.
 type SudoPlugin struct {
 	mu      sync.RWMutex
 	enabled bool
@@ -31,15 +31,18 @@ func NewSudo() *SudoPlugin {
 	}
 }
 
-func (p *SudoPlugin) Name() string        { return "sudo" }
-func (p *SudoPlugin) Description() string { return "权限委派 — 授权其他用户使用命令" }
+func (p *SudoPlugin) Name() string          { return "sudo" }
+func (p *SudoPlugin) Description() string   { return "授权其他人使用本机器人的命令" }
+func (p *SudoPlugin) DescEN() string        { return "Delegate command access to other users" }
 
 func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.load()
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "sudo",
-		Description: "权限委派管理",
-		Usage:       "sudo on|off|add|remove|list",
+		Description: "把机器人命令授权给别的用户（回复他或给 ID）",
+		DescEN:      "Grant command access to another user (reply or by ID)",
+		Usage:       "sudo add [ID] | remove [ID] | list | on | off",
+		UsageEN:     "sudo add [ID] | remove [ID] | list | on | off",
 		Plugin:      p.Name(),
 		Category:    "admin",
 		OwnerOnly:   true,
@@ -51,6 +54,7 @@ func (p *SudoPlugin) Start(_ context.Context) error { return nil }
 func (p *SudoPlugin) Stop(_ context.Context) error  { return nil }
 
 // IsSudoUser reports whether the given user is permitted.
+// Delegation only works while the switch is on.
 func (p *SudoPlugin) IsSudoUser(userID int64) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -82,61 +86,68 @@ func (p *SudoPlugin) save() {
 		users = append(users, id)
 	}
 	p.mu.RUnlock()
-	os.MkdirAll(filepath.Dir(p.file), 0o755)
+	_ = os.MkdirAll(filepath.Dir(p.file), 0o700)
 	data, _ := json.MarshalIndent(map[string]any{"enabled": enabled, "users": users}, "", "  ")
-	os.WriteFile(p.file, data, 0o600)
+	_ = os.WriteFile(p.file, data, 0o600)
 }
 
 func (p *SudoPlugin) handleSudo(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
 		return p.showStatus(ctx)
 	}
-
 	switch strings.ToLower(ctx.GetArg(0)) {
-	case "on", "enable":
+	case "on":
 		p.mu.Lock()
 		p.enabled = true
 		p.mu.Unlock()
 		p.save()
-		return ctx.Edit("✅ Sudo 已启用")
-	case "off", "disable":
+		return ctx.Edit(ctx.Tlocal("✅ Sudo 已开启，名单里的用户可以使用命令", "✅ Sudo on: listed users can run commands"))
+	case "off":
 		p.mu.Lock()
 		p.enabled = false
 		p.mu.Unlock()
 		p.save()
-		return ctx.Edit("⏸️ Sudo 已禁用")
-	case "add":
+		return ctx.Edit(ctx.Tlocal("⏸️ Sudo 已关闭，只有你自己能用命令", "⏸️ Sudo off: only you can run commands"))
+	case "add", "allow", "grant":
 		return p.addUser(ctx)
-	case "remove", "del", "rm":
+	case "remove", "del", "rm", "revoke":
 		return p.removeUser(ctx)
 	case "list", "ls":
 		return p.listUsers(ctx)
 	default:
-		return ctx.Edit("用法: sudo on|off|add <用户ID>|remove <用户ID>|list")
+		return p.showStatus(ctx)
 	}
 }
 
 func (p *SudoPlugin) showStatus(ctx *interfaces.CommandContext) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	state := "⏸️ 禁用"
+	state := ctx.Tlocal("⏸️ 关闭", "⏸️ off")
 	if p.enabled {
-		state = "✅ 启用"
+		state = ctx.Tlocal("✅ 开启", "✅ on")
 	}
-	return ctx.Edit(fmt.Sprintf("🔐 <b>Sudo 权限委派</b>\n\n状态: %s\n已授权用户: %d 个", state, len(p.users)))
+	hint := ctx.Tlocal(
+		"回复某人的消息发 <code>sudo add</code> 就能授权他；<code>sudo list</code> 看名单，<code>sudo remove</code>（同样可回复）移除",
+		"Reply to someone with <code>sudo add</code> to grant access; <code>sudo list</code> shows the list, <code>sudo remove</code> (reply works too) revokes",
+	)
+	return ctx.Edit(fmt.Sprintf("🔐 <b>Sudo</b>\n\n%s · %d %s\n\n%s",
+		state, len(p.users), ctx.Tlocal("位用户", "users"), hint))
 }
 
-func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (int64, error) {
-	// Prefer the replied-to message sender.
-	if ctx.Message != nil && ctx.Message.IsReply {
+// targetUser resolves the delegation target: replied sender first, then a
+// numeric arg. Returns the user entity too so we can show a real name.
+func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (*tg.User, error) {
+	if ctx.Message != nil && ctx.Message.IsReply && ctx.API != nil {
 		msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
-			[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}},
-		)
+			[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}})
 		if err == nil {
 			for _, m := range historyMessages(msgs) {
 				if msg, ok := m.(*tg.Message); ok && msg.ID == ctx.Message.ReplyToID {
 					if pu, ok := msg.FromID.(*tg.PeerUser); ok {
-						return pu.UserID, nil
+						if u := findUserInChats(ctx, msgs, pu.UserID); u != nil {
+							return u, nil
+						}
+						return &tg.User{ID: pu.UserID}, nil
 					}
 				}
 			}
@@ -145,50 +156,98 @@ func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (int64, error) {
 	if ctx.ArgCount() >= 2 {
 		var id int64
 		if _, err := fmt.Sscanf(ctx.GetArg(1), "%d", &id); err == nil && id != 0 {
-			return id, nil
+			return &tg.User{ID: id}, nil
 		}
 	}
-	return 0, fmt.Errorf("无法确定目标用户（回复消息或提供用户ID）")
+	return nil, fmt.Errorf("%s", ctx.Tlocal(
+		"不知道要操作谁：回复那条人的消息再发命令，或在命令后面带上用户 ID",
+		"no target: reply to the user's message or pass a user ID",
+	))
+}
+
+// findUserInChats scans the users attached to a getMessages response.
+func findUserInChats(ctx *interfaces.CommandContext, msgs tg.MessagesMessagesClass, userID int64) *tg.User {
+	var users []tg.UserClass
+	switch m := msgs.(type) {
+	case *tg.MessagesMessages:
+		users = m.Users
+	case *tg.MessagesMessagesSlice:
+		users = m.Users
+	}
+	for _, u := range users {
+		if user, ok := u.(*tg.User); ok && user.ID == userID {
+			return user
+		}
+	}
+	return nil
+}
+
+func (p *SudoPlugin) displayName(u *tg.User) string {
+	name := strings.TrimSpace(strings.Join([]string{u.FirstName, u.LastName}, " "))
+	if name == "" {
+		return fmt.Sprintf("#%d", u.ID)
+	}
+	if u.Username != "" {
+		return fmt.Sprintf("%s (@%s)", name, u.Username)
+	}
+	return name
 }
 
 func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
-	id, err := p.targetUser(ctx)
+	u, err := p.targetUser(ctx)
 	if err != nil {
 		return ctx.Edit("❌ " + err.Error())
 	}
 	p.mu.Lock()
-	p.users[id] = true
+	p.users[u.ID] = true
+	enabled := p.enabled
 	p.mu.Unlock()
+	if !enabled {
+		p.mu.Lock()
+		p.enabled = true
+		p.mu.Unlock()
+	}
 	p.save()
-	return ctx.Edit(fmt.Sprintf("✅ 已授权用户 <code>%d</code>", id))
+	extra := ""
+	if !enabled {
+		extra = ctx.Tlocal("\n（sudo 原先是关闭的，已顺手打开）", "\n(sudo was off; turned it on for you)")
+	}
+	return ctx.Edit(fmt.Sprintf("✅ %s %s%s",
+		ctx.Tlocal("已授权", "granted"), htmlEscape(p.displayName(u)), extra))
 }
 
 func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
-	id, err := p.targetUser(ctx)
+	u, err := p.targetUser(ctx)
 	if err != nil {
 		return ctx.Edit("❌ " + err.Error())
 	}
 	p.mu.Lock()
-	if !p.users[id] {
+	if !p.users[u.ID] {
 		p.mu.Unlock()
-		return ctx.Edit(fmt.Sprintf("⚠️ 用户 <code>%d</code> 未被授权", id))
+		return ctx.Edit(fmt.Sprintf("⚠️ %s %s", htmlEscape(p.displayName(u)), ctx.Tlocal("本来就不在名单里", "is not on the list")))
 	}
-	delete(p.users, id)
+	delete(p.users, u.ID)
 	p.mu.Unlock()
 	p.save()
-	return ctx.Edit(fmt.Sprintf("🗑 已移除授权 <code>%d</code>", id))
+	return ctx.Edit(fmt.Sprintf("🗑 %s %s", htmlEscape(p.displayName(u)), ctx.Tlocal("已移除授权", "revoked")))
 }
 
 func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if len(p.users) == 0 {
-		return ctx.Edit("🔐 暂无授权用户")
+		return ctx.Edit(ctx.Tlocal("名单是空的。回复某人的消息发 <code>sudo add</code> 添加", "The list is empty. Reply to someone with <code>sudo add</code>"))
 	}
 	var b strings.Builder
-	b.WriteString("🔐 <b>Sudo 授权用户</b>\n\n")
+	b.WriteString("🔐 <b>Sudo</b>\n")
 	for id := range p.users {
-		b.WriteString(fmt.Sprintf("• <code>%d</code>\n", id))
+		fmt.Fprintf(&b, "• <code>%d</code>\n", id)
 	}
+	b.WriteString("\n" + ctx.Tlocal("移除: 回复其消息发 <code>sudo remove</code>", "Revoke: reply to their message with <code>sudo remove</code>"))
 	return ctx.Edit(b.String())
+}
+
+func htmlEscape(s string) string {
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+	return r.Replace(s)
 }
