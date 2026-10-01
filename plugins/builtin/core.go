@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/gotd/td/tg"
@@ -106,7 +105,7 @@ func (p *CorePlugin) handleRestart(ctx *interfaces.CommandContext) error {
 		// Replace the process image in place: same PID, so systemd,
 		// Docker and tmux all keep supervising it. Exit(0) alone left
 		// Restart=on-failure units dead.
-		if err := syscall.Exec(exe, os.Args, os.Environ()); err != nil {
+		if err := reexec(exe); err != nil {
 			os.Exit(1) // non-zero so on-failure supervisors restart us
 		}
 	}()
