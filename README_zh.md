@@ -1,136 +1,69 @@
+<div align="center">
+
 # PaperValet
 
-[English](README.md) | **中文**
+纯 Go 编写的 Telegram 人形机器人，基于 [gotd/td](https://github.com/gotd/td)。
 
-基于 [gotd/td](https://github.com/gotd/td) 的生产级 Telegram 用户机器人 — 纯 Go MTProto，无 CGO。
+[English](README.md) · **中文**
 
-架构清晰模块化，15 个内置插件，外加可热加载的外部插件生态。
+</div>
 
-## 快速开始
+## 安装
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
+papervalet initialize
 ```
 
-安装器只负责放好程序并注册 `papervalet` 命令，接着：
+`initialize` 会带你选语言、填 API、登录，并可选注册 systemd 服务。`api_id` / `api_hash` 在 [my.telegram.org](https://my.telegram.org/apps) 申请。装好后在任意聊天发 `.ping`。
 
-```bash
-papervalet initialize   # 选语言、填 api_id/api_hash、手机号、验证码，可选注册 systemd 服务
-papervalet run          # 前台启动（已注册服务可跳过）
-```
+Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 
-`api_id` / `api_hash` 在 [my.telegram.org](https://my.telegram.org/apps) 申请。
+## 命令
 
-随便找个对话给自己发 `.ping`，机器人回 `🏓 Pong!` 就跑通了。
+只响应你自己发出的消息。`.help` 列出全部命令，`.help 命令` 看详细说明。
 
-完整教程（含 systemd 和 Docker）：**[安装指南](docs/installation_zh.md)**。
+| 插件 | 命令 | 作用 |
+|---|---|---|
+| ping | `.ping [all\|dc2\|主机]` | 测 Telegram、数据中心或任意主机的延迟 |
+| status | `.status` | 版本、主机、资源、运行状态 |
+| info | `.info` | 用户、聊天和消息信息 |
+| re | `.re [条数] [次数]` | 复读回复的消息 |
+| dme | `.dme <数量\|all> [-f]` | 删除自己最近的消息 |
+| exec | `.exec <命令>` | 执行 shell 命令 |
+| apt | `.apt s / i / rm / ls / info` | 安装和卸载外部插件 |
+| reload | `.reload` | 重载外部插件 |
+| restart | `.restart` | 原地重启 |
+| update | `.update [now]` | 从 GitHub Release 升级 |
+| backup | `.backup [restore]` | 把配置备份到收藏夹 |
+| sudo | `.sudo add / remove / list` | 授权其他人使用命令 |
+| alias | `.alias 名字=命令` | 自定义快捷命令 |
+| prefix | `.prefix add / del / set` | 命令前缀 |
+| lang | `.lang zh\|en` | 界面语言 |
+| log | `.loglevel`、`.sendlog` | 日志级别和日志文件 |
 
-## 内置插件
+## 插件
 
-| 插件 | 指令 | 说明 |
-|------|------|------|
-| `core` | `.ping`、`.restart` | 延迟检测、原地重启 |
-| `help` | `.help` | 按分类显示帮助 |
-| `status` | `.status` | 版本、运行时长、内存、插件数 |
-| `apt` | `.apt list/install/remove/load/unload` | 插件管理器 |
-| `info` | `.info` | ID 与跳转链接，回复可看对方 |
-| `re` | `.re [条数] [次数]` | 复读回复的消息 |
-| `alias` | `.alias set/del/list` | 运行时命令别名 |
-| `exec` | `.exec` | 执行系统命令 |
-| `sudo` | `.sudo on/off/add/remove/list` | 权限委派 |
-| `reload` | `.reload` | 重新加载全部外部插件 |
-| `log` | `.loglevel`、`.sendlog` | 日志级别与发送 |
-| `prefix` | `.prefix list/add/del/set` | 前缀管理 |
-| `backup` | `.backup`、`.backup restore` | 配置打包发收藏夹，回复恢复 |
-| `update` | `.update`、`.update now` | 从 GitHub Release 升级 |
-| `dme` | `.dme N`、`.dme all`、`.dme others on/off` | 批量删除，带防撤回 |
-| `lang` | `.lang` | 语言切换 |
-
-## 外部插件
-
-第三方插件独立维护在 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins)（现有 21 个），一条命令安装：
+外部插件来自 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins)：
 
 ```
-.apt install weather
+.apt s           浏览仓库
+.apt i weather   安装一个
+.apt i -all      全部安装
 ```
 
-自己写插件：[插件 SDK 文档](docs/plugin-sdk_zh.md)。
-
-## 配置说明
-
-`~/.papervalet/config.json`（由 `papervalet initialize` 生成，模板见 `config.example.json`）：
-
-```json
-{
-  "telegram": {
-    "api_id": 12345,
-    "api_hash": "your_api_hash",
-    "session_file": "session.json",
-    "database_file": "sessions.db"
-  },
-  "bot": {
-    "command_prefix": ".",
-    "plugins_dir": "plugins",
-    "owner_id": 0
-  },
-  "logger": {
-    "level": "INFO",
-    "format": "console"
-  }
-}
-```
-
-- `command_prefix` — 指令前缀（默认 `.`）
-- `owner_id` — 所有者用户 ID，仅所有者指令需要（`0` 则自动以首个登录用户为准）
-- `logger.level` — DEBUG、INFO、WARN、ERROR
-
-## 环境变量
-
-| 环境变量 | 用途 |
-|----------|------|
-| `PAPERVALET_HOME` | 数据目录（默认 `~/.papervalet`），每个注册的命令各有一份 |
-| `PAPERVALET_CONFIG` | 显式指定配置路径，不切换工作目录（Docker 用） |
-| `PAPERVALET_PHONE` | 无终端登录：E.164 手机号，如 `+8613800138000` |
-| `PAPERVALET_CODE` | 无终端登录：Telegram 发的一次性验证码 |
-| `PAPERVALET_2FA_PASSWORD` | 无终端登录：两步验证密码 |
-
-## 架构
-
-```
-cmd/papervalet/       入口
-internal/
-  app/                编排 + 鉴权 + 更新处理
-  command/            解析器、注册表、中间件
-  config/             JSON 配置与默认值
-  eventbus/           优先级发布订阅
-  media/              上传下载
-  peer/               Access Hash 缓存与解析
-  plugin/             管理器 + .so 加载器
-  session/            SQLite 会话存储
-  i18n/               zh-CN / en-US 语言目录
-plugins/builtin/      编译期内置插件
-pkg/plugin/           外部插件公共 SDK
-pkg/logger/           zap 封装
-```
-
-| 设计点 | 方案 |
-|--------|------|
-| 命令 | 强类型 `CommandContext`，带 `Reply`/`Edit`/`Delete` 助手 |
-| 插件 | 最小接口 `Init/Start/Stop` + `RegisterCommand` |
-| 事件 | `EventBus` 支持优先级、过滤、异步分发 |
-| Peer | 缓存优先 `AccessHashManager` → API → ID 规则回退 |
-| 会话 | SQLite（WAL）+ 内存缓存，TTL 清理 |
+自己写插件看 [插件 SDK](docs/plugin-sdk_zh.md)。
 
 ## 开发
 
 ```bash
-go build -o papervalet ./cmd/papervalet   # 构建
-go test ./...                             # 测试
-go vet ./... && golangci-lint run         # 静态检查
+make build     # 生成 ./papervalet
+make test
+make lint
 ```
 
-需要 Go 1.25+。
+需要 Go 1.25。外部插件必须和主程序用同一版本 Go、同样带 `-trimpath` 编译。
 
-## 许可证
+## 许可
 
-MIT — 见 [LICENSE](LICENSE)。
+[MIT](LICENSE)
