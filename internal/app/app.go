@@ -161,7 +161,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewLog(),
 		builtin.NewPrefix(),
 		builtin.NewHelp(),
-		builtin.NewStatus(Version),
+		builtin.NewStatus(Version, a.pluginLoader),
 		backup,
 		builtin.NewUpdate(Version, core.Restart),
 		builtin.NewPrune(),
