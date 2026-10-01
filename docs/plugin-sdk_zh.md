@@ -186,6 +186,22 @@ ctx.Session    // *interfaces.SessionContext - 当前会话上下文
 ctx.Logger     // interfaces.Logger - 日志记录器
 ```
 
+## Host 服务
+
+`mgr.Host()` 提供和命令上下文一样的服务，不需要触发消息。在 `Init` 里拿到后可以给定时任务、重启恢复的任务、事件监听使用。网络调用要等 `Start` 之后。
+
+```go
+h := mgr.Host()
+h.API()                       // *tg.Client
+h.PeerResolver()              // 解析 chat id
+h.Media(), h.Downloader()     // 发送 / 下载文件
+h.SelfID()                    // 当前账号 id（登录前为 0）
+h.Logger("myplugin")          // 带名字的 logger
+h.DataDir("myplugin")         // data/myplugin，按需创建
+h.Send(ctx, chatID, md, 0)    // 发送 Markdown，返回消息 id
+h.Lang(userID)                // "zh-CN" 或 "en-US"
+```
+
 ## 会话用法
 
 ```go
