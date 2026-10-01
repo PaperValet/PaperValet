@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -18,10 +19,11 @@ import (
 // SudoPlugin implements permission delegation: the owner can let other
 // Telegram users run the userbot's commands.
 type SudoPlugin struct {
-	mu      sync.RWMutex
-	enabled bool
-	users   map[int64]bool
-	file    string
+	mu          sync.RWMutex
+	enabled     bool
+	users       map[int64]bool
+	file        string
+	mgrCommands plugin.RegistryProvider
 }
 
 func NewSudo() *SudoPlugin {
@@ -36,6 +38,7 @@ func (p *SudoPlugin) Description() string { return "授权他人使用命令" }
 func (p *SudoPlugin) DescEN() string      { return "Delegate command access to other users" }
 
 func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
+	p.mgrCommands = mgr.Commands()
 	p.load()
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "sudo",
@@ -152,12 +155,18 @@ func (p *SudoPlugin) showStatus(ctx *interfaces.CommandContext) error {
 	if p.enabled {
 		state = ctx.Tlocal("✅ 开启", "✅ on")
 	}
-	hint := ctx.Tlocal(
-		"回复某人的消息发 <code>sudo add</code> 就能授权他；<code>sudo list</code> 看名单，<code>sudo remove</code>（同样可回复）移除",
-		"Reply to someone with <code>sudo add</code> to grant access; <code>sudo list</code> shows the list, <code>sudo remove</code> (reply works too) revokes",
-	)
-	return ctx.Edit(fmt.Sprintf("🔐 <b>Sudo</b>\n\n%s · %d %s\n\n%s",
-		state, len(p.users), ctx.Tlocal("位用户", "users"), hint))
+	prefix := p.mgrCommandsPrefix()
+	c := newCard("🔐", "Sudo")
+	c.blank().rawField(ctx.Tlocal("状态", "Status"), state)
+	c.field(ctx.Tlocal("已授权", "Granted"), len(p.users))
+	c.hint(ctx.Tlocal(
+		"回复某人发 "+cmdRef(prefix+"sudo add")+" 授权，"+cmdRef(prefix+"sudo list")+" 看名单",
+		"Reply with "+cmdRef(prefix+"sudo add")+" to grant; "+cmdRef(prefix+"sudo list")+" shows the list"))
+	return ctx.Edit(c.String())
+}
+
+func (p *SudoPlugin) mgrCommandsPrefix() string {
+	return p.mgrCommands.GetPrefix()
 }
 
 // targetUser resolves the delegation target: replied sender first, then a
@@ -198,7 +207,7 @@ func findUserInChats(msgs tg.MessagesMessagesClass, userID int64) *tg.User {
 func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 	u, err := p.targetUser(ctx)
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit(errText(htmlEscape(err.Error())))
 	}
 	p.mu.Lock()
 	p.users[u.ID] = true
@@ -210,12 +219,11 @@ func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 		p.mu.Unlock()
 	}
 	p.save()
-	extra := ""
+	note := ctx.Tlocal("已授权，他发的命令会被执行", "granted; their commands now run")
 	if !enabled {
-		extra = ctx.Tlocal("\n（sudo 原先是关闭的，已顺手打开）", "\n(sudo was off; turned it on for you)")
+		note += ctx.Tlocal("（总开关已顺手打开）", " (master switch turned on)")
 	}
-	return ctx.Edit(fmt.Sprintf("✅ %s %s%s",
-		ctx.Tlocal("已授权", "granted"), htmlEscape(displayName(u)), extra))
+	return ctx.Edit(okLine(displayName(u), note))
 }
 
 func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
@@ -226,27 +234,35 @@ func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
 	p.mu.Lock()
 	if !p.users[u.ID] {
 		p.mu.Unlock()
-		return ctx.Edit(fmt.Sprintf("⚠️ %s %s", htmlEscape(displayName(u)), ctx.Tlocal("本来就不在名单里", "is not on the list")))
+		return ctx.Edit(skipLine(displayName(u), ctx.Tlocal("本来就不在名单里", "not on the list")))
 	}
 	delete(p.users, u.ID)
 	p.mu.Unlock()
 	p.save()
-	return ctx.Edit(fmt.Sprintf("🗑 %s %s", htmlEscape(displayName(u)), ctx.Tlocal("已移除授权", "revoked")))
+	return ctx.Edit("🗑 <b>" + htmlEscape(displayName(u)) + "</b>  " + ctx.Tlocal("已移除授权", "revoked"))
 }
 
 func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	prefix := p.mgrCommandsPrefix()
 	if len(p.users) == 0 {
-		return ctx.Edit(ctx.Tlocal("名单是空的。回复某人的消息发 <code>sudo add</code> 添加", "The list is empty. Reply to someone with <code>sudo add</code>"))
+		c := newCard("🔐", "Sudo")
+		c.blank().line(ctx.Tlocal("名单是空的", "The list is empty"))
+		c.hint(ctx.Tlocal("回复某人发 "+cmdRef(prefix+"sudo add")+" 添加", "Reply with "+cmdRef(prefix+"sudo add")+" to add"))
+		return ctx.Edit(c.String())
 	}
-	var b strings.Builder
-	b.WriteString("🔐 <b>Sudo</b>\n")
+	ids := make([]int64, 0, len(p.users))
 	for id := range p.users {
-		fmt.Fprintf(&b, "• <code>%d</code>\n", id)
+		ids = append(ids, id)
 	}
-	b.WriteString("\n" + ctx.Tlocal("移除: 回复其消息发 <code>sudo remove</code>", "Revoke: reply to their message with <code>sudo remove</code>"))
-	return ctx.Edit(b.String())
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	c := newCard("🔐", ctx.Tlocal(fmt.Sprintf("Sudo · %d 位", len(ids)), fmt.Sprintf("Sudo · %d users", len(ids)))).blank()
+	for _, id := range ids {
+		c.rawField("•", fmt.Sprintf("<code>%d</code> · <a href=\"tg://user?id=%d\">%s</a>", id, id, ctx.Tlocal("发消息", "message")))
+	}
+	c.hint(ctx.Tlocal("移除：回复其消息发 "+cmdRef(prefix+"sudo remove"), "Revoke: reply with "+cmdRef(prefix+"sudo remove")))
+	return ctx.Edit(c.String())
 }
 
 func htmlEscape(s string) string {
