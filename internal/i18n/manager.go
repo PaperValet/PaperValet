@@ -49,6 +49,13 @@ func (m *Manager) SetUserLang(userID int64, l Lang) {
 	m.userLang[userID] = l
 }
 
+// ClearUserLangs drops per-user overrides so the catalog default applies.
+func (m *Manager) ClearUserLangs() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.userLang = make(map[int64]Lang)
+}
+
 // UserLang returns a user's preferred language, or the catalog default.
 func (m *Manager) UserLang(userID int64) Lang {
 	m.mu.RLock()
