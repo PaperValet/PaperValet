@@ -12,7 +12,6 @@ func TestServiceUnit(t *testing.T) {
 		"ExecStart=/root/.pv2/bin/papervalet run\n",
 		"Environment=PAPERVALET_HOME=/root/.pv2\n",
 		"Environment=PAPERVALET_CMD=pv2\n",
-		"Environment=PAPERVALET_NONINTERACTIVE=1\n",
 		"WorkingDirectory=/root/.pv2\n",
 		"Restart=on-failure\n",
 		"WantedBy=multi-user.target\n",
