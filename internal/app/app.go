@@ -162,7 +162,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewHelp(),
 		builtin.NewStatus(Version),
 		backup,
-		builtin.NewUpdate(),
+		builtin.NewUpdate(Version, core.Restart),
 		builtin.NewPrune(),
 		builtin.NewLang(a.i18n),
 	} {
