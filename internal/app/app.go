@@ -74,8 +74,9 @@ func New(cfg *config.Config) (*App, error) {
 	client := NewTelegramClient(cfg, updates)
 
 	api := client.API()
-	accessHash := peer.NewAccessHashManager(api)
+	accessHash := peer.NewAccessHashManager(api, peer.NewStore(filepath.Join("data", "peers.json")))
 	resolver := peer.NewResolver(accessHash)
+	updates.SetPeerRegistry(accessHash)
 
 	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID, i18nMgr)
 	mediaMgr := media.NewManager(api, resolver, "downloads")
@@ -181,11 +182,14 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("auth: %w", err)
 		}
 
-		self, err := a.client.Self(ctx)
+	self, err := a.client.Self(ctx)
 		if err != nil {
 			return fmt.Errorf("self: %w", err)
 		}
 		a.updates.SetSelfUserID(self.ID)
+		// Seed the peer store with the account itself so self references
+		// (Saved Messages, tg://user links) resolve instantly.
+		a.accessHash.RegisterPeer(self.ID, self.AccessHash, "user")
 		if a.cfg.Bot.OwnerID == 0 {
 			a.cfg.Bot.OwnerID = self.ID
 		}
