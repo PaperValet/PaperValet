@@ -1,13 +1,8 @@
 # 安装指南
 
-[English](installation.md) | **中文**
+[English](installation.md) · **中文**
 
-## 准备工作
-
-- Linux（amd64/arm64）或 macOS
-- `curl` 和 `tar`
-- 一个 Telegram 账号
-- API 凭据（`api_id` / `api_hash`），在 [my.telegram.org/apps](https://my.telegram.org/apps) 申请
+需要一台 Linux 或 macOS 机器、`curl`，以及在 [my.telegram.org/apps](https://my.telegram.org/apps) 申请的 API 凭据。
 
 ## 安装
 
@@ -15,12 +10,9 @@
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
 ```
 
-选 `1) 安装`，再起个命令名（回车就是 `papervalet`）。安装器只做两件事：
+选 **安装**，再起一个命令名（直接回车就是 `papervalet`）。安装脚本把程序放进 `~/.<命令名>/bin`，并把命令链接到 `/usr/local/bin`（root）或 `~/.local/bin`。
 
-- 把程序放到 `~/.papervalet/bin/papervalet`
-- 把命令注册到 `/usr/local/bin`（root）或 `~/.local/bin`（普通用户，会把它加进 `~/.bashrc` 的 `PATH`）
-
-每个命令名就是一个独立实例，数据目录各管各的，多个账号可以并存。`papervalet` 用 `~/.papervalet`，其他名字 `<name>` 用 `~/.<name>`。
+每个命令名是一个独立实例，有自己的数据目录，多个账号可以同时跑。
 
 ## 初始化
 
@@ -28,96 +20,96 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 papervalet initialize
 ```
 
-装完安装器会问要不要马上开始。一共五步，第一步选的语言会贯穿后面所有提示：
+共五步：选语言、填 `api_id` / `api_hash`、输手机号、输验证码（开了两步验证再输密码）、可选注册开机自启的 systemd 服务。再次运行会把上次填的内容当默认值。
 
-1. **语言**：简体中文或 English，同时作为机器人的默认语言
-2. **Telegram API**：`api_id` 和 `api_hash`
-3. **手机号**：带国家码，如 `+8613800138000`
-4. **登录**：输入 Telegram 发来的验证码，开了两步验证再输密码
-5. **后台常驻**：可选注册 systemd 服务（回车用命令名作服务名），开机自启
-
-再跑一次 `initialize` 会把旧值当默认值，也能换账号。
-
-随便找个对话（收藏夹就行）给自己发 `.ping`，机器人回 `🏓 Pong!` 就通了。
-
-> 机器人只响应**你自己发出的消息**。
+然后在任意聊天发 `.ping`。机器人只响应你自己发出的消息。
 
 ## 运行
 
-没注册服务时：
-
 ```bash
-papervalet run
-```
-
-注册了服务（以 root 为例，用户服务加 `--user`）：
-
-```bash
-systemctl status papervalet
+papervalet run                 # 前台运行
+systemctl status papervalet    # 注册了服务时
 journalctl -u papervalet -f
 ```
+
+非 root 用户注册的是用户级服务，`systemctl` 和 `journalctl` 要加 `--user`。
+
+数据目录结构：
 
 ```
 ~/.papervalet
 ├── bin/papervalet
-├── config.json      # initialize 写入（权限 0600）
-├── session.json     # Telegram 登录会话
+├── config.json      # 权限 0600，含 api_hash
+├── session.json     # Telegram 登录信息
 ├── sessions.db
-├── plugins/
-└── data/
+├── plugins/         # 外部插件 .so
+└── data/            # 插件和运行时数据
 ```
 
-## 升级 / 卸载
+## 升级与卸载
 
-重新运行安装器，选 `2) 升级` 或 `3) 卸载`。
+在 Telegram 里发 `.update now`，会下载最新版并重启。
 
-- 升级只换程序，数据全保留，有服务会顺手重启。
-- 卸载会移除命令和服务，再问你要不要连数据目录一起删。
+在终端里再跑一次安装脚本，选 **升级** 或 **卸载**。升级保留全部数据，卸载会先问要不要删数据目录。
 
-无交互用法：`bash install.sh --upgrade --name papervalet -y`。
+```bash
+bash install.sh --upgrade --name papervalet -y
+```
 
 ## Docker
 
 ```bash
-docker run -d --name papervalet \
+docker run -d --name papervalet --restart unless-stopped \
   -v "$PWD/config:/app/config" \
   -v "$PWD/data:/app/data" \
-  --restart unless-stopped \
-  ghcr.io/papervalet/papervalet:latest
-```
-
-容器读取 `/app/config/config.json`。首次登录用环境变量传入凭据：
-
-```bash
-docker run -it --rm \
   -e PAPERVALET_PHONE=+8613800138000 \
   -e PAPERVALET_CODE=12345 \
-  -e PAPERVALET_2FA_PASSWORD=你的密码 \
-  -v "$PWD/config:/app/config" \
-  -v "$PWD/data:/app/data" \
+  -e PAPERVALET_2FA_PASSWORD=secret \
   ghcr.io/papervalet/papervalet:latest
 ```
 
-验证码只能用一次，给容器登录要现取一个新的。
+把 `config.json` 放进 `./config`（参考 [`config.example.json`](../config.example.json)），并把 `session_file` 和 `database_file` 指到 `data/` 下，重启后才不用重新登录。登录相关的环境变量只有第一次启动需要，验证码只能用一次。
+
+镜像不带 cgo，加载不了外部插件。
 
 ## 从源码构建
 
 ```bash
-git clone https://github.com/PaperValet/PaperValet
-cd PaperValet
-go build -o papervalet ./cmd/papervalet
+git clone https://github.com/PaperValet/PaperValet && cd PaperValet
+make build
 ./papervalet initialize
 ./papervalet run
 ```
 
-需要 Go 1.25+。`-config path/to/config.json` 依旧可用，此时工作目录保持不变。
+## 配置
+
+`config.json` 由 `initialize` 生成，可能需要手改的字段：
+
+| 字段 | 默认 | 含义 |
+|---|---|---|
+| `bot.command_prefix` | `.` | 主命令前缀 |
+| `bot.command_prefixes` | | 额外前缀，也可以用 `.prefix` 管理 |
+| `bot.owner_id` | `0` | 主人账号，`0` 表示当前登录的账号 |
+| `bot.plugin_repo` | PaperValet-Plugins 最新 Release | `apt` 下载插件的地址 |
+| `logger.level` | `INFO` | `DEBUG`、`INFO`、`WARN`、`ERROR` |
+| `i18n.default_language` | `zh-CN` | `zh-CN` 或 `en-US` |
+
+环境变量：
+
+| 变量 | 含义 |
+|---|---|
+| `PAPERVALET_HOME` | 数据目录，默认 `~/.papervalet` |
+| `PAPERVALET_CONFIG` | 配置文件路径，不切换工作目录 |
+| `PAPERVALET_PHONE`、`PAPERVALET_CODE`、`PAPERVALET_2FA_PASSWORD` | 没有终端时登录用 |
 
 ## 常见问题
 
-**`papervalet: command not found`**：新开一个终端，或执行 `source ~/.bashrc`。
+**提示找不到命令**：开个新终端，或者 `source ~/.bashrc`。
 
-**提示还没登录**：重新跑 `papervalet initialize`。
+**提示没登录**：重新跑 `papervalet initialize`。
 
-**机器人不响应**：指令必须**从你自己的账号**发出，且以前缀开头（默认 `.`）。
+**发命令没反应**：命令必须由你的账号发出，并以前缀开头。
 
-**arm64 机器**：release 里预编译的 `.so` 插件只有 amd64。可以从 [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) 用 `go build -buildmode=plugin` 自行编译。
+**插件报 different version**：插件和主程序的 Go 版本不同。先 `.update now`，再重装插件。
+
+**插件完全加载不了**：只有 linux/amd64 的 Release 能加载外部插件。
