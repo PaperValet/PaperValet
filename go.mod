@@ -2,6 +2,8 @@ module github.com/TiaraBasori/PaperValet
 
 go 1.25.0
 
+toolchain go1.25.14
+
 require (
 	github.com/gotd/td v0.161.0
 	github.com/robfig/cron/v3 v3.0.1

@@ -12,17 +12,17 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) 
 .PHONY: build build-linux build-multiarch clean test lint run dev tidy deps docker docker-multiarch help
 
 build:
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/papervalet
+	go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/papervalet
 
 build-linux:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/papervalet
+	GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/papervalet
 
 build-multiarch:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/papervalet
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm64 ./cmd/papervalet
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-amd64 ./cmd/papervalet
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-arm64 ./cmd/papervalet
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/papervalet
+	GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-amd64 ./cmd/papervalet
+	GOOS=linux GOARCH=arm64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-linux-arm64 ./cmd/papervalet
+	GOOS=darwin GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-amd64 ./cmd/papervalet
+	GOOS=darwin GOARCH=arm64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-darwin-arm64 ./cmd/papervalet
+	GOOS=windows GOARCH=amd64 go build -trimpath $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY)-windows-amd64.exe ./cmd/papervalet
 
 clean:
 	rm -f $(BUILD_DIR)/$(BINARY)*
