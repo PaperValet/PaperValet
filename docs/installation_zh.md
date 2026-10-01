@@ -48,7 +48,7 @@ journalctl -u papervalet -f
 
 ## 升级与卸载
 
-在 Telegram 里发 `.update now`，会下载最新版并重启。
+在 Telegram 里发 `.update now`，会下载最新版并重启。`.update -f` 不管版本号，强制重装最新版。
 
 在终端里再跑一次安装脚本，选 **升级** 或 **卸载**。升级保留全部数据，卸载会先问要不要删数据目录。
 
@@ -110,6 +110,6 @@ make build
 
 **发命令没反应**：命令必须由你的账号发出，并以前缀开头。
 
-**插件报 different version**：插件和主程序的 Go 版本不同。先 `.update now`，再重装插件。
+**插件报 different version**：插件和主程序的 Go 版本不同。先 `.update -f`，再重装插件。
 
 **插件完全加载不了**：只有 linux/amd64 的 Release 能加载外部插件。
