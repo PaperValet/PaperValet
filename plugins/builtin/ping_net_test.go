@@ -140,3 +140,19 @@ func TestFmtMs(t *testing.T) {
 		t.Fatal(fmtMs(0), fmtMs(12))
 	}
 }
+
+func TestPingRegistersPingdc(t *testing.T) {
+	_, mgr := newHelpFixture(t)
+	cmd, ok := mgr.Commands().Get("pingdc")
+	if !ok || cmd.Plugin != "ping" || cmd.Handler == nil {
+		t.Fatalf("pingdc missing: %+v", cmd)
+	}
+}
+
+func TestDcLabelFollowsLanguage(t *testing.T) {
+	zh := dcLabel(&interfaces.CommandContext{Lang: "zh-CN"}, 5)
+	en := dcLabel(&interfaces.CommandContext{Lang: "en-US"}, 5)
+	if zh != "DC5 新加坡" || en != "DC5 Singapore" {
+		t.Fatalf("zh=%q en=%q", zh, en)
+	}
+}
