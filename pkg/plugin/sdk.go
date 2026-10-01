@@ -6,11 +6,8 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/gotd/td/telegram/message/entity"
-	"github.com/gotd/td/telegram/message/html"
 	"github.com/gotd/td/tg"
 )
 
@@ -332,7 +329,7 @@ func (c *CommandContext) Reply(text string) error {
 	if err != nil {
 		return err
 	}
-	plain, entities := c.parseHTML(text)
+	plain, entities := ParseMarkdown(text, c.resolveInputUser)
 	_, err = c.API.MessagesSendMessage(c.Context(), &tg.MessagesSendMessageRequest{
 		Peer:     peer,
 		Message:  plain,
@@ -351,7 +348,7 @@ func (c *CommandContext) Edit(text string) error {
 	if err != nil {
 		return err
 	}
-	plain, entities := c.parseHTML(text)
+	plain, entities := ParseMarkdown(text, c.resolveInputUser)
 	req := &tg.MessagesEditMessageRequest{
 		Peer:    peer,
 		ID:      c.Message.Message.ID,
@@ -370,18 +367,6 @@ func (c *CommandContext) ReplyMedia(path, caption string) error {
 		return ErrNoMessage
 	}
 	return c.Media.SendFile(c.Context(), c.Message.ChatID, path, caption, c.Message.Message.ID)
-}
-
-// parseHTML converts a limited HTML string (b/i/u/s/a/code/pre/blockquote)
-// into plain text plus Telegram entities. On parse failure it falls back to
-// the raw text with no entities. tg://user?id= links resolve via the API and
-// degrade to plain text when the user cannot be resolved.
-func (c *CommandContext) parseHTML(text string) (string, []tg.MessageEntityClass) {
-	var b entity.Builder
-	if err := html.HTML(strings.NewReader(text), &b, html.Options{UserResolver: c.resolveInputUser}); err != nil {
-		return text, nil
-	}
-	return b.Complete()
 }
 
 func (c *CommandContext) resolveInputUser(id int64) (tg.InputUserClass, error) {
