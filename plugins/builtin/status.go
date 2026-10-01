@@ -24,21 +24,34 @@ func NewStatus(version string) *StatusPlugin {
 }
 
 func (p *StatusPlugin) Name() string        { return "status" }
-func (p *StatusPlugin) Description() string { return "版本、运行时间与资源状态" }
+func (p *StatusPlugin) Description() string { return "运行状态" }
 func (p *StatusPlugin) DescEN() string      { return "Version, uptime and runtime status" }
 
 func (p *StatusPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "status",
-		Aliases:     []string{"stat", "st", "version", "v", "ver"},
-		Description: "查看版本、运行时长、插件数与资源占用",
-		DescEN:      "Show version, uptime, plugin count and resource usage",
-		Usage:       "status",
-		UsageEN:     "status",
-		Plugin:      p.Name(),
-		Category:    "core",
-		Handler:     p.handleStatus,
+		Description: "查看运行状态",
+		DescEN:      "Show runtime status",
+		Usage: `status
+
+<b>显示</b>
+• 版本号
+• 本次运行时长
+• Go 堆内存占用和协程数
+• 已注册插件数（内建 + 外部）
+• Go 版本`,
+		UsageEN: `status
+
+<b>Shows</b>
+• version
+• uptime of this run
+• Go heap usage and goroutine count
+• registered plugins (built-in + external)
+• Go version`,
+		Plugin:   p.Name(),
+		Category: "core",
+		Handler:  p.handleStatus,
 	})
 }
 
