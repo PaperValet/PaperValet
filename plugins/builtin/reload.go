@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -79,23 +78,18 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 	var ok, failed []string
 	for _, name := range names {
 		if err := p.loader.Unload(ctx.Context(), name); err != nil {
-			failed = append(failed, fmt.Sprintf("%s: %v", name, err))
+			failed = append(failed, failLine(name, htmlEscape(err.Error())))
 			continue
 		}
 		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-			failed = append(failed, fmt.Sprintf("%s: %v", name, err))
+			failed = append(failed, failLine(name, htmlEscape(err.Error())))
 		} else {
-			ok = append(ok, name)
+			ok = append(ok, okLine(name, ctx.Tlocal("已重载", "reloaded")))
 		}
 	}
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "🔄 %s %d/%d\n", ctx.Tlocal("重载完成", "reload finished"), len(ok), len(names))
-	if len(ok) > 0 {
-		b.WriteString("✅ " + strings.Join(ok, ", ") + "\n")
+	c := newCard("🔄", ctx.Tlocal(fmt.Sprintf("重载完成 %d/%d", len(ok), len(names)), fmt.Sprintf("Reloaded %d/%d", len(names)-len(failed), len(names)))).blank()
+	for _, l := range append(ok, failed...) {
+		c.line(l)
 	}
-	for _, f := range failed {
-		b.WriteString("❌ " + f + "\n")
-	}
-	return ctx.Edit(b.String())
+	return ctx.Edit(c.String())
 }
