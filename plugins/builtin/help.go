@@ -50,22 +50,22 @@ func (p *HelpPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Aliases:     []string{"h"},
 		Description: "命令帮助",
 		DescEN:      "Command help",
-		Usage: `help [命令|插件]
-
-<b>示例</b>
-• <code>help</code>  按插件列出全部命令和别名
-• <code>help dme</code>  看 dme 的详细用法和机制
-• <code>help core</code>  看一个插件下的所有命令
-
-别名 <code>h</code>`,
-		UsageEN: `help [command|plugin]
-
-<b>Examples</b>
-• <code>help</code>  every command and alias, grouped by plugin
-• <code>help dme</code>  detailed usage and behavior of dme
-• <code>help core</code>  all commands of one plugin
-
-Alias <code>h</code>`,
+		Usage: "help [命令|插件]\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `help`  按插件列出全部命令和别名\n" +
+			"• `help dme`  看 dme 的详细用法和机制\n" +
+			"• `help core`  看一个插件下的所有命令\n" +
+			"\n" +
+			"别名 `h`",
+		UsageEN: "help [command|plugin]\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `help`  every command and alias, grouped by plugin\n" +
+			"• `help dme`  detailed usage and behavior of dme\n" +
+			"• `help core`  all commands of one plugin\n" +
+			"\n" +
+			"Alias `h`",
 		Plugin:   p.Name(),
 		Category: "core",
 		Handler:  p.handleHelp,
@@ -88,8 +88,7 @@ func (p *HelpPlugin) handleHelp(ctx *interfaces.CommandContext) error {
 		name := strings.Fields(repl)
 		if len(name) > 0 {
 			if cmd, ok := p.mgr.Commands().Get(name[0]); ok {
-				return ctx.Edit(fmt.Sprintf("🔗 <code>%s%s</code> → <code>%s%s</code>\n\n%s",
-					prefix, htmlEscape(target), prefix, htmlEscape(repl), p.commandPage(ctx, prefix, cmd)))
+				return ctx.Edit("🔗 " + plugin.Code(prefix+target) + " → " + plugin.Code(prefix+repl) + "\n\n" + p.commandPage(ctx, prefix, cmd))
 			}
 		}
 	}
@@ -97,8 +96,8 @@ func (p *HelpPlugin) handleHelp(ctx *interfaces.CommandContext) error {
 		return ctx.Edit(p.pluginPage(ctx, prefix, info))
 	}
 	return ctx.Edit(ctx.Tlocal(
-		fmt.Sprintf("没有 <code>%s</code> 这个命令或插件，发 <code>%shelp</code> 看全部", htmlEscape(target), prefix),
-		fmt.Sprintf("No command or plugin <code>%s</code>; send <code>%shelp</code> for the list", htmlEscape(target), prefix)))
+		fmt.Sprintf("没有 %s 这个命令或插件，发 %s 看全部", plugin.Code(target), plugin.Code(prefix+"help")),
+		fmt.Sprintf("No command or plugin %s; send %s for the list", plugin.Code(target), plugin.Code(prefix+"help"))))
 }
 
 // userAliasesFor returns runtime aliases pointing at cmd.
@@ -116,12 +115,12 @@ func (p *HelpPlugin) userAliasesFor(cmd string) []string {
 // commandLine renders ".name (.a .b) — description".
 func (p *HelpPlugin) commandLine(ctx *interfaces.CommandContext, prefix string, cmd *interfaces.Command) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "<code>%s%s</code>", prefix, cmd.Name)
+	fmt.Fprintf(&b, "`%s%s`", prefix, cmd.Name)
 	aliases := append(append([]string(nil), cmd.Aliases...), p.userAliasesFor(cmd.Name)...)
 	if len(aliases) > 0 {
 		parts := make([]string, len(aliases))
 		for i, a := range aliases {
-			parts[i] = "<code>" + prefix + htmlEscape(a) + "</code>"
+			parts[i] = plugin.Code(prefix + a)
 		}
 		b.WriteString(" · " + strings.Join(parts, " "))
 	}
@@ -186,10 +185,10 @@ func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) str
 		c.blank()
 		// A plugin whose only command shares its name needs no second line.
 		if cmds := by[name]; len(cmds) == 1 && cmds[0].Name == name && len(cmds[0].Aliases) == 0 && len(p.userAliasesFor(name)) == 0 {
-			c.line("<b>" + htmlEscape(name) + "</b> · " + pluginDesc(ctx, info))
+			c.line(plugin.Bold(name) + " · " + pluginDesc(ctx, info))
 			continue
 		}
-		c.line("<b>" + htmlEscape(name) + "</b> · " + pluginDesc(ctx, info))
+		c.line(plugin.Bold(name) + " · " + pluginDesc(ctx, info))
 		for _, cmd := range by[name] {
 			c.line("  " + p.commandLine(ctx, prefix, cmd))
 		}
@@ -203,7 +202,7 @@ func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) str
 func (p *HelpPlugin) commandPage(ctx *interfaces.CommandContext, prefix string, cmd *interfaces.Command) string {
 	c := newCard("📖", prefix+cmd.Name+" · "+cmdDesc(ctx, cmd))
 	info, _ := p.mgr.GetInfo(cmd.Plugin)
-	c.line("<i>" + ctx.Tlocal("插件", "plugin") + " " + htmlEscape(info.Name) + "</i>")
+	c.line("_" + ctx.Tlocal("插件", "plugin") + " " + esc(info.Name) + "_")
 
 	usage := cmdUsage(ctx, cmd)
 	if usage == "" {
@@ -237,7 +236,7 @@ func (p *HelpPlugin) commandPage(ctx *interfaces.CommandContext, prefix string, 
 }
 
 func (p *HelpPlugin) pluginPage(ctx *interfaces.CommandContext, prefix string, info plugin.PluginInfo) string {
-	c := newCard("📦", htmlEscape(info.Name)+" · "+pluginDesc(ctx, info)).blank()
+	c := newCard("📦", esc(info.Name)+" · "+pluginDesc(ctx, info)).blank()
 	_, by := p.groups()
 	cmds := by[info.Name]
 	if len(cmds) == 0 {
