@@ -171,8 +171,7 @@ var builtinOrder = []string{
 
 func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) string {
 	names, by := p.groups()
-	var b strings.Builder
-	b.WriteString("📚 <b>PaperValet</b>\n")
+	c := newCard("📚", "PaperValet")
 	builtin := map[string]bool{}
 	for _, n := range builtinOrder {
 		builtin[n] = true
@@ -180,40 +179,40 @@ func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) str
 	shownExternal := false
 	for _, name := range names {
 		if !builtin[name] && !shownExternal {
-			b.WriteString("\n━━ " + ctx.Tlocal("外部插件", "External plugins") + " ━━\n")
+			c.blank().line("━━ " + ctx.Tlocal("外部插件", "External plugins") + " ━━")
 			shownExternal = true
 		}
 		info, _ := p.mgr.GetInfo(name)
-		desc := pluginDesc(ctx, info)
-		fmt.Fprintf(&b, "\n<b>%s</b>", htmlEscape(name))
-		if desc != "" {
-			b.WriteString(" · " + desc)
+		c.blank()
+		// A plugin whose only command shares its name needs no second line.
+		if cmds := by[name]; len(cmds) == 1 && cmds[0].Name == name && len(cmds[0].Aliases) == 0 && len(p.userAliasesFor(name)) == 0 {
+			c.line("<b>" + htmlEscape(name) + "</b> · " + pluginDesc(ctx, info))
+			continue
 		}
-		b.WriteString("\n")
+		c.line("<b>" + htmlEscape(name) + "</b> · " + pluginDesc(ctx, info))
 		for _, cmd := range by[name] {
-			b.WriteString("  " + p.commandLine(ctx, prefix, cmd) + "\n")
+			c.line("  " + p.commandLine(ctx, prefix, cmd))
 		}
 	}
-	b.WriteString("\n" + ctx.Tlocal(
-		fmt.Sprintf("💡 <code>%shelp 命令</code> 看详细用法", prefix),
-		fmt.Sprintf("💡 <code>%shelp command</code> for details", prefix)))
-	return b.String()
+	c.hint(ctx.Tlocal(
+		cmdRef(prefix+"help 命令")+" 看详细用法",
+		cmdRef(prefix+"help command")+" for details"))
+	return c.String()
 }
 
 func (p *HelpPlugin) commandPage(ctx *interfaces.CommandContext, prefix string, cmd *interfaces.Command) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "📖 <b>%s%s</b> · %s\n", prefix, cmd.Name, cmdDesc(ctx, cmd))
+	c := newCard("📖", prefix+cmd.Name+" · "+cmdDesc(ctx, cmd))
 	info, _ := p.mgr.GetInfo(cmd.Plugin)
-	fmt.Fprintf(&b, "<i>%s %s</i>\n", ctx.Tlocal("插件", "plugin"), htmlEscape(info.Name))
+	c.line("<i>" + ctx.Tlocal("插件", "plugin") + " " + htmlEscape(info.Name) + "</i>")
 
 	usage := cmdUsage(ctx, cmd)
 	if usage == "" {
 		usage = cmd.Name
 	}
 	first, rest, _ := strings.Cut(usage, "\n")
-	fmt.Fprintf(&b, "\n<b>%s</b>  <code>%s%s</code>\n", ctx.Tlocal("用法", "Usage"), prefix, first)
+	c.blank().rawField(ctx.Tlocal("用法", "Usage"), cmdRef(prefix+first))
 	if strings.TrimSpace(rest) != "" {
-		b.WriteString(strings.TrimRight(rest, "\n") + "\n")
+		c.line(strings.TrimRight(rest, "\n"))
 	}
 
 	var tags []string
@@ -221,7 +220,7 @@ func (p *HelpPlugin) commandPage(ctx *interfaces.CommandContext, prefix string, 
 	if len(aliases) > 0 {
 		parts := make([]string, len(aliases))
 		for i, a := range aliases {
-			parts[i] = "<code>" + prefix + htmlEscape(a) + "</code>"
+			parts[i] = cmdRef(prefix + a)
 		}
 		tags = append(tags, ctx.Tlocal("别名 ", "aliases ")+strings.Join(parts, " "))
 	}
@@ -232,25 +231,24 @@ func (p *HelpPlugin) commandPage(ctx *interfaces.CommandContext, prefix string, 
 		tags = append(tags, ctx.Tlocal(fmt.Sprintf("%d 秒冷却", cmd.RateLimit), fmt.Sprintf("%ds cooldown", cmd.RateLimit)))
 	}
 	if len(tags) > 0 {
-		b.WriteString("\n" + strings.Join(tags, " · "))
+		c.blank().line(strings.Join(tags, " · "))
 	}
-	return b.String()
+	return c.String()
 }
 
 func (p *HelpPlugin) pluginPage(ctx *interfaces.CommandContext, prefix string, info plugin.PluginInfo) string {
+	c := newCard("📦", htmlEscape(info.Name)+" · "+pluginDesc(ctx, info)).blank()
 	_, by := p.groups()
-	var b strings.Builder
-	fmt.Fprintf(&b, "📦 <b>%s</b> · %s\n\n", htmlEscape(info.Name), pluginDesc(ctx, info))
 	cmds := by[info.Name]
 	if len(cmds) == 0 {
-		b.WriteString(ctx.Tlocal("这个插件没有命令", "This plugin has no commands"))
-		return b.String()
+		c.line(ctx.Tlocal("这个插件没有命令", "This plugin has no commands"))
+		return c.String()
 	}
 	for _, cmd := range cmds {
-		b.WriteString(p.commandLine(ctx, prefix, cmd) + "\n")
+		c.line(p.commandLine(ctx, prefix, cmd))
 	}
-	b.WriteString("\n" + ctx.Tlocal(
-		fmt.Sprintf("💡 <code>%shelp 命令</code> 看详细用法", prefix),
-		fmt.Sprintf("💡 <code>%shelp command</code> for details", prefix)))
-	return b.String()
+	c.hint(ctx.Tlocal(
+		cmdRef(prefix+"help 命令")+" 看详细用法",
+		cmdRef(prefix+"help command")+" for details"))
+	return c.String()
 }
