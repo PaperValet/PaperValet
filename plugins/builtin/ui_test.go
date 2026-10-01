@@ -8,9 +8,9 @@ import (
 
 func TestCardLayout(t *testing.T) {
 	c := newCard("📦", "Title")
-	c.section("Part").field("A", 1).rawField("B", "<code>x</code>").line("plain")
+	c.section("Part").field("A", 1).rawField("B", "`x`").line("plain")
 	got := c.String()
-	for _, want := range []string{"📦 <b>Title</b>", "<b>Part</b>", "A  <code>1</code>"} {
+	for _, want := range []string{"📦 **Title**", "**Part**", "A  `1`"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
