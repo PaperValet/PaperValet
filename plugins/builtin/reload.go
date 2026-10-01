@@ -11,7 +11,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// ReloadPlugin provides hot-reload for external plugins.
+// ReloadPlugin hot-reloads every external plugin.
 type ReloadPlugin struct {
 	loader *loader.Loader
 	mgr    plugin.Manager
@@ -22,15 +22,18 @@ func NewReload(pluginLoader *loader.Loader) *ReloadPlugin {
 }
 
 func (p *ReloadPlugin) Name() string        { return "reload" }
-func (p *ReloadPlugin) Description() string { return "外部插件热重载" }
+func (p *ReloadPlugin) Description() string { return "热重载全部外部插件" }
+func (p *ReloadPlugin) DescEN() string      { return "Hot-reload all external plugins" }
 
 func (p *ReloadPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "reload",
 		Aliases:     []string{"rl"},
-		Description: "重载外部插件",
-		Usage:       "reload <插件名|all|list>",
+		Description: "重新加载所有外部插件（先卸载再加载）",
+		DescEN:      "Reload every external plugin (unload then load)",
+		Usage:       "reload",
+		UsageEN:     "reload",
 		Plugin:      p.Name(),
 		Category:    "admin",
 		OwnerOnly:   true,
@@ -42,60 +45,46 @@ func (p *ReloadPlugin) Start(_ context.Context) error { return nil }
 func (p *ReloadPlugin) Stop(_ context.Context) error  { return nil }
 
 func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
-	args := ctx.Args
-	if len(args) == 0 {
-		return ctx.Edit("用法: reload <插件名|all|list>")
+	if ctx.ArgCount() > 0 {
+		return ctx.Edit(ctx.Tlocal(
+			"reload 不带参数：重新加载所有外部插件。单个插件的装卸用 <code>apt load/unload</code>",
+			"reload takes no arguments: it reloads every external plugin. For a single plugin use <code>apt load/unload</code>",
+		))
 	}
 
-	target := args[0]
-
-	switch target {
-	case "list", "ls":
-		loaded := p.loader.GetLoaded()
-		if len(loaded) == 0 {
-			return ctx.Edit("暂无已加载的外部插件")
-		}
-		var b strings.Builder
-		b.WriteString("🔌 <b>已加载外部插件:</b>\n\n")
-		var names []string
-		for name := range loaded {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			info := loaded[name]
-			b.WriteString(fmt.Sprintf("• <code>%s</code> (%s)\n", name, info.Path))
-			if info.Metadata != nil {
-				b.WriteString(fmt.Sprintf("  版本: %s | 作者: %s\n", info.Metadata.Version, info.Metadata.Author))
-			}
-		}
-		return ctx.Edit(b.String())
-
-	case "all":
-		loaded := p.loader.GetLoaded()
-		var results []string
-		for name := range loaded {
-			if err := p.loader.Unload(ctx.Context(), name); err != nil {
-				results = append(results, fmt.Sprintf("❌ %s 卸载失败: %v", name, err))
-				continue
-			}
-			if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-				results = append(results, fmt.Sprintf("❌ %s 重载失败: %v", name, err))
-			} else {
-				results = append(results, fmt.Sprintf("✅ %s", name))
-			}
-		}
-		return ctx.Edit("🔄 <b>全量重载结果:</b>\n\n" + strings.Join(results, "\n"))
-
-	default:
-		if p.loader.IsLoaded(target) {
-			if err := p.loader.Unload(ctx.Context(), target); err != nil {
-				return ctx.Edit(fmt.Sprintf("❌ 卸载失败: %v", err))
-			}
-		}
-		if err := p.loader.LoadByName(ctx.Context(), target); err != nil {
-			return ctx.Edit(fmt.Sprintf("❌ 重载失败: %v", err))
-		}
-		return ctx.Edit(fmt.Sprintf("🔄 已重载: %s", target))
+	loaded := p.loader.GetLoaded()
+	names := make([]string, 0, len(loaded))
+	for name := range loaded {
+		names = append(names, name)
 	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return ctx.Edit(ctx.Tlocal(
+			"没有已加载的外部插件。用 <code>apt install &lt;名字&gt;</code> 安装，或 <code>apt search</code> 看仓库里有什么",
+			"No external plugins are loaded. Install with <code>apt install &lt;name&gt;</code> or browse with <code>apt search</code>",
+		))
+	}
+
+	var ok, failed []string
+	for _, name := range names {
+		if err := p.loader.Unload(ctx.Context(), name); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", name, err))
+			continue
+		}
+		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v", name, err))
+		} else {
+			ok = append(ok, name)
+		}
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "🔄 %s %d/%d\n", ctx.Tlocal("重载完成", "reload finished"), len(ok), len(names))
+	if len(ok) > 0 {
+		b.WriteString("✅ " + strings.Join(ok, ", ") + "\n")
+	}
+	for _, f := range failed {
+		b.WriteString("❌ " + f + "\n")
+	}
+	return ctx.Edit(b.String())
 }
