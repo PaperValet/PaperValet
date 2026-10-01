@@ -1,537 +1,66 @@
-# PaperValet Architecture Specification
+# Architecture
 
-## Overview
-Production-grade Telegram Userbot built on **gotd/td** (Telegram MTProto client), learning from:
-- **NexusValet** (Go, gotd): Hook system, plugin interfaces, peer resolution
-- **PagerMaid-Modify** (Python, Pyrogram): Module system, alias manager, permissions
-- **TeleBox** (TypeScript, gramJS): Plugin SDK, external plugins, command context helpers
-
----
-
-## Architecture Principles
-
-1. **Interface-based Dependency Injection** — No global state, all dependencies injected
-2. **Public Plugin SDK** (`pkg/plugin`) — External plugins depend ONLY on this
-3. **Built-in vs External Plugins** — Built-ins compile in; externals load as `.so` via Go plugins
-4. **Type-safe Command Context** — Rich helpers: `Reply()`, `Edit()`, `Delete()`, `Typing()`, `GetArg()`
-5. **Event Bus with Hooks** — `BeforeStart`, `AfterStart`, `BeforeStop`, `AfterStop` + custom events
-6. **Permission System** — Owner-only, sudo, admin, rate limiting built-in
-7. **Session Management** — Per-user-per-chat state persistence (SQLite)
-8. **Peer Resolution** — AccessHashManager for reliable peer resolution
-
----
-
-## Package Structure
+## Layout
 
 ```
-github.com/TiaraBasori/PaperValet/
-├── cmd/papervalet/           # Entry point
-├── internal/
-│   ├── app/                  # Application orchestrator (App, Bot)
-│   ├── command/              # Command registry, parser, context
-│   ├── config/               # Configuration (JSON, env)
-│   ├── eventbus/             # Event system + hooks
-│   ├── i18n/                 # Language catalog + per-user language
-│   ├── media/                # Media upload/send manager
-│   ├── peer/                 # Peer resolution + AccessHashManager
-│   ├── plugin/
-│   │   ├── loader/           # Go plugin (.so) loader
-│   │   └── manager/          # Plugin lifecycle management
-│   └── session/              # SQLite session storage
-├── pkg/
-│   ├── logger/               # Zap logger wrapper
-│   └── plugin/               # PUBLIC SDK (external plugins import THIS)
-│       ├── sdk.go            # Interfaces, types
-│       ├── metadata.go       # PluginMetadata for .so plugins
-│       └── helpers.go        # CommandContext helpers (Reply, Edit, etc.)
-└── plugins/
-    ├── builtin/              # Built-in plugins (compiled in)
-    │   ├── core.go           # ping, restart
-    │   ├── help.go           # help (categorized, i18n)
-    │   ├── status.go         # detailed system status
-    │   ├── apt.go            # Plugin package manager (list/install/remove/load/unload)
-    │   ├── info.go           # info
-    │   ├── re.go             # re (repeat)
-    │   ├── alias.go          # runtime alias set/del/list (wired into parsing)
-    │   ├── exec.go           # exec/shell (owner)
-    │   ├── sudo.go           # permission delegation (owner)
-    │   ├── reload.go         # reload all external plugins
-    │   ├── log.go            # loglevel, sendlog (owner)
-    │   ├── prefix.go         # prefix list/add/del/set (runtime applied)
-    │   ├── backup.go         # config backup to Saved Messages / restore by reply
-    │   ├── update.go         # upgrade from GitHub Releases
-    │   ├── dme.go            # dme N / all / others, anti-recall
-    │   └── lang.go           # per-user language switching
-    └── external/             # External plugins (built separately as .so)
-        # source of truth: github.com/PaperValet/PaperValet-Plugins
-        ├── fun/              # roll, coin, choose, 8ball, fact
-        ├── account/          # username, name, bio, rmpfp
-        ├── save/             # save messages/messages ranges to a target
-        ├── qrcode/
-        ├── ping/             # Advanced ping (DC, ICMP, HTTP)
+cmd/papervalet/        CLI: run, initialize, version
+internal/
+  app/                 wiring, login, update handler
+  command/             parser, registry, middleware, plugin Host
+  config/              config.json, data home, defaults
+  eventbus/            pub/sub with priorities
+  i18n/                zh-CN / en-US catalogs, per-user language
+  media/               file upload and download
+  peer/                access hash cache and peer resolver
+  plugin/              plugin manager
+  plugin/loader/       .so loader and apt downloads
+  session/             SQLite session store
+  setup/               interactive initialize
+pkg/
+  plugin/              public SDK, the only package plugins import
+  logger/              zap wrapper
+plugins/builtin/       built-in plugins
+examples/              sample external plugin
+scripts/               installers
 ```
 
----
+## Message flow
 
-## Plugin SDK (`pkg/plugin/sdk.go`)
+1. gotd delivers updates to `app.UpdateHandler`, which records access hashes and emits a `message` event.
+2. `command.Parser` subscribes to `message`. It checks the sender (owner, or a sudo user's incoming message), strips a prefix, expands user aliases once, and matches the longest registered command.
+3. `command.Registry` builds a `CommandContext` and runs the handler through recovery, logging and rate-limit middleware. `OwnerOnly` commands are checked here.
+4. Handlers answer with `ctx.Edit` or `ctx.Reply`. Text is Telegram Markdown, converted to entities by `pkg/plugin.ParseMarkdown`.
 
-```go
-// Package plugin provides the PUBLIC SDK for PaperValet plugins.
-// External plugins build against this package ONLY.
-package plugin
+## Plugins
 
-import (
-    "context"
-    "time"
-    "github.com/gotd/td/tg"
-)
+Built-in and external plugins implement the same `plugin.Plugin` interface and register commands through `plugin.Manager`.
 
-// ============================================================
-// Plugin Lifecycle
-// ============================================================
+Built-ins are compiled in and registered in `app.registerBuiltins`. There are 16: ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log.
 
-// Plugin is the interface all plugins must implement.
-type Plugin interface {
-    Name() string
-    Description() string
-    Init(ctx context.Context, mgr Manager) error
-    Start(ctx context.Context) error
-    Stop(ctx context.Context) error
-}
+External plugins are `.so` files in `plugins/`, loaded at startup. `apt i` downloads one from the plugin repository release, loads it and starts it right away. `apt rm` stops it and deletes the file. There is no installed-but-disabled state.
 
-// PluginMetadata is exported by external .so plugins as `var Metadata *PluginMetadata`.
-type PluginMetadata struct {
-    Name        string
-    Description string
-    Version     string
-    Author      string
-    MinVersion  string
-}
+Plugins that work outside command handlers (schedulers, restored tasks) take long-lived services from `mgr.Host()`.
 
-// ============================================================
-// Manager Interface (exposed to plugins)
-// ============================================================
+Go plugins cannot be unloaded. `reload` re-runs `Init`/`Start` on the loaded code. Replacing a `.so` takes a `restart`.
 
-// Manager is the plugin manager interface exposed to plugins.
-type Manager interface {
-    RegisterPlugin(p Plugin) error
-    RegisterCommand(cmd *Command) error
-    UnregisterCommand(name string)
-    UnregisterPlugin(name string)
-    Commands() RegistryProvider
-    GetInfo(name string) (PluginInfo, bool)
-    GetAllInfo() []PluginInfo
-    Emit(ctx context.Context, eventType string, data any) error
-    InitAll(ctx context.Context) error
-    StartAll(ctx context.Context) error
-    StopAll(ctx context.Context) error
-}
+## Runtime state
 
-// PluginInfo holds plugin metadata.
-type PluginInfo struct {
-    Name        string
-    Description string
-    Status      PluginStatus
-}
+Everything lives in the data home (default `~/.papervalet`, the working directory of the process):
 
-type PluginStatus int
-const (
-    StatusInactive PluginStatus = iota
-    StatusActive
-    StatusError
-)
+- `config.json`: API credentials and settings, mode 0600
+- `session.json`, `sessions.db`: Telegram login and per-chat session state
+- `data/`: peers cache, aliases, prefixes, sudo list, language, restart marker, and one `data/<plugin>/` per plugin
+- `plugins/`: external plugins
 
-// RegistryProvider provides command registry access.
-type RegistryProvider interface {
-    Get(name string) (*Command, bool)
-    GetAll() map[string]*Command
-    GetByPlugin(plugin string) map[string]*Command
-    GetPrefix() string
-}
+## Restart and update
 
-// ============================================================
-// Logging
-// ============================================================
+`restart` stops all plugins, flushes sessions and logs, then re-executes the binary under the same PID. Supervisors (systemd, Docker, tmux) never see an exit. After login the app edits the command message into the elapsed time.
 
-type Logger interface {
-    Debug(msg string, keysAndValues ...any)
-    Info(msg string, keysAndValues ...any)
-    Warn(msg string, keysAndValues ...any)
-    Error(msg string, keysAndValues ...any)
-    Named(name string) Logger
-    With(keysAndValues ...any) Logger
-}
+`update now` downloads the matching release bundle, swaps only the binary and uses the same restart path.
 
-// ============================================================
-// Event System
-// ============================================================
+## Build and release
 
-type Emitter interface {
-    Emit(ctx context.Context, eventType string, data any) error
-}
-
-// ============================================================
-// Peer Resolution
-// ============================================================
-
-type PeerResolver interface {
-    ResolveFromChatID(ctx context.Context, chatID int64) (tg.InputPeerClass, error)
-    ResolveUserInChannel(ctx context.Context, channelPeer tg.InputChannelClass, userID int64) (tg.InputPeerClass, error)
-    ResolveUserFromMessage(ctx context.Context, peer tg.InputPeerClass, msgID int, userID int64) (tg.InputPeerClass, error)
-}
-
-// ============================================================
-// Message & Session
-// ============================================================
-
-type MessageEvent struct {
-    Update    tg.UpdatesClass
-    Message   *tg.Message
-    Text      string
-    UserID    int64
-    ChatID    int64
-    IsOut     bool
-    IsReply   bool
-    ReplyToID int
-    Entities  []tg.MessageEntityClass
-    Media     tg.MessageMediaClass
-    Date      int
-    PeerID    tg.PeerClass
-    Raw       any
-}
-
-type Session struct {
-    UserID    int64
-    ChatID    int64
-    State     string
-    Data      map[string]any
-    Timestamp int64
-}
-
-type SessionContext struct {
-    Session *Session
-    Context context.Context
-    Data    map[string]any
-}
-
-func NewSessionContext(s *Session, ctx context.Context) *SessionContext {
-    return &SessionContext{Session: s, Context: ctx, Data: make(map[string]any)}
-}
-
-func (s *SessionContext) Ctx() context.Context {
-    if s != nil && s.Context != nil { return s.Context }
-    return context.Background()
-}
-func (s *SessionContext) Get(key string) (any, bool) {
-    if s == nil || s.Data == nil { return nil, false }
-    v, ok := s.Data[key]; return v, ok
-}
-func (s *SessionContext) Set(key string, value any) {
-    if s.Data == nil { s.Data = make(map[string]any) }
-    s.Data[key] = value
-}
-func (s *SessionContext) Delete(key string) { delete(s.Data, key) }
-
-// ============================================================
-// Command System
-// ============================================================
-
-type Handler func(ctx *CommandContext) error
-type Middleware func(next Handler) Handler
-
-type Command struct {
-    Name        string
-    Aliases     []string
-    Description string
-    Usage       string
-    Plugin      string
-    Category    string
-    OwnerOnly   bool
-    SudoOnly    bool
-    Hidden      bool
-    RateLimit   int
-    RateWindow  int
-    Handler     Handler
-}
-
-type CommandContext struct {
-    Command      string
-    Args         []string
-    RawArgs      string
-    Message      *MessageEvent
-    Session      *SessionContext
-    API          *tg.Client
-    PeerResolver PeerResolver
-    Emitter      Emitter
-    PluginName   string
-    StartTime    time.Time
-    Metadata     map[string]any
-    Ctx          context.Context
-    Logger       Logger
-}
-
-// Context() returns the request context.
-func (c *CommandContext) Context() context.Context {
-    if c.Ctx != nil { return c.Ctx }
-    if c.Session != nil { return s.Ctx() }
-    return context.Background()
-}
-
-// resolvePeer resolves the current chat peer.
-func (c *CommandContext) resolvePeer() (tg.InputPeerClass, error) {
-    if c.Message == nil || c.PeerResolver == nil { return nil, ErrNoMessage }
-    return c.PeerResolver.ResolveFromChatID(c.Context(), c.Message.ChatID)
-}
-
-// Reply sends a reply to the triggering message.
-func (c *CommandContext) Reply(text string) error {
-    if c.Message == nil || c.API == nil || c.Message.Message == nil { return ErrNoMessage }
-    peer, err := c.resolvePeer()
-    if err != nil { return err }
-    _, err = c.API.MessagesSendMessage(c.Context(), &tg.MessagesSendMessageRequest{
-        Peer: peer, Message: text, RandomID: time.Now().UnixNano(),
-        ReplyTo: &tg.InputReplyToMessage{ReplyToMsgID: c.Message.Message.ID},
-    })
-    return err
-}
-
-// Edit edits the triggering message.
-func (c *CommandContext) Edit(text string) error {
-    if c.Message == nil || c.API == nil || c.Message.Message == nil { return ErrNoMessage }
-    peer, err := c.resolvePeer()
-    if err != nil { return err }
-    _, err = c.API.MessagesEditMessage(c.Context(), &tg.MessagesEditMessageRequest{
-        Peer: peer, ID: c.Message.Message.ID, Message: text,
-    })
-    return err
-}
-
-// Delete deletes the triggering message.
-func (c *CommandContext) Delete() error {
-    if c.Message == nil || c.API == nil || c.Message.Message == nil { return ErrNoMessage }
-    _, err := c.API.MessagesDeleteMessages(c.Context(), &tg.MessagesDeleteMessagesRequest{
-        ID: []int{c.Message.Message.ID}, Revoke: true,
-    })
-    return err
-}
-
-// Typing sends a typing action.
-func (c *CommandContext) Typing() error {
-    if c.Message == nil || c.API == nil { return ErrNoMessage }
-    peer, err := c.resolvePeer()
-    if err != nil { return err }
-    _, err = c.API.MessagesSetTyping(c.Context(), &tg.MessagesSetTypingRequest{
-        Peer: peer, Action: &tg.SendMessageTypingAction{},
-    })
-    return err
-}
-
-// GetArg returns the argument at index, or empty string.
-func (c *CommandContext) GetArg(index int) string {
-    if index < 0 || index >= len(c.Args) { return "" }
-    return c.Args[index]
-}
-
-// GetArgs returns the raw arguments string.
-func (c *CommandContext) GetArgs() string { return c.RawArgs }
-
-// ArgCount returns the number of arguments.
-func (c *CommandContext) ArgCount() int { return len(c.Args) }
-
-// HasArg checks if an argument exists.
-func (c *CommandContext) HasArg(arg string) bool {
-    for _, a := range c.Args { if a == arg { return true } }
-    return false
-}
-
-var ErrNoMessage = &CommandError{Code: "NO_MESSAGE", Message: "no message in context"}
-
-type CommandError struct {
-    Code    string
-    Message string
-    Err     error
-}
-func (e *CommandError) Error() string {
-    if e.Err != nil { return e.Message + ": " + e.Err.Error() }
-    return e.Message
-}
-func (e *CommandError) Unwrap() error { return e.Err }
-```
-
----
-
-## Built-in Plugins (15 total)
-
-| Plugin | Commands | Category | Notes |
-|--------|----------|----------|-------|
-| **core** | ping, restart | core | Minimal core |
-| **help** | help [cmd\|plugin] | core | Help & command discovery |
-| **status** | status | core | Runtime status |
-| **apt** | apt install/remove/load/unload/list/info/search | core | Plugin package manager |
-| **info** | info | tools | IDs and jump links |
-| **re** | re | tools | Repeat replied messages |
-| **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
-| **exec** | exec | admin | Shell commands (owner) |
-| **sudo** | sudo | admin | Permission delegation (owner) |
-| **reload** | reload | admin | Reload all external plugins |
-| **log** | loglevel, sendlog | admin | Log level + log delivery (owner) |
-| **prefix** | prefix list/add/del/set | admin | Multi-prefix management (JSON persisted) |
-| **backup** | backup, backup restore | admin | Config to Saved Messages, restore by reply |
-| **update** | update, update now | admin | Upgrade from GitHub Releases |
-| **dme** | dme N, dme all, dme others | tools | Bulk delete, anti-recall |
-| **lang** | lang | core | Per-user language switching |
-
----
-
-## External Plugin System
-
-External plugins are built independently as `.so` files and published to GitHub Releases by the
-[PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repo.
-
-**Available external plugins (21 total):**
-
-| Plugin | Description | Category |
-|--------|-------------|----------|
-| **account** | 账号资料管理 | account |
-| **atadmins** | 一键艾特全部管理员 | admin |
-| **bizhi** | 随机壁纸 | fun |
-| **calc** | 计算器 | tools |
-| **duckduckgo** | DuckDuckGo 搜索 | tools |
-| **encode** | 编码/解码 | tools |
-| **fun** | 娱乐命令 | fun |
-| **gt** | 谷歌翻译 | tools |
-| **hitokoto** | 随机一言 | fun |
-| **isalive** | 存活检测 | tools |
-| **ping** | 网络延迟测试 | tools |
-| **qr** | 二维码生成 | tools |
-| **qrcode** | 二维码生成与解码 | tools |
-| **rev** | 文本反转 | tools |
-| **save** | 保存/转发消息 | tools |
-| **sendat** | 定时消息发送 | tools |
-| **speedtest** | 网络速度测试 | tools |
-| **weather** | 天气查询 | tools |
-
-**Installation flow:**
-1. `apt install ping` → downloads `ping.so` from `https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download/ping.so`
-2. `apt load ping` → opens `.so`, registers plugin, initializes, starts
-3. `apt unload ping` → stops plugin, unregisters commands
-4. `apt remove ping` → deletes `.so` file
-
-**Build:**
-```bash
-go build -buildmode=plugin -o plugins/ping.so ./ping   # in PaperValet-Plugins
-```
-
-**Metadata:** External plugin exports `var Metadata *plugin.PluginMetadata`
-**Dependencies:** External plugins import ONLY `github.com/TiaraBasori/PaperValet/pkg/plugin`
-
----
-
-## Event Bus & Hooks
-
-```go
-// Event types
-const (
-    EventStart       = "start"
-    EventStop        = "stop"
-    EventMessage     = "message"
-    EventCommand     = "command"
-    EventCommandError = "command_error"
-    EventPluginLoad  = "plugin_load"
-    EventPluginUnload = "plugin_unload"
-)
-
-// Hook points (like NexusValet)
-const (
-    HookBeforeStart = "before_start"
-    HookAfterStart  = "after_start"
-    HookBeforeStop  = "before_stop"
-    HookAfterStop   = "after_stop"
-)
-```
-
----
-
-## Configuration (`config.json`)
-
-```json
-{
-  "telegram": {
-    "api_id": 123456,
-    "api_hash": "abcdef...",
-    "database": "data/telegram.db",
-    "session_file": "data/session.json"
-  },
-  "bot": {
-    "command_prefix": ".",
-    "command_prefixes": [".", "!", "/"],
-    "owner_id": 123456789,
-    "plugins_dir": "plugins",
-    "plugin_repo": "https://github.com/PaperValet/PaperValet-Plugins/releases/latest/download",
-    "max_message_len": 4000,
-    "rate_limit": 3
-  },
-  "logger": {
-    "level": "info",
-    "format": "console"
-  }
-}
-```
-
----
-
-## Key Design Decisions
-
-### 1. No Global State
-All dependencies injected via `App` constructor. Testable, parallelizable.
-
-### 2. Public SDK Separation
-`pkg/plugin` is the ONLY import for external plugins. Internal packages use type aliases in `internal/interfaces`.
-
-### 3. Go Plugins for External Isolation
-True dynamic loading via `.so` files. Each plugin runs in same process but isolated namespace.
-
-### 4. Command Context Helpers
-`Reply()`, `Edit()`, `Delete()`, `Typing()`, `GetArg()` reduce boilerplate (inspired by TeleBox).
-
-### 5. Hook System (NexusValet)
-`BeforeStart`, `AfterStart`, `BeforeStop`, `AfterStop` for cross-cutting concerns.
-
-### 6. AccessHashManager (NexusValet)
-Reliable peer resolution with persistent caching to SQLite.
-
-### 7. Session/State (PagerMaid + NexusValet)
-Per-user-per-chat SQLite-backed sessions for multi-step flows.
-
-### 8. Alias Manager (PagerMaid)
-Persistent command aliases stored in JSON, hot-reloadable.
-
-### 9. Plugin Package Manager (APT)
-Built-in plugin to manage external plugins from GitHub releases.
-
-### 10. Rate Limiting & Permissions
-Built into command registry: `OwnerOnly`, `SudoOnly`, `RateLimit`, `RateWindow`.
-
----
-
-## Build & Deploy
-
-```bash
-# Build main binary
-go build -o papervalet ./cmd/papervalet
-
-# Build external plugins (in PaperValet-Plugins)
-go build -buildmode=plugin -o plugins/qrcode.so ./qrcode
-# ...
-
-# Run
-./papervalet -config config.json
-```
-
----
-
-## CI/CD
-
-- **Main CI**: `go vet`, `go test`, `go build`, `go build -race`
-- **Plugin Release**: Trigger on `plugins/**` tags or `workflow_dispatch`
-- **Docker**: Multi-stage build with `golang:1.25-alpine`
+- Go 1.25.14 with `-trimpath` everywhere, pinned in CI, the Dockerfile and the plugin repo.
+- CI on `master`: vet, test, cross-builds for linux, darwin and windows, and a multi-arch image on GHCR.
+- A `v*` tag publishes bundles (`bin/papervalet`, `config.example.json`, `LICENSE`, `README`, `plugins/`) to GitHub Releases.
+- The plugin repo CI builds each plugin inside a `go work` workspace with the latest PaperValet and republishes the `latest` release with every `.so` and `plugins.json`.
