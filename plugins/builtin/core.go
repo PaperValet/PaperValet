@@ -82,6 +82,9 @@ type restartState struct {
 	Lang   string `json:"lang"`
 }
 
+// Restart is exported so update can reuse the same restart flow.
+func (p *CorePlugin) Restart(ctx *interfaces.CommandContext) error { return p.handleRestart(ctx) }
+
 func (p *CorePlugin) handleRestart(ctx *interfaces.CommandContext) error {
 	exe, err := os.Executable()
 	if err != nil {
