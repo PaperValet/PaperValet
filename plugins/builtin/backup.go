@@ -176,16 +176,11 @@ func (p *BackupPlugin) restoreTarget(ctx *interfaces.CommandContext) (string, []
 	if !ctx.Message.IsReply {
 		return "", nil, fmt.Errorf("%s", ctx.Tlocal("回复那条备份消息再发 backup restore", "Reply to the backup message first"))
 	}
-	msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
-		[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}})
+	msg, _, err := fetchMessage(ctx, ctx.Message.ReplyToID)
 	if err != nil {
 		return "", nil, err
 	}
-	for _, m := range historyMessages(msgs) {
-		msg, ok := m.(*tg.Message)
-		if !ok || msg.ID != ctx.Message.ReplyToID {
-			continue
-		}
+	{
 		doc, ok := msg.Media.(*tg.MessageMediaDocument)
 		if !ok {
 			return "", nil, fmt.Errorf("%s", ctx.Tlocal("回复的消息没有附件", "The replied message has no attachment"))
@@ -208,7 +203,6 @@ func (p *BackupPlugin) restoreTarget(ctx *interfaces.CommandContext) (string, []
 		}
 		return name, data, nil
 	}
-	return "", nil, fmt.Errorf("%s", ctx.Tlocal("找不到那条消息", "Message not found"))
 }
 
 func (p *BackupPlugin) doRestore(ctx *interfaces.CommandContext) error {
