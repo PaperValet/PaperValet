@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -140,9 +139,7 @@ func (p *ExecPlugin) handleExec(ctx *interfaces.CommandContext) error {
 	runCtx, cancel := context.WithTimeout(ctx.Context(), timeout)
 	defer cancel()
 
-	cmd := exec.Command("sh", "-c", line)
-	// Own process group so the deadline kills the whole pipeline, not just sh.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd := shellCommand(line)
 	out := &limitedBuffer{limit: execBufferLimit}
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -168,7 +165,7 @@ loop:
 			break loop
 		case <-runCtx.Done():
 			timedOut = true
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			killTree(cmd)
 			waitErr = <-done
 			break loop
 		case <-ticker.C:
