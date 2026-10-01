@@ -304,6 +304,9 @@ func (l *Loader) GetPluginDir() string {
 	return l.dir
 }
 
+// RepoURL returns the configured plugin registry base URL.
+func (l *Loader) RepoURL() string { return l.repoURL }
+
 // SetRepoURL sets the plugin registry URL.
 func (l *Loader) SetRepoURL(url string) {
 	l.repoURL = url
