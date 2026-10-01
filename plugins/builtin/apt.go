@@ -51,10 +51,12 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"• `remove` · `rm`  <名字…>  停用并删除\n" +
 			"• `list` · `ls`  已安装的插件\n" +
 			"• `info`  <名字>  版本、作者、提供的命令\n" +
+			"• `i -all` / `rm -all`  一次装上仓库里全部插件 / 卸掉全部已装插件\n" +
 			"\n" +
 			"**示例**\n" +
 			"• `apt s`\n" +
-			"• `apt i weather calc`\n" +
+			"• `apt i weather gt`\n" +
+			"• `apt i -all`\n" +
 			"• `apt rm weather`\n" +
 			"\n" +
 			"**机制**\n" +
@@ -70,10 +72,12 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"• `remove` · `rm`  <name…>  disable and delete\n" +
 			"• `list` · `ls`  installed plugins\n" +
 			"• `info`  <name>  version, author, commands\n" +
+			"• `i -all` / `rm -all`  install every plugin in the repository / remove every installed one\n" +
 			"\n" +
 			"**Examples**\n" +
 			"• `apt s`\n" +
-			"• `apt i weather calc`\n" +
+			"• `apt i weather gt`\n" +
+			"• `apt i -all`\n" +
 			"• `apt rm weather`\n" +
 			"\n" +
 			"**How it works**\n" +
@@ -108,6 +112,8 @@ func (p *AptPlugin) help(ctx *interfaces.CommandContext) error {
 	c.line(cmdRef(prefix+"apt s") + "  " + ctx.Tlocal("搜索仓库", "search"))
 	c.line(cmdRef(prefix+"apt i 名字") + "  " + ctx.Tlocal("安装", "install"))
 	c.line(cmdRef(prefix+"apt rm 名字") + "  " + ctx.Tlocal("卸载", "remove"))
+	c.line(cmdRef(prefix+"apt i -all") + "  " + ctx.Tlocal("全部安装", "install all"))
+	c.line(cmdRef(prefix+"apt rm -all") + "  " + ctx.Tlocal("全部卸载", "remove all"))
 	c.line(cmdRef(prefix+"apt ls") + "  " + ctx.Tlocal("已安装", "installed"))
 	c.line(cmdRef(prefix+"apt info 名字") + "  " + ctx.Tlocal("详情", "details"))
 	c.hint(ctx.Tlocal("完整说明 ", "Full guide ") + cmdRef(prefix+"help apt"))
@@ -133,10 +139,16 @@ func (p *AptPlugin) handleApt(ctx *interfaces.CommandContext) error {
 		if len(args) == 0 {
 			return need("apt i <name>")
 		}
+		if hasAllFlag(args) {
+			return p.installAll(ctx)
+		}
 		return p.install(ctx, args)
 	case "remove":
 		if len(args) == 0 {
 			return need("apt rm <name>")
+		}
+		if hasAllFlag(args) {
+			return p.removeAll(ctx)
 		}
 		return p.remove(ctx, args)
 	case "list":
@@ -301,7 +313,10 @@ func loadError(ctx *interfaces.CommandContext, err error) string {
 func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) error {
 	_ = ctx.Edit("⏳ " + ctx.Tlocal("安装中…", "Installing…"))
 	var rows []string
-	for _, name := range names {
+	for i, name := range names {
+		if len(names) > 1 {
+			_ = ctx.Edit(fmt.Sprintf("⏳ %s %d/%d  `%s`", ctx.Tlocal("安装中", "Installing"), i+1, len(names), name))
+		}
 		if p.loader.IsLoaded(name) {
 			rows = append(rows, skipLine(name, ctx.Tlocal("已经装过了", "already installed")))
 			continue
@@ -341,4 +356,49 @@ func (p *AptPlugin) remove(ctx *interfaces.CommandContext, names []string) error
 		rows = append(rows, "🗑 **"+esc(name)+"**  "+ctx.Tlocal("已卸载", "removed"))
 	}
 	return ctx.Edit(strings.Join(rows, "\n"))
+}
+
+// hasAllFlag reports whether args ask for every plugin at once.
+func hasAllFlag(args []string) bool {
+	for _, a := range args {
+		switch strings.ToLower(a) {
+		case "-all", "--all", "-a":
+			return true
+		}
+	}
+	return false
+}
+
+// installAll installs every plugin listed in the repository index.
+func (p *AptPlugin) installAll(ctx *interfaces.CommandContext) error {
+	_ = ctx.Edit("⏳ " + ctx.Tlocal("拉取插件清单…", "Fetching the index…"))
+	entries, err := p.fetchRegistry(ctx)
+	if err != nil {
+		return ctx.Edit(errText(ctx.Tlocal("拉取插件清单失败：", "Could not fetch the index: ") + esc(err.Error())))
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Name != "" {
+			names = append(names, e.Name)
+		}
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return ctx.Edit(errText(ctx.Tlocal("仓库里没有插件", "The repository is empty")))
+	}
+	return p.install(ctx, names)
+}
+
+// removeAll removes every installed external plugin.
+func (p *AptPlugin) removeAll(ctx *interfaces.CommandContext) error {
+	loaded := p.loader.GetLoaded()
+	names := make([]string, 0, len(loaded))
+	for n := range loaded {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return ctx.Edit(skipLine("apt", ctx.Tlocal("没有已安装的外部插件", "No external plugins installed")))
+	}
+	return p.remove(ctx, names)
 }
