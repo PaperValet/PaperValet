@@ -139,8 +139,18 @@ func (a *App) registerBuiltins() error {
 		cfgPath = config.FileName
 	}
 	backup.SetConfig(cfgPath, a.cfg)
+	core := builtin.NewCore(Version)
+	core.BeforeRestart = func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = a.plugins.StopAll(ctx)
+		if a.sessions != nil {
+			_ = a.sessions.Close()
+		}
+		_ = logger.Sync()
+	}
 	for _, p := range []pkgplugin.Plugin{
-		builtin.NewCore(Version),
+		core,
 		builtin.NewApt(a.pluginLoader),
 		builtin.NewInfo(),
 		builtin.NewAlias(),
@@ -207,6 +217,8 @@ func (a *App) Run(ctx context.Context) error {
 		if err := a.pluginLoader.LoadAll(ctx); err != nil {
 			a.logger.Warn("external plugin load", "error", err)
 		}
+
+		builtin.FinishRestart(ctx, a.api, a.peers.ResolveFromChatID)
 
 		a.bus.Emit(ctx, eventbus.EventStart, map[string]any{"version": Version})
 
