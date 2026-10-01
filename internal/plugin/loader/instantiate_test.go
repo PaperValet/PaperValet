@@ -54,3 +54,18 @@ func TestInstantiateRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataOf(t *testing.T) {
+	m := &pkgplugin.PluginMetadata{Name: "x"}
+	if got := metadataOf(&m); got != m {
+		t.Errorf("pointer variable: got %v", got)
+	}
+	v := pkgplugin.PluginMetadata{Name: "y"}
+	if got := metadataOf(&v); got != &v {
+		t.Errorf("value variable: got %v", got)
+	}
+	var nilPtr **pkgplugin.PluginMetadata
+	if metadataOf(nilPtr) != nil || metadataOf("nope") != nil {
+		t.Error("bad input should give nil")
+	}
+}
