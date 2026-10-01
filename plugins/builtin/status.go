@@ -39,25 +39,25 @@ func (p *StatusPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		DescEN:      "Show runtime status",
 		Usage: `status
 
-<b>显示</b>
+**显示**
 • 版本：PaperValet、Go、gotd
 • 主机：主机名、系统、内核、架构
-• 资源：CPU 核数与负载、进程内存、系统内存、磁盘
-• 运行：本次运行时长、系统开机时长、外部插件数、扫描耗时
+• 资源：CPU 核数与负载、系统内存、磁盘
+• 运行：本次运行时长、系统开机时长、进程内存、外部插件数、扫描耗时
 
-<b>机制</b>
+**机制**
 • 系统信息读自 /proc 和 statfs，Linux 以外的系统只显示能拿到的项
 • 进程内存是常驻内存 RSS，比 Go 堆大，是真实占用
 • 外部插件数不含内建插件`,
 		UsageEN: `status
 
-<b>Shows</b>
+**Shows**
 • versions: PaperValet, Go, gotd
 • host: hostname, OS, kernel, arch
-• resources: CPU cores and load, process memory, system memory, disk
-• runtime: uptime, system uptime, external plugins, scan time
+• resources: CPU cores and load, system memory, disk
+• runtime: uptime, system uptime, process memory, external plugins, scan time
 
-<b>How it works</b>
+**How it works**
 • System data comes from /proc and statfs; non-Linux systems show what is available
 • Process memory is resident RSS, larger than the Go heap and the real footprint
 • The plugin count excludes built-ins`,
@@ -213,11 +213,6 @@ func (p *StatusPlugin) handleStatus(ctx *interfaces.CommandContext) error {
 		load = "—"
 	}
 	c.field("CPU", fmt.Sprintf("%d %s · %s %s", runtime.NumCPU(), ctx.Tlocal("核", "cores"), ctx.Tlocal("负载", "load"), load))
-	if rss := proc["VmRSS"]; rss > 0 {
-		c.field(ctx.Tlocal("进程内存", "Process"), fmt.Sprintf("%s · %s %s", formatBytes(rss), ctx.Tlocal("堆", "heap"), formatBytes(int64(heap.HeapAlloc))))
-	} else {
-		c.field(ctx.Tlocal("进程内存", "Process"), ctx.Tlocal("堆 ", "heap ")+formatBytes(int64(heap.HeapAlloc)))
-	}
 	if total := mem["MemTotal"]; total > 0 {
 		c.field(ctx.Tlocal("系统内存", "Memory"), pct(total-mem["MemAvailable"], total))
 		if st := mem["SwapTotal"]; st > 0 {
@@ -232,6 +227,11 @@ func (p *StatusPlugin) handleStatus(ctx *interfaces.CommandContext) error {
 		if secs, err := strconv.ParseFloat(strings.Fields(up)[0], 64); err == nil {
 			c.field(ctx.Tlocal("系统开机", "System up"), humanDuration(time.Duration(secs)*time.Second, en))
 		}
+	}
+	if rss := proc["VmRSS"]; rss > 0 {
+		c.field(ctx.Tlocal("进程内存", "Process"), fmt.Sprintf("%s · %s %s", formatBytes(rss), ctx.Tlocal("堆", "heap"), formatBytes(int64(heap.HeapAlloc))))
+	} else {
+		c.field(ctx.Tlocal("进程内存", "Process"), ctx.Tlocal("堆 ", "heap ")+formatBytes(int64(heap.HeapAlloc)))
 	}
 	c.field(ctx.Tlocal("外部插件", "Plugins"), external)
 	c.field(ctx.Tlocal("协程", "Goroutines"), runtime.NumGoroutine())
