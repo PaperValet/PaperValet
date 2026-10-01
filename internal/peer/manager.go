@@ -2,6 +2,9 @@ package peer
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -10,9 +13,76 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
 
+// Store persists access hashes so peer resolution survives restarts.
+// Without it, channel commands fail with CHANNEL_INVALID until the peer is
+// seen in an update again.
+type Store struct {
+	mu    sync.RWMutex
+	peers map[int64]storedPeer
+	path  string
+}
+
+type storedPeer struct {
+	AccessHash int64  `json:"access_hash"`
+	PeerType   string `json:"peer_type"`
+	SavedAt    int64  `json:"saved_at"`
+}
+
+// NewStore loads (or starts) the peer cache at path.
+func NewStore(path string) *Store {
+	s := &Store{peers: make(map[int64]storedPeer), path: path}
+	s.load()
+	return s
+}
+
+func (s *Store) load() {
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		return
+	}
+	var peers map[int64]storedPeer
+	if json.Unmarshal(data, &peers) == nil {
+		s.mu.Lock()
+		s.peers = peers
+		s.mu.Unlock()
+	}
+}
+
+func (s *Store) save() {
+	data, err := json.MarshalIndent(s.peers, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(s.path), 0o700)
+	tmp := s.path + ".tmp"
+	if os.WriteFile(tmp, data, 0o600) == nil {
+		_ = os.Rename(tmp, s.path)
+	}
+}
+
+// Get returns the cached access hash for peerID.
+func (s *Store) Get(peerID int64) (accessHash int64, peerType string, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, exists := s.peers[peerID]
+	return p.AccessHash, p.PeerType, exists
+}
+
+// Put records an access hash and persists asynchronously.
+func (s *Store) Put(peerID, accessHash int64, peerType string) {
+	if accessHash == 0 {
+		return
+	}
+	s.mu.Lock()
+	s.peers[peerID] = storedPeer{AccessHash: accessHash, PeerType: peerType, SavedAt: time.Now().Unix()}
+	s.mu.Unlock()
+	go s.save()
+}
+
 // AccessHashManager caches and resolves access hashes for peers.
 type AccessHashManager struct {
 	api    *tg.Client
+	store  *Store
 	mu     sync.RWMutex
 	cache  map[int64]*peerCacheEntry
 	logger interface {
@@ -28,9 +98,13 @@ type peerCacheEntry struct {
 	TTL        time.Duration
 }
 
-func NewAccessHashManager(api *tg.Client) *AccessHashManager {
+func NewAccessHashManager(api *tg.Client, store *Store) *AccessHashManager {
+	if store == nil {
+		store = NewStore("data/peers.json")
+	}
 	return &AccessHashManager{
 		api:    api,
+		store:  store,
 		cache:  make(map[int64]*peerCacheEntry),
 		logger: logger.NamedLogger("peer"),
 	}
@@ -40,12 +114,22 @@ func (m *AccessHashManager) GetInputPeer(ctx context.Context, peerID int64) (tg.
 	if entry := m.getFromCache(peerID); entry != nil {
 		return m.buildInputPeer(peerID, entry), nil
 	}
+	// Fall back to the persistent store before giving up; saved hashes are
+	// long-lived and valid across restarts.
+	if hash, peerType, ok := m.store.Get(peerID); ok {
+		m.updateCache(peerID, hash, peerType)
+		return m.buildInputPeer(peerID, m.getFromCache(peerID)), nil
+	}
 	return m.fallbackInputPeer(peerID), nil
 }
 
 func (m *AccessHashManager) GetUserPeerWithFallback(ctx context.Context, userID int64, channelPeer tg.InputChannelClass) (tg.InputPeerClass, error) {
 	if entry := m.getFromCache(userID); entry != nil && entry.AccessHash != 0 {
 		return &tg.InputPeerUser{UserID: userID, AccessHash: entry.AccessHash}, nil
+	}
+	if hash, _, ok := m.store.Get(userID); ok && hash != 0 {
+		m.updateCache(userID, hash, "user")
+		return &tg.InputPeerUser{UserID: userID, AccessHash: hash}, nil
 	}
 	if channelPeer != nil {
 		participants, err := m.api.ChannelsGetParticipants(ctx, &tg.ChannelsGetParticipantsRequest{
@@ -72,6 +156,10 @@ func (m *AccessHashManager) GetUserPeerFromMessage(ctx context.Context, peer tg.
 	if entry := m.getFromCache(userID); entry != nil && entry.AccessHash != 0 {
 		return &tg.InputPeerUser{UserID: userID, AccessHash: entry.AccessHash}, nil
 	}
+	if hash, _, ok := m.store.Get(userID); ok && hash != 0 {
+		m.updateCache(userID, hash, "user")
+		return &tg.InputPeerUser{UserID: userID, AccessHash: hash}, nil
+	}
 	return &tg.InputPeerUser{UserID: userID}, nil
 }
 
@@ -97,7 +185,7 @@ func (m *AccessHashManager) ResolveUsername(ctx context.Context, username string
 	case *tg.PeerChannel:
 		for _, c := range resolved.GetChats() {
 			if ch, ok := c.(*tg.Channel); ok && ch.ID == p.ChannelID {
-				m.updateCache(ch.ID, ch.AccessHash, "channel")
+				m.updateCache(ChannelChatID(ch.ID), ch.AccessHash, "channel")
 				return &tg.InputPeerChannel{ChannelID: ch.ID, AccessHash: ch.AccessHash}, nil
 			}
 		}
@@ -131,6 +219,9 @@ func (m *AccessHashManager) updateCache(peerID int64, accessHash int64, peerType
 		ResolvedAt: time.Now(),
 		TTL:        24 * time.Hour,
 	}
+	if accessHash != 0 {
+		m.store.Put(peerID, accessHash, peerType)
+	}
 }
 
 func (m *AccessHashManager) buildInputPeer(peerID int64, entry *peerCacheEntry) tg.InputPeerClass {
@@ -161,6 +252,10 @@ func (m *AccessHashManager) fallbackInputPeer(peerID int64) tg.InputPeerClass {
 		return &tg.InputPeerChannel{ChannelID: channelID}
 	}
 }
+
+// ChannelChatID converts a raw channel ID to the -100… chat ID form used
+// by MessageEvent.ChatID, so cache keys match what commands look up.
+func ChannelChatID(channelID int64) int64 { return -1000000000000 - channelID }
 
 type PeerError struct {
 	Code    string
