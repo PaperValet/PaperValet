@@ -301,8 +301,8 @@ func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
 func loadError(ctx *interfaces.CommandContext, err error) string {
 	msg := err.Error()
 	if strings.Contains(msg, "different version of package") {
-		return ctx.Tlocal("和主程序的 Go 版本不一致，先 `update now` 升级主程序再装",
-			"built with a different Go version; run `update now` first")
+		return ctx.Tlocal("和主程序的 Go 版本不一致，先 `update -f` 重装主程序再装",
+			"built with a different Go version; run `update -f` first")
 	}
 	if strings.Contains(msg, "status 404") || strings.Contains(msg, "may not exist") {
 		return ctx.Tlocal("仓库里没有这个插件", "not in the repository")
