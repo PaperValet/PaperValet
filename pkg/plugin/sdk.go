@@ -399,14 +399,33 @@ func (c *CommandContext) resolveInputUser(id int64) (tg.InputUserClass, error) {
 	return u.AsInput(), nil
 }
 
+// Delete removes the command message.
 func (c *CommandContext) Delete() error {
-	if c.Message == nil || c.API == nil || c.Message.Message == nil {
+	if c.Message == nil || c.Message.Message == nil {
 		return ErrNoMessage
 	}
-	_, err := c.API.MessagesDeleteMessages(c.Context(), &tg.MessagesDeleteMessagesRequest{
-		ID:     []int{c.Message.Message.ID},
-		Revoke: true,
-	})
+	return c.DeleteMessages(c.Message.Message.ID)
+}
+
+// DeleteMessages removes messages in the current chat. Channels and
+// supergroups need channels.deleteMessages; messages.deleteMessages there
+// silently does nothing.
+func (c *CommandContext) DeleteMessages(ids ...int) error {
+	if c.API == nil {
+		return ErrNoMessage
+	}
+	peer, err := c.ResolvePeer()
+	if err != nil {
+		return err
+	}
+	if ch, ok := peer.(*tg.InputPeerChannel); ok {
+		_, err = c.API.ChannelsDeleteMessages(c.Context(), &tg.ChannelsDeleteMessagesRequest{
+			Channel: &tg.InputChannel{ChannelID: ch.ChannelID, AccessHash: ch.AccessHash},
+			ID:      ids,
+		})
+		return err
+	}
+	_, err = c.API.MessagesDeleteMessages(c.Context(), &tg.MessagesDeleteMessagesRequest{ID: ids, Revoke: true})
 	return err
 }
 
