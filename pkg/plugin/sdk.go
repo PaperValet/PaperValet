@@ -246,16 +246,16 @@ type Command struct {
 	Description string
 	// DescEN is the English description; when set it wins over Description
 	// for English users (Description stays the Chinese/primary text).
-	DescEN      string
-	Usage       string
+	DescEN string
+	Usage  string
 	// UsageEN is the English usage line; when empty Usage is reused.
-	UsageEN     string
-	Plugin      string
-	Category    string
-	OwnerOnly   bool
-	Hidden      bool
-	RateLimit   int
-	Handler     Handler
+	UsageEN   string
+	Plugin    string
+	Category  string
+	OwnerOnly bool
+	Hidden    bool
+	RateLimit int
+	Handler   Handler
 }
 
 // CommandContext is passed to every command handler.
@@ -273,16 +273,16 @@ type CommandContext struct {
 	PluginName   string
 	// SelfID is the account user id; Message.UserID == SelfID means the
 	// owner sent the command, otherwise it is delegated sudo traffic.
-	SelfID       int64
+	SelfID int64
 	// Lang is the active language ("zh-CN"/"en-US") for this command,
 	// resolved from the i18n manager. Lets plugins localize static help
 	// text without registering a full catalog.
-	Lang         string
-	StartTime    time.Time
-	Metadata     map[string]any
-	Ctx          context.Context
-	Logger       Logger
-	I18n         func(key string, args ...any) string
+	Lang      string
+	StartTime time.Time
+	Metadata  map[string]any
+	Ctx       context.Context
+	Logger    Logger
+	I18n      func(key string, args ...any) string
 }
 
 func (c *CommandContext) Context() context.Context {
