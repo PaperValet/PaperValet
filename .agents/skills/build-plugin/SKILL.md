@@ -37,7 +37,7 @@ plugins-external/<name>/
 
 - `New` takes no arguments and returns a value implementing `plugin.Plugin` (a concrete pointer is fine), optionally with an `error`.
 - `var Metadata = &plugin.PluginMetadata{...}` with `Name` equal to `Name()`, `Description`, `DescEN`, `Version`, `Author`. `scripts/gen-registry.py` reads it to build `plugins.json`, the `apt` index.
-- Every command sets `Description`, `DescEN`, `Usage`, `UsageEN`. No `Aliases`, and one spelling per subcommand. Users add shortcuts with `.alias`.
+- Every command sets `Description`, `DescEN`, `Usage`, `UsageEN`. No `Aliases` except one short form for a long name (`ddg`, `st`), and one spelling per subcommand. Users add shortcuts with `.alias`.
 - Text is Telegram Markdown. Wrap user input with `plugin.Escape` or `plugin.Code`. Pick language with `ctx.Tlocal(zh, en)`.
 - State goes in `data/<name>/` (use `mgr.Host().DataDir(name)`). Goroutines start in `Start` and stop in `Stop`.
 - Work outside a command (schedulers, restored jobs) takes the client from `mgr.Host()` in `Init`, never by reflection into host internals.
