@@ -139,8 +139,8 @@ func (a *App) registerBuiltins() error {
 		cfgPath = config.FileName
 	}
 	backup.SetConfig(cfgPath)
-	core := builtin.NewCore(Version)
-	core.BeforeRestart = func() {
+	restart := builtin.NewRestart()
+	restart.BeforeRestart = func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = a.plugins.StopAll(ctx)
@@ -150,7 +150,8 @@ func (a *App) registerBuiltins() error {
 		_ = logger.Sync()
 	}
 	for _, p := range []pkgplugin.Plugin{
-		core,
+		builtin.NewPing(),
+		restart,
 		builtin.NewApt(a.pluginLoader),
 		builtin.NewInfo(),
 		builtin.NewRe(),
@@ -163,7 +164,7 @@ func (a *App) registerBuiltins() error {
 		builtin.NewHelp(),
 		builtin.NewStatus(Version, a.pluginLoader),
 		backup,
-		builtin.NewUpdate(Version, core.Restart),
+		builtin.NewUpdate(Version, restart.Restart),
 		builtin.NewPrune(),
 		builtin.NewLang(a.i18n),
 	} {
