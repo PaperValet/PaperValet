@@ -28,7 +28,7 @@ func NewPrefix() *PrefixPlugin {
 }
 
 func (p *PrefixPlugin) Name() string        { return "prefix" }
-func (p *PrefixPlugin) Description() string { return "管理命令前缀" }
+func (p *PrefixPlugin) Description() string { return "命令前缀" }
 func (p *PrefixPlugin) DescEN() string      { return "Manage command prefixes" }
 
 func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
@@ -38,15 +38,36 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr.Commands().SetPrefixes(p.prefixes)
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "prefix",
-		Aliases:     []string{"pfx", "cmdprefix"},
-		Description: "改命令触发符号，比如把 . 换成 !",
-		DescEN:      "Change the command trigger symbol, e.g. . to !",
-		Usage:       "prefix add|del|set <符号>",
-		UsageEN:     "prefix add|del|set <symbol>",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handlePrefix,
+		Description: "管理命令前缀",
+		DescEN:      "Manage command prefixes",
+		Usage: `prefix · prefix add|del|set &lt;符号&gt;
+
+<b>示例</b>
+• <code>prefix</code>  看当前前缀
+• <code>prefix add !</code>  再加一个 !，. 和 ! 都能触发
+• <code>prefix set !</code>  把 ! 设为主前缀（帮助里显示的那个）
+• <code>prefix del !</code>  删除
+
+<b>机制</b>
+• 可以同时有多个前缀，至少保留一个
+• 多个前缀匹配时优先最长的，例如 .. 优先于 .
+• 立即生效，保存在 data/prefixes.json`,
+		UsageEN: `prefix · prefix add|del|set &lt;symbol&gt;
+
+<b>Examples</b>
+• <code>prefix</code>  show current prefixes
+• <code>prefix add !</code>  add !, both . and ! trigger
+• <code>prefix set !</code>  make ! the main prefix (shown in help)
+• <code>prefix del !</code>  remove
+
+<b>How it works</b>
+• Several prefixes can coexist; at least one stays
+• The longest matching prefix wins, e.g. .. before .
+• Applies immediately, stored in data/prefixes.json`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handlePrefix,
 	})
 }
 
