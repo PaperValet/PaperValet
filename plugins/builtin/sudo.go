@@ -144,7 +144,7 @@ func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (*tg.User, error
 			for _, m := range historyMessages(msgs) {
 				if msg, ok := m.(*tg.Message); ok && msg.ID == ctx.Message.ReplyToID {
 					if pu, ok := msg.FromID.(*tg.PeerUser); ok {
-						if u := findUserInChats(ctx, msgs, pu.UserID); u != nil {
+						if u := findUserInChats(msgs, pu.UserID); u != nil {
 							return u, nil
 						}
 						return &tg.User{ID: pu.UserID}, nil
@@ -166,7 +166,7 @@ func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (*tg.User, error
 }
 
 // findUserInChats scans the users attached to a getMessages response.
-func findUserInChats(ctx *interfaces.CommandContext, msgs tg.MessagesMessagesClass, userID int64) *tg.User {
+func findUserInChats(msgs tg.MessagesMessagesClass, userID int64) *tg.User {
 	var users []tg.UserClass
 	switch m := msgs.(type) {
 	case *tg.MessagesMessages:
@@ -180,17 +180,6 @@ func findUserInChats(ctx *interfaces.CommandContext, msgs tg.MessagesMessagesCla
 		}
 	}
 	return nil
-}
-
-func (p *SudoPlugin) displayName(u *tg.User) string {
-	name := strings.TrimSpace(strings.Join([]string{u.FirstName, u.LastName}, " "))
-	if name == "" {
-		return fmt.Sprintf("#%d", u.ID)
-	}
-	if u.Username != "" {
-		return fmt.Sprintf("%s (@%s)", name, u.Username)
-	}
-	return name
 }
 
 func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
@@ -213,7 +202,7 @@ func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 		extra = ctx.Tlocal("\n（sudo 原先是关闭的，已顺手打开）", "\n(sudo was off; turned it on for you)")
 	}
 	return ctx.Edit(fmt.Sprintf("✅ %s %s%s",
-		ctx.Tlocal("已授权", "granted"), htmlEscape(p.displayName(u)), extra))
+		ctx.Tlocal("已授权", "granted"), htmlEscape(displayName(u)), extra))
 }
 
 func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
@@ -224,12 +213,12 @@ func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
 	p.mu.Lock()
 	if !p.users[u.ID] {
 		p.mu.Unlock()
-		return ctx.Edit(fmt.Sprintf("⚠️ %s %s", htmlEscape(p.displayName(u)), ctx.Tlocal("本来就不在名单里", "is not on the list")))
+		return ctx.Edit(fmt.Sprintf("⚠️ %s %s", htmlEscape(displayName(u)), ctx.Tlocal("本来就不在名单里", "is not on the list")))
 	}
 	delete(p.users, u.ID)
 	p.mu.Unlock()
 	p.save()
-	return ctx.Edit(fmt.Sprintf("🗑 %s %s", htmlEscape(p.displayName(u)), ctx.Tlocal("已移除授权", "revoked")))
+	return ctx.Edit(fmt.Sprintf("🗑 %s %s", htmlEscape(displayName(u)), ctx.Tlocal("已移除授权", "revoked")))
 }
 
 func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
