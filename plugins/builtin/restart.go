@@ -16,85 +16,47 @@ import (
 
 const restartMarker = "data/restart.json"
 
-// CorePlugin provides ping and restart.
-// The old version command merged into status.
-type CorePlugin struct {
-	version string
+// RestartPlugin re-executes the bot in place.
+type RestartPlugin struct {
 	// BeforeRestart lets the app flush state (session, plugins) before the
 	// process image is replaced.
 	BeforeRestart func()
 }
 
-func NewCore(version string) *CorePlugin {
-	return &CorePlugin{version: version}
-}
+func NewRestart() *RestartPlugin { return &RestartPlugin{} }
 
-func (p *CorePlugin) Name() string        { return "core" }
-func (p *CorePlugin) Description() string { return "延迟检测与重启" }
-func (p *CorePlugin) DescEN() string      { return "ping / restart basics" }
+func (p *RestartPlugin) Name() string        { return "restart" }
+func (p *RestartPlugin) Description() string { return "重启机器人" }
+func (p *RestartPlugin) DescEN() string      { return "Restart the bot" }
 
-func (p *CorePlugin) Init(_ context.Context, mgr plugin.Manager) error {
-	cmds := []*interfaces.Command{
-		{
-			Name:        "ping",
-			Description: "测延迟",
-			DescEN:      "Measure latency",
-			Usage: `ping
-
-**机制**
-• 编辑一次命令消息，计算从发出编辑到 Telegram 返回的耗时
-• 显示的是 机器人 → Telegram 服务器 的往返延迟，不含你的客户端网络`,
-			UsageEN: `ping
-
-**How it works**
-• Edits the command once and measures the round trip until Telegram answers
-• Shows bot → Telegram server latency, not your own client network`,
-			Plugin:   p.Name(),
-			Category: "core",
-			Handler:  p.handlePing,
-		},
-		{
-			Name:        "restart",
-			Description: "重启机器人",
-			DescEN:      "Restart the bot",
-			Usage: `restart
+func (p *RestartPlugin) Init(_ context.Context, mgr plugin.Manager) error {
+	return mgr.RegisterCommand(&interfaces.Command{
+		Name:        "restart",
+		Description: "重启机器人",
+		DescEN:      "Restart the bot",
+		Usage: `restart
 
 **机制**
 • 先停止所有插件、写盘、刷新日志
 • 在同一进程号上原地重新加载程序，systemd、Docker、tmux 都不会把它当成退出
 • 回来后把这条命令消息改成「重启完成」和用时
 • 已加载的外部插件会随启动自动重新加载`,
-			UsageEN: `restart
+		UsageEN: `restart
 
 **How it works**
 • Stops all plugins, flushes state and logs
 • Re-executes in place under the same PID, so systemd, Docker and tmux keep supervising it
 • After boot the command message turns into "Restarted" with the elapsed time
 • Installed external plugins are loaded again on startup`,
-			Plugin:    p.Name(),
-			Category:  "admin",
-			OwnerOnly: true,
-			Handler:   p.handleRestart,
-		},
-	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleRestart,
+	})
 }
 
-func (p *CorePlugin) Start(_ context.Context) error { return nil }
-func (p *CorePlugin) Stop(_ context.Context) error  { return nil }
-
-func (p *CorePlugin) handlePing(ctx *interfaces.CommandContext) error {
-	start := time.Now()
-	if err := ctx.Edit("🏓"); err != nil {
-		return err
-	}
-	return ctx.Edit(fmt.Sprintf("🏓 Pong · %s", time.Since(start).Round(time.Millisecond)))
-}
+func (p *RestartPlugin) Start(_ context.Context) error { return nil }
+func (p *RestartPlugin) Stop(_ context.Context) error  { return nil }
 
 type restartState struct {
 	ChatID int64  `json:"chat_id"`
@@ -104,9 +66,9 @@ type restartState struct {
 }
 
 // Restart is exported so update can reuse the same restart flow.
-func (p *CorePlugin) Restart(ctx *interfaces.CommandContext) error { return p.handleRestart(ctx) }
+func (p *RestartPlugin) Restart(ctx *interfaces.CommandContext) error { return p.handleRestart(ctx) }
 
-func (p *CorePlugin) handleRestart(ctx *interfaces.CommandContext) error {
+func (p *RestartPlugin) handleRestart(ctx *interfaces.CommandContext) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return ctx.Edit("❌ " + esc(err.Error()))
