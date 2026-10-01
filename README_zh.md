@@ -29,20 +29,20 @@ papervalet run          # 前台启动（已注册服务可跳过）
 
 | 插件 | 指令 | 说明 |
 |------|------|------|
-| `core` | `.version`、`.ping`、`.restart` | 核心管理 |
+| `core` | `.ping`、`.restart` | 延迟检测、原地重启 |
 | `help` | `.help` | 按分类显示帮助 |
-| `status` | `.status` | 运行状态 |
+| `status` | `.status`（别名 `.version`） | 版本、运行时长、内存、插件数 |
 | `apt` | `.apt list/install/remove/load/unload` | 插件管理器 |
-| `info` | `.info`、`.fwd` | 信息查询与转发 |
+| `info` | `.info` | 查看 ID（回复可看对方） |
 | `alias` | `.alias set/del/list` | 运行时命令别名 |
 | `exec` | `.exec` | 执行系统命令 |
 | `sudo` | `.sudo on/off/add/remove/list` | 权限委派 |
-| `reload` | `.reload` | 外部插件热重载 |
+| `reload` | `.reload` | 重新加载全部外部插件 |
 | `log` | `.loglevel`、`.sendlog` | 日志级别与发送 |
 | `prefix` | `.prefix list/add/del/set` | 前缀管理 |
-| `backup` | `.backup` | 备份与恢复 |
-| `update` | `.update`、`.autofix` | 代码同步与重启 |
-| `dme` | `.dme`、`.dme all` | 消息清理 |
+| `backup` | `.backup`、`.backup restore` | 配置打包发收藏夹，回复恢复 |
+| `update` | `.update`、`.update now` | 从 GitHub Release 升级 |
+| `dme` | `.dme N`、`.dme all`、`.dme others on/off` | 批量删除，带防撤回 |
 | `lang` | `.lang` | 语言切换 |
 
 ## 外部插件
