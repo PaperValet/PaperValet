@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/gotd/td/tg"
 )
@@ -15,16 +14,8 @@ func TestStoreSurvivesRestart(t *testing.T) {
 	chatID := ChannelChatID(3061608291)
 	m.RegisterPeer(chatID, 42, "channel")
 
-	// Put persists asynchronously.
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if _, _, ok := NewStore(path).Get(chatID); ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("peer was not persisted")
-		}
-		time.Sleep(10 * time.Millisecond)
+	if _, _, ok := NewStore(path).Get(chatID); !ok {
+		t.Fatal("peer was not persisted")
 	}
 
 	fresh := NewAccessHashManager(nil, NewStore(path))

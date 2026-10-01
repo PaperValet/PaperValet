@@ -17,9 +17,10 @@ import (
 // Without it, channel commands fail with CHANNEL_INVALID until the peer is
 // seen in an update again.
 type Store struct {
-	mu    sync.RWMutex
-	peers map[int64]storedPeer
-	path  string
+	mu     sync.RWMutex
+	saveMu sync.Mutex
+	peers  map[int64]storedPeer
+	path   string
 }
 
 type storedPeer struct {
@@ -49,7 +50,11 @@ func (s *Store) load() {
 }
 
 func (s *Store) save() {
-	data, err := json.MarshalIndent(s.peers, "", "  ")
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
+	s.mu.RLock()
+	data, err := json.Marshal(s.peers)
+	s.mu.RUnlock()
 	if err != nil {
 		return
 	}
@@ -68,15 +73,20 @@ func (s *Store) Get(peerID int64) (accessHash int64, peerType string, ok bool) {
 	return p.AccessHash, p.PeerType, exists
 }
 
-// Put records an access hash and persists asynchronously.
+// Put records an access hash and persists it when it changed. Unchanged
+// hashes (the common case on every update) cost no disk write.
 func (s *Store) Put(peerID, accessHash int64, peerType string) {
 	if accessHash == 0 {
 		return
 	}
 	s.mu.Lock()
+	if old, ok := s.peers[peerID]; ok && old.AccessHash == accessHash && old.PeerType == peerType {
+		s.mu.Unlock()
+		return
+	}
 	s.peers[peerID] = storedPeer{AccessHash: accessHash, PeerType: peerType, SavedAt: time.Now().Unix()}
 	s.mu.Unlock()
-	go s.save()
+	s.save()
 }
 
 // AccessHashManager caches and resolves access hashes for peers.
