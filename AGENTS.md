@@ -33,7 +33,7 @@ Some tests `t.Chdir` into a temp dir because plugins persist to `data/`. Do the 
 - **Bilingual.** User-facing text comes in zh-CN and en-US. Commands set `Description` + `DescEN` and `Usage` + `UsageEN`. Handlers choose with `ctx.Tlocal(zh, en)`. CLI and setup strings live in `internal/i18n` and have a parity test.
 - **Markdown output.** Replies are Telegram Markdown. Escape anything user-controlled with `plugin.Escape`, `plugin.Code` or `esc` in built-ins. Backslash escapes do not work inside code spans.
 - **Shared card style.** Built-ins format output with the helpers in `plugins/builtin/ui.go` (`newCard`, `field`, `hint`, `okLine`…). Keep new output consistent with them.
-- **Minimal aliases.** Commands carry no aliases unless the name is long (`help` → `h`, `duckduckgo` → `ddg`, `speedtest` → `st`). Users add their own with `.alias`.
+- **No aliases.** External plugins register no command aliases and accept one spelling per subcommand. The only built-in alias is `help` → `h`. Users make their own shortcuts with `.alias`.
 - **State under `data/`.** Built-ins write `data/<file>`; plugins use `data/<plugin>/` (`mgr.Host().DataDir`). Files with secrets are `0600`.
 - **Channels need channel APIs.** In supergroups and channels use `channels.deleteMessages` and friends; `messages.*` variants silently do nothing there. `ctx.DeleteMessages` already handles it.
 
