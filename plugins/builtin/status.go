@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
@@ -225,12 +224,7 @@ func (p *StatusPlugin) handleStatus(ctx *interfaces.CommandContext) error {
 			c.field("Swap", pct(st-mem["SwapFree"], st))
 		}
 	}
-	var fs syscall.Statfs_t
-	if wd, err := os.Getwd(); err == nil && syscall.Statfs(wd, &fs) == nil {
-		total := int64(fs.Blocks) * int64(fs.Bsize)
-		free := int64(fs.Bavail) * int64(fs.Bsize)
-		c.field(ctx.Tlocal("磁盘", "Disk"), pct(total-free, total))
-	}
+	c.rawField(ctx.Tlocal("磁盘", "Disk"), diskUsage())
 
 	c.section(ctx.Tlocal("⏱ 运行", "⏱ Runtime"))
 	c.field(ctx.Tlocal("已运行", "Uptime"), humanDuration(time.Since(p.startTime), en))
