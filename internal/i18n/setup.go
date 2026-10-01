@@ -61,6 +61,14 @@ func SetupCatalog() *Catalog {
 		"setup.service_linger":     "想退出登录后也保持运行，执行一次 {0}",
 		"setup.run_hint":           "随时用 {0} 启动",
 		"setup.done":               "全部完成",
+
+		"cli.usage":         "用法: {0} [命令]\n\n  initialize  交互式初始化：语言、API、登录、后台服务\n  run         启动机器人（默认）\n  version     显示版本信息",
+		"cli.unknown":       "未知命令 {0}",
+		"cli.no_config":     "还没初始化，先运行 {0}",
+		"cli.not_logged_in": "还没登录，先运行 {0}",
+		"cli.load_failed":   "读取配置失败: {0}",
+		"cli.init_failed":   "初始化失败: {0}",
+		"cli.run_failed":    "运行出错: {0}",
 	})
 
 	c.AddMany(EnUS, map[string]string{
@@ -119,6 +127,14 @@ func SetupCatalog() *Catalog {
 		"setup.service_linger":     "To keep it running after you log out, run {0} once",
 		"setup.run_hint":           "Start it any time with {0}",
 		"setup.done":               "All set",
+
+		"cli.usage":         "Usage: {0} [command]\n\n  initialize  Interactive setup: language, API, login, background service\n  run         Start the bot (default)\n  version     Show version info",
+		"cli.unknown":       "Unknown command {0}",
+		"cli.no_config":     "Not set up yet, run {0} first",
+		"cli.not_logged_in": "Not logged in, run {0} first",
+		"cli.load_failed":   "Failed to load config: {0}",
+		"cli.init_failed":   "Setup failed: {0}",
+		"cli.run_failed":    "Run failed: {0}",
 	})
 
 	return c
