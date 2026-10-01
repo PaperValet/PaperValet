@@ -39,22 +39,24 @@ func (p *UpdatePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "update",
 		Description: "升级版本",
 		DescEN:      "Upgrade",
-		Usage: "update · update now\n" +
+		Usage: "update · update now · update -f\n" +
 			"\n" +
 			"**示例**\n" +
 			"• `update`  检查有没有新版本\n" +
 			"• `update now`  下载并安装，然后自动重启\n" +
+			"• `update -f`  不管版本号，强制重装最新版并重启\n" +
 			"\n" +
 			"**机制**\n" +
 			"• 查询 GitHub 上 PaperValet 的最新 Release\n" +
 			"• 下载与本机系统和架构匹配的安装包，只替换程序本身\n" +
 			"• 先写到临时文件再原子替换，下载失败不会弄坏现有程序\n" +
 			"• 配置、登录和插件都不受影响",
-		UsageEN: "update · update now\n" +
+		UsageEN: "update · update now · update -f\n" +
 			"\n" +
 			"**Examples**\n" +
 			"• `update`  check for a new version\n" +
 			"• `update now`  download, install and restart\n" +
+			"• `update -f`  reinstall the latest release regardless of version, then restart\n" +
 			"\n" +
 			"**How it works**\n" +
 			"• Queries the latest PaperValet release on GitHub\n" +
@@ -107,10 +109,11 @@ func (p *UpdatePlugin) handleUpdate(ctx *interfaces.CommandContext) error {
 		return ctx.Edit(ctx.Tlocal("❌ 查询新版本失败: "+esc(err.Error()), "❌ Version check failed: "+esc(err.Error())))
 	}
 	latest := strings.TrimPrefix(rel.Tag, "v")
-	if latest == p.version {
+	force, now := updateMode(ctx.Args)
+	if latest == p.version && !force {
 		return ctx.Edit(ctx.Tlocal(fmt.Sprintf("✅ 已经是最新版 %s", p.version), fmt.Sprintf("✅ Up to date (%s)", p.version)))
 	}
-	if strings.ToLower(ctx.GetArg(0)) != "now" {
+	if !now && !force {
 		return ctx.Edit(ctx.Tlocal(
 			fmt.Sprintf("🔔 有新版本 %s（当前 %s）\n发 `update now` 安装并重启", latest, p.version),
 			fmt.Sprintf("🔔 New version %s (current %s)\nSend `update now` to install and restart", latest, p.version)))
@@ -127,7 +130,11 @@ func (p *UpdatePlugin) handleUpdate(ctx *interfaces.CommandContext) error {
 		return ctx.Edit(ctx.Tlocal("❌ 这个版本没有适合本机的安装包: "+want, "❌ No build for this platform: "+want))
 	}
 
-	_ = ctx.Edit(ctx.Tlocal(fmt.Sprintf("⬇️ 下载 %s…", latest), fmt.Sprintf("⬇️ Downloading %s…", latest)))
+	if force {
+		_ = ctx.Edit(ctx.Tlocal(fmt.Sprintf("⬇️ 强制重装 %s…", latest), fmt.Sprintf("⬇️ Force reinstalling %s…", latest)))
+	} else {
+		_ = ctx.Edit(ctx.Tlocal(fmt.Sprintf("⬇️ 下载 %s…", latest), fmt.Sprintf("⬇️ Downloading %s…", latest)))
+	}
 	if err := replaceBinary(ctx.Context(), url); err != nil {
 		return ctx.Edit(ctx.Tlocal("❌ 更新失败: "+esc(err.Error()), "❌ Update failed: "+esc(err.Error())))
 	}
@@ -189,4 +196,18 @@ func replaceBinary(ctx context.Context, url string) error {
 		}
 		return os.Rename(tmp, exe)
 	}
+}
+
+// updateMode reads the arguments: -f/--force reinstalls even when the
+// version matches (and implies now); now installs a newer release.
+func updateMode(args []string) (force, now bool) {
+	for _, a := range args {
+		switch strings.ToLower(a) {
+		case "-f", "--force", "force":
+			force = true
+		case "now":
+			now = true
+		}
+	}
+	return force, now
 }
