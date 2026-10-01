@@ -34,3 +34,27 @@ func TestUsersOfChannelMessages(t *testing.T) {
 		t.Fatal("channel responses must expose their users")
 	}
 }
+
+func TestUsernamesIncludeCollectibles(t *testing.T) {
+	u := &tg.User{Username: "main", Usernames: []tg.Username{
+		{Username: "main", Active: true},
+		{Username: "nft", Active: true},
+		{Username: "off", Active: false},
+	}}
+	got := usernamesOf(u)
+	if len(got) != 2 || got[0] != "main" || got[1] != "nft" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestEstimateRegDate(t *testing.T) {
+	if y := estimateRegDate(7041948142).Year(); y != 2024 {
+		t.Fatalf("7041948142 should land in 2024, got %d", y)
+	}
+	if y := estimateRegDate(100).Year(); y != 2013 {
+		t.Fatalf("tiny ids are 2013, got %d", y)
+	}
+	if y := estimateRegDate(9000000000).Year(); y < 2026 {
+		t.Fatalf("ids past the table extrapolate forward, got %d", y)
+	}
+}
