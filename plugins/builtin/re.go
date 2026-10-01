@@ -34,32 +34,32 @@ func (p *RePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "re",
 		Description: "复读消息",
 		DescEN:      "Repeat messages",
-		Usage: `re [条数] [次数]（回复一条消息）
-
-<b>示例</b>
-• <code>re</code>  复读回复的那条
-• <code>re 3</code>  从那条起连续 3 条一起复读
-• <code>re 1 5</code>  那一条复读 5 次
-
-<b>机制</b>
-• 先删掉命令消息，再把目标消息转发到当前聊天
-• 转发保留图片、贴纸、文件和格式
-• 聊天禁止转发时，改为发送一模一样的消息（文字、格式、媒体都照搬）
-• 在话题群里发到同一个话题
-• 上限 100 条 × 10 次`,
-		UsageEN: `re [count] [times] (reply to a message)
-
-<b>Examples</b>
-• <code>re</code>  repeat the replied message
-• <code>re 3</code>  repeat it and the next 2
-• <code>re 1 5</code>  repeat it 5 times
-
-<b>How it works</b>
-• Deletes the command, then forwards the target into this chat
-• Forwarding keeps photos, stickers, files and formatting
-• When the chat forbids forwarding, sends an identical copy instead (text, formatting and media)
-• In forum groups it posts to the same topic
-• Max 100 messages × 10 times`,
+		Usage: "re [条数] [次数]（回复一条消息）\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `re`  复读回复的那条\n" +
+			"• `re 3`  从那条起连续 3 条一起复读\n" +
+			"• `re 1 5`  那一条复读 5 次\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 先删掉命令消息，再把目标消息转发到当前聊天\n" +
+			"• 转发保留图片、贴纸、文件和格式\n" +
+			"• 聊天禁止转发时，改为发送一模一样的消息（文字、格式、媒体都照搬）\n" +
+			"• 在话题群里发到同一个话题\n" +
+			"• 上限 100 条 × 10 次",
+		UsageEN: "re [count] [times] (reply to a message)\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `re`  repeat the replied message\n" +
+			"• `re 3`  repeat it and the next 2\n" +
+			"• `re 1 5`  repeat it 5 times\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Deletes the command, then forwards the target into this chat\n" +
+			"• Forwarding keeps photos, stickers, files and formatting\n" +
+			"• When the chat forbids forwarding, sends an identical copy instead (text, formatting and media)\n" +
+			"• In forum groups it posts to the same topic\n" +
+			"• Max 100 messages × 10 times",
 		Plugin:    p.Name(),
 		Category:  "tools",
 		OwnerOnly: true,
@@ -79,8 +79,8 @@ func randomID() int64 {
 func (p *RePlugin) handleRe(ctx *interfaces.CommandContext) error {
 	if ctx.Message == nil || !ctx.Message.IsReply {
 		return ctx.Edit(ctx.Tlocal(
-			"回复一条消息再发 <code>re</code>，详细说明见 <code>help re</code>",
-			"Reply to a message with <code>re</code>; see <code>help re</code>"))
+			"回复一条消息再发 `re`，详细说明见 `help re`",
+			"Reply to a message with `re`; see `help re`"))
 	}
 	count, repeat := 1, 1
 	if ctx.ArgCount() > 0 {
@@ -100,7 +100,7 @@ func (p *RePlugin) handleRe(ctx *interfaces.CommandContext) error {
 
 	peer, err := ctx.ResolvePeer()
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	ids := p.targetIDs(ctx, peer, count)
 	_ = ctx.Delete()
