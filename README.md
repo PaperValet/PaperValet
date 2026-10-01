@@ -1,136 +1,69 @@
+<div align="center">
+
 # PaperValet
 
-**English** | [中文](README_zh.md)
+A Telegram userbot in pure Go, built on [gotd/td](https://github.com/gotd/td).
 
-A production-grade Telegram userbot built with [gotd/td](https://github.com/gotd/td) — pure Go MTProto, no CGO.
+**English** · [中文](README_zh.md)
 
-Clean modular architecture, 15 built-in plugins, and a hot-loadable external plugin ecosystem.
+</div>
 
-## Quick Start
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
+papervalet initialize
 ```
 
-The installer puts the binary in place and registers a `papervalet` command. Then:
+`initialize` walks you through language, API credentials, login and an optional systemd service. Get `api_id` / `api_hash` at [my.telegram.org](https://my.telegram.org/apps). Then send `.ping` in any chat.
 
-```bash
-papervalet initialize   # language, api_id/api_hash, phone, login code, optional systemd service
-papervalet run          # start in the foreground (skip if you registered the service)
-```
+Docker, upgrades and troubleshooting: **[Installation](docs/installation.md)**.
 
-Get `api_id` / `api_hash` at [my.telegram.org](https://my.telegram.org/apps).
+## Commands
 
-Send `.ping` to yourself in any chat — the bot answers `🏓 Pong!`.
+Everything is triggered by your own messages. `.help` lists all commands, `.help <command>` explains one.
 
-Full walkthrough including systemd and Docker: **[Installation Guide](docs/installation.md)**.
+| Plugin | Command | What it does |
+|---|---|---|
+| ping | `.ping [all\|dc2\|host]` | Latency to Telegram, its DCs or any host |
+| status | `.status` | Version, host, resources, runtime |
+| info | `.info` | User, chat and message details |
+| re | `.re [count] [times]` | Repeat the replied message |
+| dme | `.dme <n\|all> [-f]` | Delete your recent messages |
+| exec | `.exec <cmd>` | Run a shell command |
+| apt | `.apt s / i / rm / ls / info` | Install and remove external plugins |
+| reload | `.reload` | Reload external plugins |
+| restart | `.restart` | Restart in place |
+| update | `.update [now]` | Upgrade from GitHub Releases |
+| backup | `.backup [restore]` | Back up config to Saved Messages |
+| sudo | `.sudo add / remove / list` | Let other users run commands |
+| alias | `.alias name=command` | Your own shortcuts |
+| prefix | `.prefix add / del / set` | Command prefixes |
+| lang | `.lang zh\|en` | Interface language |
+| log | `.loglevel`, `.sendlog` | Log level and log files |
 
-## Built-in Plugins
+## Plugins
 
-| Plugin | Commands | Description |
-|--------|----------|-------------|
-| `core` | `.ping`, `.restart` | Latency check, in-place restart |
-| `help` | `.help` | Command help by category |
-| `status` | `.status` | Version, uptime, memory, plugins |
-| `apt` | `.apt list/install/remove/load/unload` | Plugin manager |
-| `info` | `.info` | IDs and jump links; reply shows the sender |
-| `re` | `.re [count] [times]` | Repeat the replied message |
-| `alias` | `.alias set/del/list` | Runtime command aliases |
-| `exec` | `.exec` | System command execution |
-| `sudo` | `.sudo on/off/add/remove/list` | Permission delegation |
-| `reload` | `.reload` | Reload every external plugin |
-| `log` | `.loglevel`, `.sendlog` | Log level + log delivery |
-| `prefix` | `.prefix list/add/del/set` | Command prefix management |
-| `backup` | `.backup`, `.backup restore` | Pack config to Saved Messages; restore by reply |
-| `update` | `.update`, `.update now` | Upgrade from GitHub Releases |
-| `dme` | `.dme N`, `.dme all`, `.dme others on/off` | Bulk delete with anti-recall |
-| `lang` | `.lang` | Language switching |
-
-## External Plugins
-
-Third-party plugins live in the separate [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) repo (21 available) and install with one command:
+External plugins come from [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins):
 
 ```
-.apt install weather
+.apt s           browse
+.apt i weather   install one
+.apt i -all      install everything
 ```
 
-Writing your own: [Plugin SDK](docs/plugin-sdk.md) / [中文版](docs/plugin-sdk_zh.md).
-
-## Configuration
-
-`~/.papervalet/config.json` (written by `papervalet initialize`, see `config.example.json`):
-
-```json
-{
-  "telegram": {
-    "api_id": 12345,
-    "api_hash": "your_api_hash",
-    "session_file": "session.json",
-    "database_file": "sessions.db"
-  },
-  "bot": {
-    "command_prefix": ".",
-    "plugins_dir": "plugins",
-    "owner_id": 0
-  },
-  "logger": {
-    "level": "INFO",
-    "format": "console"
-  }
-}
-```
-
-- `command_prefix` — command trigger (default `.`)
-- `owner_id` — Telegram user ID for owner-only commands (`0` = first logged-in user)
-- `logger.level` — DEBUG, INFO, WARN, ERROR
-
-## Environment
-
-| Variable | Purpose |
-|----------|---------|
-| `PAPERVALET_HOME` | Data directory (default `~/.papervalet`); each registered command sets its own |
-| `PAPERVALET_CONFIG` | Explicit config path; the working directory is left alone (Docker) |
-| `PAPERVALET_PHONE` | Headless login: E.164 phone number, e.g. `+8613800138000` |
-| `PAPERVALET_CODE` | Headless login: one-time code sent by Telegram |
-| `PAPERVALET_2FA_PASSWORD` | Headless login: cloud 2FA password |
-
-## Architecture
-
-```
-cmd/papervalet/       entry point
-internal/
-  app/                orchestrator + auth + update handler
-  command/            parser, registry, middleware
-  config/             JSON config with defaults
-  eventbus/           priority pub/sub
-  media/              download/upload helpers
-  peer/               access hash cache + resolver
-  plugin/             manager + .so loader
-  session/            SQLite session store
-  i18n/               zh-CN / en-US catalogs
-plugins/builtin/      compiled-in plugins
-pkg/plugin/           PUBLIC SDK for external plugins
-pkg/logger/           zap wrapper
-```
-
-| Concern | Approach |
-|---------|----------|
-| Commands | Typed `CommandContext` with `Reply`/`Edit`/`Delete` helpers |
-| Plugins | Minimal interface: `Init/Start/Stop` + `RegisterCommand` |
-| Events | `EventBus` with priority, filters, async emit |
-| Peers | Cache-first `AccessHashManager` → API → ID-pattern fallback |
-| Sessions | SQLite (WAL) + in-memory cache, TTL cleanup |
+To write one, see the [Plugin SDK](docs/plugin-sdk.md).
 
 ## Development
 
 ```bash
-go build -o papervalet ./cmd/papervalet   # build
-go test ./...                             # test
-go vet ./... && golangci-lint run         # lint
+make build     # ./papervalet
+make test
+make lint
 ```
 
-Requires Go 1.25+.
+Go 1.25. External plugins must be built with the same Go version and `-trimpath` as the binary.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
