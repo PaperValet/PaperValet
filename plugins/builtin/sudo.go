@@ -32,21 +32,47 @@ func NewSudo() *SudoPlugin {
 }
 
 func (p *SudoPlugin) Name() string        { return "sudo" }
-func (p *SudoPlugin) Description() string { return "授权其他人使用本机器人的命令" }
+func (p *SudoPlugin) Description() string { return "授权他人使用命令" }
 func (p *SudoPlugin) DescEN() string      { return "Delegate command access to other users" }
 
 func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.load()
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "sudo",
-		Description: "把机器人命令授权给别的用户（回复他或给 ID）",
-		DescEN:      "Grant command access to another user (reply or by ID)",
-		Usage:       "sudo add [ID] | remove [ID] | list | on | off",
-		UsageEN:     "sudo add [ID] | remove [ID] | list | on | off",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Handler:     p.handleSudo,
+		Description: "授权他人使用命令",
+		DescEN:      "Delegate command access",
+		Usage: `sudo add|remove [用户ID] · sudo list · sudo on|off
+
+<b>示例</b>
+• 回复某人的消息发 <code>sudo add</code>  授权他
+• <code>sudo add 123456</code>  按 ID 授权
+• 回复某人发 <code>sudo remove</code>  取消授权
+• <code>sudo list</code>  查看名单
+• <code>sudo off</code> / <code>sudo on</code>  整体关闭 / 开启
+
+<b>机制</b>
+• 名单里的人发的命令和你自己发的一样会被执行，包括仅主人可用的命令
+• 添加第一个人时会自动打开总开关
+• 总开关关闭时名单保留，但所有人都不能用
+• 名单保存在 data/sudo.json，重启不丢`,
+		UsageEN: `sudo add|remove [user ID] · sudo list · sudo on|off
+
+<b>Examples</b>
+• Reply to someone with <code>sudo add</code>  grant access
+• <code>sudo add 123456</code>  grant by ID
+• Reply with <code>sudo remove</code>  revoke
+• <code>sudo list</code>  show the list
+• <code>sudo off</code> / <code>sudo on</code>  master switch
+
+<b>How it works</b>
+• Commands from listed users run exactly like yours, owner-only ones included
+• Adding someone turns the master switch on
+• With the switch off the list is kept but nobody can use it
+• Stored in data/sudo.json, survives restarts`,
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleSudo,
 	})
 }
 
