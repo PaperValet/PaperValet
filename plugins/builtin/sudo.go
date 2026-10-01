@@ -44,34 +44,34 @@ func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "sudo",
 		Description: "授权他人使用命令",
 		DescEN:      "Delegate command access",
-		Usage: `sudo add|remove [用户ID] · sudo list · sudo on|off
-
-<b>示例</b>
-• 回复某人的消息发 <code>sudo add</code>  授权他
-• <code>sudo add 123456</code>  按 ID 授权
-• 回复某人发 <code>sudo remove</code>  取消授权
-• <code>sudo list</code>  查看名单
-• <code>sudo off</code> / <code>sudo on</code>  整体关闭 / 开启
-
-<b>机制</b>
-• 名单里的人发的命令和你自己发的一样会被执行，包括仅主人可用的命令
-• 添加第一个人时会自动打开总开关
-• 总开关关闭时名单保留，但所有人都不能用
-• 名单保存在 data/sudo.json，重启不丢`,
-		UsageEN: `sudo add|remove [user ID] · sudo list · sudo on|off
-
-<b>Examples</b>
-• Reply to someone with <code>sudo add</code>  grant access
-• <code>sudo add 123456</code>  grant by ID
-• Reply with <code>sudo remove</code>  revoke
-• <code>sudo list</code>  show the list
-• <code>sudo off</code> / <code>sudo on</code>  master switch
-
-<b>How it works</b>
-• Commands from listed users run exactly like yours, owner-only ones included
-• Adding someone turns the master switch on
-• With the switch off the list is kept but nobody can use it
-• Stored in data/sudo.json, survives restarts`,
+		Usage: "sudo add|remove [用户ID] · sudo list · sudo on|off\n" +
+			"\n" +
+			"**示例**\n" +
+			"• 回复某人的消息发 `sudo add`  授权他\n" +
+			"• `sudo add 123456`  按 ID 授权\n" +
+			"• 回复某人发 `sudo remove`  取消授权\n" +
+			"• `sudo list`  查看名单\n" +
+			"• `sudo off` / `sudo on`  整体关闭 / 开启\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 名单里的人发的命令和你自己发的一样会被执行，包括仅主人可用的命令\n" +
+			"• 添加第一个人时会自动打开总开关\n" +
+			"• 总开关关闭时名单保留，但所有人都不能用\n" +
+			"• 名单保存在 data/sudo.json，重启不丢",
+		UsageEN: "sudo add|remove [user ID] · sudo list · sudo on|off\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• Reply to someone with `sudo add`  grant access\n" +
+			"• `sudo add 123456`  grant by ID\n" +
+			"• Reply with `sudo remove`  revoke\n" +
+			"• `sudo list`  show the list\n" +
+			"• `sudo off` / `sudo on`  master switch\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Commands from listed users run exactly like yours, owner-only ones included\n" +
+			"• Adding someone turns the master switch on\n" +
+			"• With the switch off the list is kept but nobody can use it\n" +
+			"• Stored in data/sudo.json, survives restarts",
 		Plugin:    p.Name(),
 		Category:  "admin",
 		OwnerOnly: true,
@@ -207,7 +207,7 @@ func findUserInChats(msgs tg.MessagesMessagesClass, userID int64) *tg.User {
 func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 	u, err := p.targetUser(ctx)
 	if err != nil {
-		return ctx.Edit(errText(htmlEscape(err.Error())))
+		return ctx.Edit(errText(esc(err.Error())))
 	}
 	p.mu.Lock()
 	p.users[u.ID] = true
@@ -229,7 +229,7 @@ func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
 	u, err := p.targetUser(ctx)
 	if err != nil {
-		return ctx.Edit("❌ " + err.Error())
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	p.mu.Lock()
 	if !p.users[u.ID] {
@@ -239,7 +239,7 @@ func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
 	delete(p.users, u.ID)
 	p.mu.Unlock()
 	p.save()
-	return ctx.Edit("🗑 <b>" + htmlEscape(displayName(u)) + "</b>  " + ctx.Tlocal("已移除授权", "revoked"))
+	return ctx.Edit("🗑 **" + esc(displayName(u)) + "**  " + ctx.Tlocal("已移除授权", "revoked"))
 }
 
 func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
@@ -259,13 +259,12 @@ func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	c := newCard("🔐", ctx.Tlocal(fmt.Sprintf("Sudo · %d 位", len(ids)), fmt.Sprintf("Sudo · %d users", len(ids)))).blank()
 	for _, id := range ids {
-		c.rawField("•", fmt.Sprintf("<code>%d</code> · <a href=\"tg://user?id=%d\">%s</a>", id, id, ctx.Tlocal("发消息", "message")))
+		c.rawField("•", plugin.Code(id)+" · "+plugin.Mention(ctx.Tlocal("发消息", "message"), id))
 	}
 	c.hint(ctx.Tlocal("移除：回复其消息发 "+cmdRef(prefix+"sudo remove"), "Revoke: reply with "+cmdRef(prefix+"sudo remove")))
 	return ctx.Edit(c.String())
 }
 
-func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-	return r.Replace(s)
+func esc(s string) string {
+	return plugin.Escape(s)
 }
