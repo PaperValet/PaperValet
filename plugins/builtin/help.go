@@ -18,15 +18,40 @@ type HelpPlugin struct {
 func NewHelp() *HelpPlugin { return &HelpPlugin{} }
 
 func (p *HelpPlugin) Name() string        { return "help" }
-func (p *HelpPlugin) Description() string { return "帮助与命令发现" }
+func (p *HelpPlugin) Description() string { return "命令列表与用法" }
+func (p *HelpPlugin) DescEN() string      { return "Command list and usage" }
+
+// cmdDesc picks the description in the active language.
+func cmdDesc(ctx *interfaces.CommandContext, cmd *interfaces.Command) string {
+	if ctx.Lang == "en-US" && cmd.DescEN != "" {
+		return cmd.DescEN
+	}
+	return cmd.Description
+}
+
+func cmdUsage(ctx *interfaces.CommandContext, cmd *interfaces.Command) string {
+	if ctx.Lang == "en-US" && cmd.UsageEN != "" {
+		return cmd.UsageEN
+	}
+	return cmd.Usage
+}
+
+func pluginDesc(ctx *interfaces.CommandContext, info plugin.PluginInfo) string {
+	if ctx.Lang == "en-US" && info.DescEN != "" {
+		return info.DescEN
+	}
+	return info.Description
+}
 
 func (p *HelpPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgr = mgr
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "help",
 		Aliases:     []string{"h", "?"},
-		Description: "显示帮助信息（按分类）",
-		Usage:       "help [命令名|插件名]",
+		Description: "列出所有命令；help 命令名 看详细用法",
+		DescEN:      "List commands; help <command> for details",
+		Usage:       "help [命令]",
+		UsageEN:     "help [command]",
 		Plugin:      p.Name(),
 		Category:    "core",
 		Handler:     p.handleHelp,
@@ -98,7 +123,7 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 		catDisplay := ctx.T("help.cat_" + cat)
 		b.WriteString(fmt.Sprintf("<b>%s</b>\n", catDisplay))
 		for _, cmd := range cmds {
-			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, cmd.Name, cmd.Description))
+			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, cmd.Name, cmdDesc(ctx, cmd)))
 		}
 		b.WriteString("\n")
 	}
@@ -111,10 +136,10 @@ func (p *HelpPlugin) showAllHelp(ctx *interfaces.CommandContext, prefix string) 
 func (p *HelpPlugin) showCommandHelp(ctx *interfaces.CommandContext, prefix string, cmd *interfaces.Command) error {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("<b>%s%s</b>\n", prefix, cmd.Name))
-	b.WriteString(fmt.Sprintf("%s\n", cmd.Description))
+	b.WriteString(fmt.Sprintf("%s\n", cmdDesc(ctx, cmd)))
 
-	if cmd.Usage != "" {
-		b.WriteString("\n" + ctx.T("help.usage", prefix+cmd.Usage) + "\n")
+	if u := cmdUsage(ctx, cmd); u != "" {
+		b.WriteString("\n" + ctx.T("help.usage", prefix+u) + "\n")
 	}
 
 	if len(cmd.Aliases) > 0 {
@@ -122,12 +147,17 @@ func (p *HelpPlugin) showCommandHelp(ctx *interfaces.CommandContext, prefix stri
 	}
 
 	if cmd.OwnerOnly {
-		b.WriteString("\n\n" + ctx.T("help.owner_only"))
+		b.WriteString("\n" + ctx.T("help.owner_only"))
 	}
 
 	if cmd.RateLimit > 0 {
-		b.WriteString("\n" + ctx.T("help.rate_limit", cmd.RateLimit, cmd.RateLimit))
+		b.WriteString("\n" + ctx.T("help.rate_limit", 1, cmd.RateLimit))
 	}
+
+	// Commands with rich built-in guides show them on bare invocation.
+	b.WriteString("\n" + ctx.Tlocal(
+		fmt.Sprintf("💡 直接发 <code>%s%s</code> 看示例", prefix, cmd.Name),
+		fmt.Sprintf("💡 Send <code>%s%s</code> alone for examples", prefix, cmd.Name)))
 
 	return ctx.Edit(b.String())
 }
@@ -137,7 +167,7 @@ func (p *HelpPlugin) showPluginHelp(ctx *interfaces.CommandContext, prefix strin
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("📦 <b>%s</b>\n", info.Name))
-	b.WriteString(fmt.Sprintf("%s\n", info.Description))
+	b.WriteString(fmt.Sprintf("%s\n", pluginDesc(ctx, info)))
 
 	statusStr := ctx.T("help.status_idle")
 	switch info.Status {
@@ -159,7 +189,7 @@ func (p *HelpPlugin) showPluginHelp(ctx *interfaces.CommandContext, prefix strin
 		sort.Strings(names)
 		for _, name := range names {
 			cmd := cmds[name]
-			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, name, cmd.Description))
+			b.WriteString(fmt.Sprintf("  <code>%s%s</code> — %s\n", prefix, name, cmdDesc(ctx, cmd)))
 		}
 	}
 	return ctx.Edit(b.String())
