@@ -19,6 +19,7 @@ import (
 type PluginMetadata struct {
 	Name        string
 	Description string
+	DescEN      string
 	Version     string
 	Author      string
 	MinVersion  string
@@ -32,15 +33,24 @@ type PluginMetadata struct {
 type Plugin interface {
 	Name() string
 	Description() string
+	// DescEN optionally returns the English description. Embedders may
+	// implement DescENProvider instead of adding it here.
 	Init(ctx context.Context, mgr Manager) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+}
+
+// DescENProvider is optionally implemented by plugins that carry an
+// English description alongside the primary one.
+type DescENProvider interface {
+	DescEN() string
 }
 
 // PluginInfo holds plugin metadata.
 type PluginInfo struct {
 	Name        string
 	Description string
+	DescEN      string
 	Status      PluginStatus
 }
 
@@ -236,7 +246,12 @@ type Command struct {
 	Name        string
 	Aliases     []string
 	Description string
+	// DescEN is the English description; when set it wins over Description
+	// for English users (Description stays the Chinese/primary text).
+	DescEN      string
 	Usage       string
+	// UsageEN is the English usage line; when empty Usage is reused.
+	UsageEN     string
 	Plugin      string
 	Category    string
 	OwnerOnly   bool
@@ -258,6 +273,13 @@ type CommandContext struct {
 	Media        MediaSender
 	Downloader   MediaDownloader
 	PluginName   string
+	// SelfID is the account user id; Message.UserID == SelfID means the
+	// owner sent the command, otherwise it is delegated sudo traffic.
+	SelfID       int64
+	// Lang is the active language ("zh-CN"/"en-US") for this command,
+	// resolved from the i18n manager. Lets plugins localize static help
+	// text without registering a full catalog.
+	Lang         string
 	StartTime    time.Time
 	Metadata     map[string]any
 	Ctx          context.Context
@@ -289,6 +311,19 @@ func (c *CommandContext) T(key string, args ...any) string {
 		return c.I18n(key, args...)
 	}
 	return key
+}
+
+// IsSelf reports whether the command came from the owner's own account.
+func (c *CommandContext) IsSelf() bool {
+	return c.SelfID == 0 || (c.Message != nil && c.Message.UserID == c.SelfID)
+}
+
+// Tlocal picks between a Chinese and an English string by active language.
+func (c *CommandContext) Tlocal(zh, en string) string {
+	if c.Lang == "en-US" {
+		return en
+	}
+	return zh
 }
 
 func (c *CommandContext) Reply(text string) error {

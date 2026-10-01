@@ -20,6 +20,7 @@ import (
 type Registry struct {
 	mu              sync.RWMutex
 	commands        map[string]*interfaces.Command
+	selfID          int64
 	aliases         map[string]string
 	userAliases     map[string]string // runtime aliases: name -> full command line
 	globalMW        []interfaces.Middleware
@@ -41,6 +42,7 @@ func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, 
 		prefixes = []string{"."}
 	}
 	r := &Registry{
+		selfID:      ownerID,
 		commands:    make(map[string]*interfaces.Command),
 		aliases:     make(map[string]string),
 		userAliases: make(map[string]string),
@@ -335,6 +337,7 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 		Args:         args,
 		RawArgs:      strings.Join(args, " "),
 		Message:      msg,
+		SelfID:       r.selfID,
 		Session:      interfaces.NewSessionContext(&interfaces.Session{UserID: msg.UserID, ChatID: msg.ChatID}, ctx),
 		API:          r.api,
 		PeerResolver: r.resolver,
@@ -352,6 +355,9 @@ func (r *Registry) ExecuteCommand(ctx context.Context, msg *interfaces.MessageEv
 			}
 			return key
 		},
+	}
+	if r.i18n != nil {
+		cmdCtx.Lang = string(r.i18n.UserLang(msg.UserID))
 	}
 
 	handler := cmd.Handler
