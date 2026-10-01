@@ -1,564 +1,352 @@
 #!/bin/bash
-# PaperValet one-line installer (macOS / Linux) — interactive menu + CLI.
-# PaperValet 一键安装脚本（macOS / Linux）—— 交互菜单 + 命令行双形态。
+# PaperValet installer for Linux / macOS.
 #
-# Piped execution (curl | bash): stdin carries this very script, so interactive
-# reads would eat the script itself. Re-download the script to a temp file and
-# re-exec with the terminal as stdin. Skipped automatically when there is no
-# controlling terminal (CI), where --non-interactive / env vars are the way.
-# 管道执行（curl | bash）时 stdin 是脚本内容，交互读取会吞掉脚本。
-# 此处把脚本重新下载为临时文件并以终端作为 stdin 重新执行；
-# 无控制终端的环境（CI）自动跳过，走 --non-interactive / 环境变量路径。
-if [ ! -t 0 ]; then
+#   curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
+#
+# It only installs the binary and registers a shell command. Everything else
+# (language, API credentials, login, background service) is done by
+#   <command> initialize
+#
+# Options:
+#   --install | --upgrade | --uninstall   skip the menu
+#   --name <cmd>       command name (default papervalet; one name = one instance)
+#   --version <tag>    release tag (default latest)
+#   --repo <owner/repo>
+#   -y, --yes          accept defaults, never prompt
+#
+# Env: PAPERVALET_REPO, PAPERVALET_VERSION, PAPERVALET_INSTALL_URL,
+#      PAPERVALET_BUNDLE (use a local bundle archive instead of downloading)
+
+# Piped runs (curl | bash) read the script from stdin, so prompts would eat
+# the script itself. Re-download to a temp file and re-exec on the terminal.
+# Only when the script itself arrives on stdin (BASH_SOURCE is empty then);
+# `bash install.sh` never re-execs, and PAPERVALET_REEXEC stops any loop.
+if [ -z "${BASH_SOURCE[0]:-}" ] && [ -z "${PAPERVALET_REEXEC:-}" ]; then
     _self_url="${PAPERVALET_INSTALL_URL:-https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh}"
     _self_tmp="$(mktemp /tmp/papervalet-install.XXXXXX.sh)"
     if command -v curl >/dev/null 2>&1 && curl -fsSL "$_self_url" -o "$_self_tmp" 2>/dev/null && [ -s "$_self_tmp" ]; then
-        if (exec 3< /dev/tty) 2>/dev/null; then
-            exec bash "$_self_tmp" "$@" < /dev/tty
-        else
-            exec bash "$_self_tmp" "$@"
+        export PAPERVALET_REEXEC=1
+        if (exec 3</dev/tty) 2>/dev/null; then
+            exec bash "$_self_tmp" "$@" </dev/tty
         fi
-    else
-        rm -f "$_self_tmp"
-        echo "❌ Failed to re-download installer for interactive mode | 无法重新下载安装脚本以进入交互模式" >&2
-        exit 1
+        exec bash "$_self_tmp" "$@" </dev/null
     fi
+    rm -f "$_self_tmp"
+    echo "✗ Failed to download the installer | 下载安装脚本失败" >&2
+    exit 1
 fi
-# PaperValet 一键安装脚本（macOS / Linux）—— 交互菜单 + 命令行双形态。
-#
-# ===== Menu mode (default) | 菜单形态（默认） =====
-#   curl -fsSL https://.../install.sh | bash
-#   curl -fsSL https://.../install.sh | bash -s -- --menu
-#
-# Menu items | 菜单项：
-#   1) install      First install to $HOME/.papervalet | 首次安装到 $HOME/.papervalet（默认）
-#   2) reinstall    Reinstall (keeps config.json / session.json / sessions.db) | 覆盖式重装（保留配置与会话）
-#   3) upgrade      Upgrade to version (keeps all data) | 升级到指定版本（保留全部数据）
-#   4) uninstall    Uninstall (optional keep config / data) | 卸载（可保留配置与数据）
-#   5) status       Show install info (path / version / binary SHA / .so count) | 查看安装信息
-#   6) latest       List latest release version and assets | 列出最新 release 版本与资产
-#   7) set-phone    Persist PAPERVALET_PHONE login env | 写入登录环境变量
-#   8) run          Start bot in foreground | 前台启动 bot
-#   9) doctor       Self-check (curl / jq / disk / arch / release reachability) | 自检
-#   0) exit         Quit | 退出
-#
-# ===== CLI mode | 命令行形态 =====
-#   --non-interactive   Skip menu, install directly (CI) | 跳过菜单直接安装（CI 用）
-#   --version <tag>     指定 release tag（默认 latest）
-#   --home <dir>        安装目录（默认 $HOME/.papervalet）
-#   --phone <+E164>     写入 PAPERVALET_PHONE（同时设置 ~/.profile 持久化）
-#   --api-id <int>      写入 config.telegram.api_id
-#   --api-hash <str>    写入 config.telegram.api_hash
-#   --no-config         不生成 config.json
-#   --keep-config       重装 / 升级时保留已有 config.json
-#   --keep-data         重装 / 升级时保留已有 session.json / sessions.db
-#   --repo <owner/repo> 指定仓库（默认 PaperValet/PaperValet）
-#   --help              显示帮助
-#
-# 环境变量：
-#   PAPERVALET_REPO          覆盖默认仓库
-#   PAPERVALET_HOME          覆盖默认安装目录
-#   PAPERVALET_VERSION       覆盖默认 version（latest / vX.Y.Z）
-#   PAPERVALET_MENU=0        强制命令行形态（即使无参数）
+# bash keeps the script open, so the re-exec temp copy can go right away.
+case "$0" in /tmp/papervalet-install.*.sh) rm -f "$0" ;; esac
 
-set -euo pipefail
+set -eo pipefail
 
-# ===== 默认值 =====
 REPO="${PAPERVALET_REPO:-PaperValet/PaperValet}"
 VERSION="${PAPERVALET_VERSION:-latest}"
-HOME_DIR="${PAPERVALET_HOME:-$HOME/.papervalet}"
-PHONE=""
-API_ID=""
-API_HASH=""
-WRITE_CONFIG=1
-KEEP_CONFIG=0
-KEEP_DATA=0
-USE_MENU="auto"      # auto | yes | no
-NON_INTERACTIVE=0
-ACTION="install"     # install | reinstall | upgrade | uninstall | status | latest | set-phone | run | doctor
+ACTION=""
+NAME=""
+YES=0
+MARKER="# papervalet-wrapper"
 
-# ===== 帮助 =====
-usage() {
-    sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
-    exit "${1:-0}"
-}
-
-# ===== 参数解析 =====
 while [ $# -gt 0 ]; do
     case "$1" in
-        --menu)            USE_MENU="yes"; shift ;;
-        --no-menu)         USE_MENU="no"; shift ;;
-        --non-interactive) USE_MENU="no"; NON_INTERACTIVE=1; shift ;;
-        --action)          ACTION="$2"; USE_MENU="no"; shift 2 ;;
-        --version)         VERSION="$2"; shift 2 ;;
-        --home)            HOME_DIR="$2"; shift 2 ;;
-        --phone)           PHONE="$2"; shift 2 ;;
-        --api-id)          API_ID="$2"; shift 2 ;;
-        --api-hash)        API_HASH="$2"; shift 2 ;;
-        --no-config)       WRITE_CONFIG=0; shift ;;
-        --keep-config)     KEEP_CONFIG=1; shift ;;
-        --keep-data)       KEEP_DATA=1; shift ;;
-        --repo)            REPO="$2"; shift 2 ;;
-        -h|--help)         usage 0 ;;
-        *) echo "Unknown argument 未知参数: $1" >&2; usage 1 ;;
+        --install)   ACTION=install; shift ;;
+        --upgrade)   ACTION=upgrade; shift ;;
+        --uninstall) ACTION=uninstall; shift ;;
+        --name)      NAME="${2:-}"; shift 2 ;;
+        --version)   VERSION="${2:-}"; shift 2 ;;
+        --repo)      REPO="${2:-}"; shift 2 ;;
+        -y|--yes|--non-interactive) YES=1; shift ;;
+        -h|--help)   sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "✗ Unknown option | 未知参数: $1" >&2; exit 2 ;;
     esac
 done
+[ -t 0 ] || YES=1
 
-# 当通过 curl pipe 进来时 stdin 是 tty，但 PAPERVALET_MENU=0 或显式带参数 → 走 CLI
-if [ "${PAPERVALET_MENU:-}" = "0" ]; then
-    USE_MENU="no"
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    B=$'\033[1m'; D=$'\033[2m'; R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; C=$'\033[36m'; N=$'\033[0m'
+else
+    B=; D=; R=; G=; Y=; C=; N=
 fi
-if [ "$USE_MENU" = "auto" ]; then
-    if [ -t 0 ] && [ -z "$PHONE$API_ID$API_HASH" ]; then
-        USE_MENU="yes"
-    else
-        USE_MENU="no"
-    fi
-fi
+ok()   { echo "  ${G}✓${N} $*"; }
+warn() { echo "  ${Y}!${N} $*"; }
+err()  { echo "  ${R}✗${N} $*" >&2; }
+hint() { echo "  ${D}$*${N}"; }
+die()  { err "$*"; exit 1; }
 
-# ===== 通用函数 =====
-RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; BLUE=$'\033[34m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
-info()  { echo "${BLUE}ℹ${RESET}  $*"; }
-ok()    { echo "${GREEN}✓${RESET}  $*"; }
-warn()  { echo "${YELLOW}⚠${RESET}  $*"; }
-fail()  { echo "${RED}❌${RESET} $*" >&2; }
-
-detect_os_arch() {
-    OS_RAW="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    case "$OS_RAW" in
-        linux)  OS="linux" ;;
-        darwin) OS="darwin" ;;
-        *) fail "Unsupported OS: $OS_RAW (macOS / Linux only) | 不支持的 OS: $OS_RAW（仅 macOS / Linux）"; echo "   Windows users use scripts/install.ps1 | Windows 用户请用 scripts/install.ps1" >&2; return 1 ;;
-    esac
-    ARCH_RAW="$(uname -m)"
-    case "$ARCH_RAW" in
-        x86_64|amd64)   ARCH="amd64" ;;
-        aarch64|arm64)  ARCH="arm64" ;;
-        *) fail "Unsupported arch: $ARCH_RAW | 不支持的架构: $ARCH_RAW"; return 1 ;;
-    esac
-    if [ "$ARCH" = "arm64" ]; then
-        warn "arm64: bundled .so files are amd64 (see README) | arm64：bundle 内 .so 为 amd64（见 README）"
-        SO_ARCH="amd64"
-    else
-        SO_ARCH="$ARCH"
-    fi
+# ask <label> <default> → $REPLY
+ask() {
+    if [ "$YES" = 1 ]; then REPLY="$2"; return 0; fi
+    local shown=""
+    [ -n "$2" ] && shown=" ${D}[$2]${N}"
+    read -r -p "  ${C}›${N} $1$shown: " REPLY || REPLY=""
+    [ -n "$REPLY" ] || REPLY="$2"
 }
 
-require_cmd() {
-    for cmd in "$@"; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            fail "Missing dependency: $cmd | 缺少依赖: $cmd"
-            return 1
+# confirm <label> <y|n> → exit status
+confirm() {
+    local def="$2" hint_yn="[y/N]" ans
+    [ "$def" = y ] && hint_yn="[Y/n]"
+    if [ "$YES" = 1 ]; then [ "$def" = y ]; return; fi
+    read -r -p "  ${C}›${N} $1 ${D}$hint_yn${N} " ans || ans=""
+    [ -n "$ans" ] || ans="$def"
+    case "$ans" in y|Y|yes|YES|是) return 0 ;; *) return 1 ;; esac
+}
+
+# ===== Platform =====
+case "$(uname -s)" in
+    Linux)  OS=linux ;;
+    Darwin) OS=darwin ;;
+    *) die "Only Linux / macOS; Windows uses scripts/install.ps1 | 仅支持 Linux / macOS，Windows 请用 scripts/install.ps1" ;;
+esac
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH=amd64 ;;
+    aarch64|arm64) ARCH=arm64 ;;
+    *) die "Unsupported CPU | 不支持的架构: $(uname -m)" ;;
+esac
+
+if [ "$(id -u)" = 0 ]; then
+    BIN_DIR=/usr/local/bin
+else
+    BIN_DIR="$HOME/.local/bin"
+fi
+
+valid_name() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; }
+
+# Default name keeps the classic ~/.papervalet; other names get ~/.<name>.
+home_for() {
+    if [ "$1" = papervalet ]; then echo "$HOME/.papervalet"; else echo "$HOME/.$1"; fi
+}
+
+wrapper_path() { echo "$BIN_DIR/$1"; }
+is_ours() { [ -f "$1" ] && grep -qF "$MARKER" "$1" 2>/dev/null; }
+
+# Read PAPERVALET_HOME back from an installed wrapper.
+wrapper_home() {
+    sed -n 's/^export PAPERVALET_HOME="\(.*\)"$/\1/p' "$1" | head -n1
+}
+
+pick_name() {
+    local purpose="$1"
+    while :; do
+        ask "Command name | 命令名" "${NAME:-papervalet}"
+        NAME="$REPLY"
+        if ! valid_name "$NAME"; then
+            err "Letters, digits, - and _ only | 只能用字母、数字、- 和 _"
+            [ "$YES" = 1 ] && exit 1
+            NAME=""; continue
         fi
+        WRAPPER="$(wrapper_path "$NAME")"
+        if [ "$purpose" = install ]; then
+            local other
+            other="$(command -v "$NAME" 2>/dev/null || true)"
+            if [ -n "$other" ] && [ "$other" != "$WRAPPER" ] && ! is_ours "$other"; then
+                err "$NAME is taken by $other | $NAME 已被 $other 占用"
+                [ "$YES" = 1 ] && exit 1
+                NAME=""; continue
+            fi
+            HOME_DIR="$(home_for "$NAME")"
+        else
+            if ! is_ours "$WRAPPER"; then
+                err "No PaperValet command named $NAME | 没有叫 $NAME 的 PaperValet 命令"
+                [ "$YES" = 1 ] && exit 1
+                NAME=""; continue
+            fi
+            HOME_DIR="$(wrapper_home "$WRAPPER")"
+            [ -n "$HOME_DIR" ] || HOME_DIR="$(home_for "$NAME")"
+        fi
+        return 0
     done
 }
 
-# ===== Release 元数据 =====
-fetch_release_json() {
-    local version="$1"
-    local api_url
-    if [ "$version" = "latest" ]; then
-        api_url="https://api.github.com/repos/$REPO/releases/latest"
+# ===== Download =====
+fetch_bundle() {
+    local out="$1"
+    if [ -n "${PAPERVALET_BUNDLE:-}" ]; then
+        [ -f "$PAPERVALET_BUNDLE" ] || die "PAPERVALET_BUNDLE not found: $PAPERVALET_BUNDLE"
+        cp "$PAPERVALET_BUNDLE" "$out"
+        return 0
+    fi
+    command -v curl >/dev/null 2>&1 || die "curl is required | 需要 curl"
+    local name="papervalet-$OS-$ARCH.tar.gz" url
+    if [ "$VERSION" = latest ]; then
+        url="https://github.com/$REPO/releases/latest/download/$name"
     else
-        api_url="https://api.github.com/repos/$REPO/releases/tags/$version"
+        url="https://github.com/$REPO/releases/download/$VERSION/$name"
     fi
-    curl -fsSL "$api_url" || return 1
+    hint "↓ $url"
+    curl -fSL --progress-bar -o "$out" "$url" || die "Download failed | 下载失败"
 }
 
-resolve_bundle_url() {
-    local json="$1" name="$2"
-    echo "$json" | grep '"browser_download_url"' \
-        | grep -F "$name\"" \
-        | head -n1 \
-        | sed -E 's/.*"([^"]+)".*/\1/'
-}
-
-list_release_assets() {
-    local json="$1"
-    echo "$json" | grep '"name"' | sed -E 's/.*"name": "([^"]+)".*/\1/'
-}
-
-download_bundle() {
-    local json="$1" os="$2" arch="$3" out_dir="$4"
-    local ext="tar.gz"
-    [ "$os" = "windows" ] && ext="zip"
-    local bundle_name="papervalet-$os-$arch.$ext"
-    local url
-    url="$(resolve_bundle_url "$json" "$bundle_name")"
-    if [ -z "$url" ]; then
-        fail "Bundle not found in release: $bundle_name | release 中找不到 $bundle_name"
-        info "Available assets: | 可用资产:"
-        list_release_assets "$json" | sed 's/^/  /'
-        return 1
+# Unpack the bundle and copy bin + bundled plugins into the data home.
+deploy() {
+    local tmp
+    tmp="$(mktemp -d)"
+    fetch_bundle "$tmp/bundle.tar.gz"
+    tar -xzf "$tmp/bundle.tar.gz" -C "$tmp" --strip-components=1 || { rm -rf "$tmp"; die "Bad archive | 安装包损坏"; }
+    [ -f "$tmp/bin/papervalet" ] || { rm -rf "$tmp"; die "Archive has no bin/papervalet | 安装包缺少 bin/papervalet"; }
+    mkdir -p "$HOME_DIR/bin" "$HOME_DIR/plugins"
+    chmod 700 "$HOME_DIR"
+    # Replace via rename so a running service keeps its old inode.
+    cp "$tmp/bin/papervalet" "$HOME_DIR/bin/.papervalet.new"
+    chmod 755 "$HOME_DIR/bin/.papervalet.new"
+    mv -f "$HOME_DIR/bin/.papervalet.new" "$HOME_DIR/bin/papervalet"
+    if [ -d "$tmp/plugins" ]; then
+        find "$tmp/plugins" -maxdepth 1 -type f -name '*.so' -exec cp -f {} "$HOME_DIR/plugins/" \;
     fi
-    local archive="$out_dir/$bundle_name"
-    info "下载: $url" >&2
-    curl -fSL -o "$archive" "$url" >&2
-    echo "$archive"
+    rm -rf "$tmp"
+    "$HOME_DIR/bin/papervalet" version >/dev/null 2>&1 || die "The binary does not run on this machine | 二进制无法在本机运行"
 }
 
-extract_bundle() {
-    local archive="$1" target="$2"
-    mkdir -p "$target"
-    case "$archive" in
-        *.tar.gz) tar -xzf "$archive" -C "$target" --strip-components=1 ;;
-        *.zip)    (cd "$target" && unzip -oq "$(basename "$archive")") ;;
-        *) fail "Unknown archive: $archive | 未知归档: $archive"; return 1 ;;
+write_wrapper() {
+    mkdir -p "$BIN_DIR"
+    cat >"$WRAPPER" <<EOF
+#!/bin/sh
+$MARKER
+export PAPERVALET_HOME="$HOME_DIR"
+export PAPERVALET_CMD="$NAME"
+exec "\$PAPERVALET_HOME/bin/papervalet" "\$@"
+EOF
+    chmod 755 "$WRAPPER"
+}
+
+# Non-root: make sure ~/.local/bin is on PATH for future shells.
+ensure_path() {
+    [ "$BIN_DIR" = /usr/local/bin ] && return 0
+    case ":$PATH:" in *":$BIN_DIR:"*) return 0 ;; esac
+    local line='export PATH="$HOME/.local/bin:$PATH"' rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [ "$rc" = "$HOME/.zshrc" ] && [ ! -f "$rc" ] && [ "${SHELL##*/}" != zsh ]; then
+            continue
+        fi
+        grep -qF "$line" "$rc" 2>/dev/null || printf '\n# PaperValet\n%s\n' "$line" >>"$rc"
+    done
+    PATH_ADDED=1
+}
+
+# Unit files of services that run this data home.
+find_units() {
+    local d
+    for d in /etc/systemd/system "$HOME/.config/systemd/user"; do
+        [ -d "$d" ] || continue
+        grep -lxF "Environment=PAPERVALET_HOME=$HOME_DIR" "$d"/*.service 2>/dev/null || true
+    done
+}
+
+systemctl_for() {
+    case "$1" in
+        "$HOME"/.config/systemd/user/*) systemctl --user "${@:2}" ;;
+        *) systemctl "${@:2}" ;;
     esac
 }
 
-write_config() {
-    local cfg="$1"
-    [ "$WRITE_CONFIG" = 1 ] || return 0
-    local example="$HOME_DIR/config.example.json"
-    if [ ! -f "$cfg" ] && [ -f "$example" ]; then
-        cp "$example" "$cfg"
-        chmod 600 "$cfg"
-        ok "Wrote default config: $cfg | 已写入默认 config: $cfg"
-    fi
-    if command -v jq >/dev/null 2>&1; then
-        if [[ "$API_ID" =~ ^[0-9]+$ ]]; then
-            if jq --arg v "$API_ID" '.telegram.api_id = ($v|tonumber)' "$cfg" > "$cfg.tmp" 2>/dev/null; then
-                mv "$cfg.tmp" "$cfg"
-            else
-                warn "Failed to write api_id into config | api_id 写入 config 失败"
-                rm -f "$cfg.tmp"
-            fi
-        elif [ -n "$API_ID" ]; then
-            warn "api_id must be numeric, not written | api_id 必须是数字，未写入"
-        fi
-        if [ -n "$API_HASH" ]; then
-            if jq --arg v "$API_HASH" '.telegram.api_hash = $v' "$cfg" > "$cfg.tmp" 2>/dev/null; then
-                mv "$cfg.tmp" "$cfg"
-            else
-                warn "Failed to write api_hash into config | api_hash 写入 config 失败"
-                rm -f "$cfg.tmp"
-            fi
-        fi
-    else
-        [ -n "$API_ID" ]   && warn "jq missing, api_id not written | 缺 jq，未写入 api_id"
-        [ -n "$API_HASH" ] && warn "jq missing, api_hash not written | 缺 jq，未写入 api_hash"
-    fi
-    return 0
-}
-
-# ===== 动作：install / reinstall / upgrade | Install / reinstall / upgrade =====
-prompt_credentials() {
-    [ "$NON_INTERACTIVE" = 1 ] && return 0
-    [ "$ACTION" != "install" ] && return 0
-    [ ! -t 0 ] && { warn "No terminal for credential prompts; fill config.json manually or use --api-id/--api-hash/--phone | 检测不到终端，无法交互输入凭据；请手填 config.json 或用 --api-id/--api-hash/--phone"; return 0; }
-    if [ -d "$HOME_DIR" ]; then
-        local ans2
-        read -r -p "   $HOME_DIR | 目录已存在，是否覆盖？Overwrite? [y/N] " ans2
-        case "$ans2" in y|Y|yes|YES) rm -rf "$HOME_DIR" ;; *) echo "Cancelled | 已取消"; return 1 ;; esac
-    fi
-    echo ""
-    info "Login credentials | 登录凭据（Get API credentials at 可从 https://my.telegram.org 获取；Press Enter to skip 回车可跳过稍后手填）"
-    if [ -z "$API_ID" ]; then
-        read -r -p "   api_id (numeric ID | 数字 ID): " API_ID || true
-    fi
-    if [ -z "$API_HASH" ]; then
-        read -r -p "   api_hash (hash string | 哈希串): " API_HASH || true
-    fi
-    if [ -z "$PHONE" ]; then
-        read -r -p "   Phone | 手机号 (E.164, e.g. 如 +8613800138000): " PHONE || true
-    fi
+# ===== Actions =====
+title() {
+    [ -n "${MENU_SHOWN:-}" ] && return 0
+    echo
+    echo "  ${B}${C}PaperValet${N} ${D}$1 · $OS/$ARCH${N}"
+    echo
 }
 
 do_install() {
-    detect_os_arch || return 1
-    require_cmd curl tar || return 1
-
-    prompt_credentials || return 0
-
-    local json
-    json="$(fetch_release_json "$VERSION")" || { fail "Failed to fetch release metadata | 获取 release 元数据失败"; return 1; }
-
-    # 安装目录已存在 → install 动作在 prompt_credentials 里已确认并删除；此处只处理 reinstall/upgrade。
-    # Existing dir was already confirmed and removed in prompt_credentials for install; only reinstall/upgrade here.
-    if [ -d "$HOME_DIR" ]; then
-        if [ "$ACTION" = "reinstall" ]; then
-            backup_keep_then_clean
-        elif [ "$ACTION" = "upgrade" ]; then
-            backup_keep_then_clean
-        fi
+    title "install | 安装"
+    pick_name install
+    if [ -x "$HOME_DIR/bin/papervalet" ] && is_ours "$WRAPPER"; then
+        warn "$NAME is already installed | $NAME 已经装过了"
+        confirm "Upgrade it instead? | 改为升级？" y || exit 0
+        do_upgrade_named
+        return
     fi
-
-    local tmp; tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' RETURN
-
-    local archive
-    archive="$(download_bundle "$json" "$OS" "$ARCH" "$tmp")" || return 1
-
-    mkdir -p "$HOME_DIR"
-    info "Extracting to | 解压到 $HOME_DIR"
-    extract_bundle "$archive" "$HOME_DIR"
-
-    # restore keep data
-    [ -d "$tmp/keep/config.json" ] && cp "$tmp/keep/config.json" "$HOME_DIR/config.json" && ok "Kept config.json | 保留 config.json"
-    [ -d "$tmp/keep/data" ] && cp -r "$tmp/keep/data" "$HOME_DIR/" && ok "Kept session / database | 保留 session / database"
-
-    write_config "$HOME_DIR/config.json"
-    set_phone_env_persist "$PHONE"
-
-    print_finish_banner "installed"
+    deploy
+    write_wrapper
+    ensure_path
+    echo
+    ok "Installed | 已安装  ${B}$NAME${N}  ${D}→ $HOME_DIR${N}"
+    local cmd="$NAME"
+    if [ -n "${PATH_ADDED:-}" ]; then
+        cmd="$WRAPPER"
+        hint "Open a new terminal for $NAME to be on PATH | 新开终端后 $NAME 命令即可用"
+    fi
+    echo
+    if [ "$YES" = 0 ] && confirm "Run setup now? | 现在开始初始化？" y; then
+        exec "$WRAPPER" initialize
+    fi
+    echo "  Next | 下一步  ${C}$cmd initialize${N}"
+    echo
 }
 
-backup_keep_then_clean() {
-    local tmp_keep="$(mktemp -d)"
-    [ "$KEEP_CONFIG" = 1 ] && [ -f "$HOME_DIR/config.json" ] && cp "$HOME_DIR/config.json" "$tmp_keep/config.json"
-    [ "$KEEP_DATA" = 1 ] && {
-        mkdir -p "$tmp_keep/data"
-        for f in session.json sessions.db sessions.db-wal sessions.db-shm; do
-            [ -f "$HOME_DIR/$f" ] && cp "$HOME_DIR/$f" "$tmp_keep/data/$f"
-        done
-    }
-    # 隐式默认：reinstall 保留 config；upgrade 保留 config + data
-    if [ "$ACTION" = "upgrade" ] && [ "$KEEP_DATA" = 0 ]; then KEEP_DATA=1; fi
-    if [ "$KEEP_CONFIG" = 0 ]; then KEEP_CONFIG=1; fi
-
-    mkdir -p "$tmp/keep"
-    cp -r "$tmp_keep/." "$tmp/keep/" 2>/dev/null || true
-    rm -rf "$HOME_DIR" "$tmp_keep"
+do_upgrade_named() {
+    local units old new
+    old="$("$HOME_DIR/bin/papervalet" version 2>/dev/null | head -n1 || true)"
+    deploy
+    write_wrapper
+    new="$("$HOME_DIR/bin/papervalet" version 2>/dev/null | head -n1 || true)"
+    ok "Upgraded | 已升级  ${D}${old:-?} → ${new:-?}${N}"
+    units="$(find_units)"
+    local u
+    for u in $units; do
+        if systemctl_for "$u" try-restart "$(basename "$u")" 2>/dev/null; then
+            ok "Restarted service | 已重启服务  $(basename "$u" .service)"
+        fi
+    done
+    echo
 }
 
-# ===== 动作：uninstall =====
+do_upgrade() {
+    title "upgrade | 升级"
+    pick_name upgrade
+    do_upgrade_named
+}
+
 do_uninstall() {
-    if [ ! -d "$HOME_DIR" ]; then
-        warn "$HOME_DIR does not exist | $HOME_DIR 不存在"
-        return 0
-    fi
-    info "About to uninstall | 即将卸载 $HOME_DIR"
-    local keep_cfg="N" keep_data="N"
-    if [ "$NON_INTERACTIVE" = 0 ]; then
-        read -r -p "   Keep config.json? 保留 config.json? [y/N] " keep_cfg
-        read -r -p "   Keep session data? 保留 session.json / sessions.db? [y/N] " keep_data
-        read -r -p "   Confirm deletion? Type YES to continue 确认删除？输入 YES 继续: " ans
-        [ "$ans" = "YES" ] || { echo "Cancelled | 已取消"; return 0; }
-    else
-        ans="YES"
-    fi
-    local bak=""
-    if [[ "$keep_cfg" =~ ^[Yy]$ ]] && [ -f "$HOME_DIR/config.json" ]; then
-        bak="$(mktemp -d)"; cp "$HOME_DIR/config.json" "$bak/config.json"
-    fi
-    if [[ "$keep_data" =~ ^[Yy]$ ]]; then
-        bak="${bak:-$(mktemp -d)}"
-        mkdir -p "$bak/data"
-        for f in session.json sessions.db sessions.db-wal sessions.db-shm; do
-            [ -f "$HOME_DIR/$f" ] && cp "$HOME_DIR/$f" "$bak/data/$f"
-        done
-    fi
-    rm -rf "$HOME_DIR"
-    ok "Uninstalled | 已卸载"
-    if [ -n "${bak:-}" ] && [ -d "$bak" ]; then
-        echo "   Backup 备份: $bak"
-        echo "   Restore 恢复: cp -r $bak/* $HOME_DIR/"
-    fi
-}
-
-# ===== 动作：status =====
-do_status() {
-    echo "${BOLD}PaperValet status | PaperValet 安装状态${RESET}"
-    echo "  Install dir 安装目录: ${HOME_DIR}"
+    title "uninstall | 卸载"
+    pick_name upgrade
+    local units u
+    units="$(find_units)"
+    for u in $units; do
+        local svc
+        svc="$(basename "$u")"
+        systemctl_for "$u" disable --now "$svc" >/dev/null 2>&1 || true
+        rm -f "$u"
+        systemctl_for "$u" daemon-reload >/dev/null 2>&1 || true
+        ok "Removed service | 已移除服务  ${svc%.service}"
+    done
+    rm -f "$WRAPPER"
+    ok "Removed command | 已移除命令  $NAME"
+    rm -f "$HOME_DIR/bin/papervalet"
+    rmdir "$HOME_DIR/bin" 2>/dev/null || true
     if [ -d "$HOME_DIR" ]; then
-        local bin="$HOME_DIR/bin/papervalet"
-        if [ -x "$bin" ]; then
-            local ver
-            ver="$("$bin" --version 2>&1 | head -n1 || echo '?')"
-            local sha
-            sha="$(sha256sum "$bin" 2>/dev/null | awk '{print substr($1,1,12)}')"
-            echo "  二进制:   $bin  ${GREEN}${ver}${RESET}  (sha256:${sha}...)"
+        warn "Data holds your login session and settings | 数据目录里有登录会话和配置"
+        if confirm "Delete $HOME_DIR as well? | 同时删除 $HOME_DIR？" n; then
+            rm -rf "$HOME_DIR"
+            ok "Deleted | 已删除  $HOME_DIR"
         else
-            warn "  Binary missing or not executable | 二进制缺失或不可执行"
+            hint "Kept | 已保留  $HOME_DIR"
         fi
-        local cfg="$HOME_DIR/config.json"
-        [ -f "$cfg" ] && echo "  config:   $cfg (size $(stat -c%s "$cfg" 2>/dev/null || stat -f%z "$cfg") bytes)" \
-            || warn "  config missing | config 缺失"
-        local so_count
-        so_count="$(find "$HOME_DIR/plugins" -maxdepth 1 -name '*.so' 2>/dev/null | wc -l | tr -d ' ')"
-        echo "  .so plugins 插件: ${so_count}"
-        for f in session.json sessions.db; do
-            [ -f "$HOME_DIR/$f" ] && echo "  $f: present 存在 ($(stat -c%s "$HOME_DIR/$f" 2>/dev/null || stat -f%z "$HOME_DIR/$f") bytes)"
-        done
-        local profile="$HOME/.papervalet.env"
-        [ -f "$profile" ] && echo "  Env file 环境变量持久化: $profile"
-    else
-        warn "Not installed | 未安装"
     fi
+    echo
 }
 
-# ===== 动作：latest =====
-do_latest() {
-    require_cmd curl || return 1
-    local json
-    json="$(fetch_release_json latest)" || { fail "获取 latest 失败"; return 1; }
-    echo "${BOLD}Latest release | 最新 release${RESET}"
-    echo "$json" | grep -E '"(tag_name|name|published_at|html_url)"' \
-        | sed -E 's/^[[:space:]]*"([^"]+)":[[:space:]]*"([^"]+)".*/  \1: \2/'
-    echo ""
-    echo "Available bundles: | 可用 bundle:"
-    list_release_assets "$json" | grep -E '^papervalet-' | sed 's/^/  /'
-}
-
-# ===== 动作：set-phone =====
-do_set_phone() {
-    if [ -z "$PHONE" ]; then
-        read -r -p "   Phone number 手机号 (E.164, e.g. 如 +8613800138000): " PHONE
-    fi
-    [ -z "$PHONE" ] && { fail "No phone number provided | 未提供手机号"; return 1; }
-    set_phone_env_persist "$PHONE"
-    ok "PAPERVALET_PHONE set | PAPERVALET_PHONE 已设置"
-    cat <<EOF
-
-   后续手动启动：
-     export PAPERVALET_PHONE='$PHONE'
-     $HOME_DIR/run.sh
-EOF
-}
-
-set_phone_env_persist() {
-    local phone="$1"
-    [ -z "$phone" ] && return 0
-    local env_file="$HOME/.papervalet.env"
-    {
-        echo "# PaperValet login env (auto-generated by install.sh)"
-        echo "export PAPERVALET_PHONE='$phone'"
-        echo "export PAPERVALET_HOME='$HOME_DIR'"
-        [ -n "${PAPERVALET_CODE:-}" ] && echo "export PAPERVALET_CODE='${PAPERVALET_CODE}'"
-        [ -n "${PAPERVALET_2FA_PASSWORD:-}" ] && echo "export PAPERVALET_2FA_PASSWORD='${PAPERVALET_2FA_PASSWORD}'"
-    } > "$env_file"
-    ok "Persisted env to $env_file (source it to apply) | 环境变量持久化到 $env_file（执行 'source $env_file' 生效）"
-}
-
-# ===== 动作：run =====
-do_run() {
-    local bin="$HOME_DIR/bin/papervalet"
-    [ -x "$bin" ] || { fail "$bin unavailable, install first | $bin 不可用，先 install"; return 1; }
-    info "Starting in foreground (Ctrl+C to stop) | 前台启动（Ctrl+C 退出）"
-    [ -f "$HOME/.papervalet.env" ] && source "$HOME/.papervalet.env"
-    cd "$HOME_DIR" && exec "$bin" -config "$HOME_DIR/config.json"
-}
-
-# ===== 动作：doctor =====
-do_doctor() {
-    echo "${BOLD}PaperValet doctor | PaperValet 自检${RESET}"
-    require_cmd curl tar jq 2>/dev/null && ok "Dependencies OK (curl tar jq) | 依赖完整 (curl tar jq)" \
-        || warn "jq missing; some config fields will not be written | 缺 jq，config 写入部分字段会失败"
-    df -h "$HOME" 2>/dev/null | awk 'NR==2 {print "  Disk 磁盘: used 已用 "$3" / "$2" (free 剩余 "$4")"}'
-    detect_os_arch && ok "OS=$OS ARCH=$ARCH SO_ARCH=$SO_ARCH"
-    local json
-    json="$(fetch_release_json latest 2>/dev/null)" && ok "GitHub API reachable | GitHub API 可达" \
-        || warn "GitHub API unreachable; offline install/upgrade unavailable | GitHub API 不可达，离线环境无法安装/升级"
-    [ -d "$HOME_DIR" ] && [ -x "$HOME_DIR/bin/papervalet" ] \
-        && ok "Local install 本地安装: $HOME_DIR/bin/papervalet" \
-        || warn "Not installed locally or binary missing | 本地未安装或二进制缺失"
-}
-
-# ===== 收尾提示 =====
-print_finish_banner() {
-    local phase="${1:-installed}"
-    local so_count=0
-    [ -d "$HOME_DIR/plugins" ] && so_count="$(find "$HOME_DIR/plugins" -maxdepth 1 -name '*.so' 2>/dev/null | wc -l | tr -d ' ')"
-    cat <<EOF
-
-${GREEN}${BOLD}✅ PaperValet ${phase}${RESET} : $HOME_DIR
-   ├── bin/papervalet
-   ├── plugins/        (${so_count} .so plugins 个插件)
-   ├── config.json     $([ -f "$HOME_DIR/config.json" ] && echo "✓" || echo "✗")
-   └── run.sh
-
-EOF
-    if [ ! -f "$HOME_DIR/config.json" ]; then
-        cat <<EOF
-Next steps | 下一步：
-   1) cp $HOME_DIR/config.example.json $HOME_DIR/config.json
-   2) Edit config.json, fill api_id / api_hash | 编辑 config.json 填入 api_id / api_hash
-   3) $HOME_DIR/run.sh
-EOF
-    elif [ -z "$API_ID" ] || [ -z "$API_HASH" ]; then
-        cat <<EOF
-Next steps | 下一步：
-   Edit $HOME_DIR/config.json, fill api_id / api_hash, then | 编辑 $HOME_DIR/config.json 填入 api_id / api_hash，然后：
-   $HOME_DIR/run.sh
-EOF
-    else
-        cat <<EOF
-Next steps | 下一步：
-   Start directly 直接启动: $HOME_DIR/run.sh
-   Or menu option 8) run | 或菜单选 8) run
-EOF
-    fi
-
-    if [ -n "$PHONE" ]; then
-        cat <<EOF
-
-💡 PAPERVALET_PHONE persisted to ~/.papervalet.env | 已为你持久化 PAPERVALET_PHONE 到 ~/.papervalet.env
-   Apply now | 立即生效: source ~/.papervalet.env
-EOF
-    fi
-}
-
-# ===== 菜单 =====
-run_menu() {
-    while true; do
-        clear 2>/dev/null || true
-        echo "${BOLD}PaperValet 安装器${RESET}  ($OS/$ARCH, repo=$REPO, version=$VERSION)"
-        echo "  安装目录: $HOME_DIR"
-        echo ""
-        cat <<MENU
-请选择操作：
-
-  ${BOLD}1${RESET}) install       首次安装到 $HOME_DIR
-  ${BOLD}2${RESET}) reinstall     覆盖重装（默认保留 config；可 --keep-data）
-  ${BOLD}3${RESET}) upgrade       升级到 ${VERSION}（保留 config / session / db）
-  ${BOLD}4${RESET}) uninstall     卸载（可选保留 config 与 data 的子菜单）
-  ${BOLD}5${RESET}) status        查看当前安装信息
-  ${BOLD}6${RESET}) latest        查看 GitHub 最新 release
-  ${BOLD}7${RESET}) set-phone     设置 PAPERVALET_PHONE 等登录环境变量
-  ${BOLD}8${RESET}) run           前台启动（PATH 已就绪）
-  ${BOLD}9${RESET}) doctor        自检（依赖 / 磁盘 / 网络 / 架构）
-  ${BOLD}0${RESET}) exit          退出
-
-  ${BOLD}v${RESET}) 切换 version（当前: ${VERSION}）
-  ${BOLD}h${RESET}) 切换 home dir（当前: ${HOME_DIR}）
-MENU
-        read -r -p "Select 选择 [0-9vh]: " choice
-        case "$choice" in
-            1) ACTION="install";    do_install ;;
-            2) ACTION="reinstall";  do_install ;;
-            3) ACTION="upgrade";    do_install ;;
-            4) ACTION="uninstall";  do_uninstall ;;
-            5) ACTION="status";     do_status ;;
-            6) ACTION="latest";     do_latest ;;
-            7) ACTION="set-phone";  do_set_phone ;;
-            8) ACTION="run";        do_run ;;
-            9) ACTION="doctor";     do_doctor ;;
-            0) echo "bye"; exit 0 ;;
-            v|V) read -r -p "New version 新 version (latest or 或 vX.Y.Z): " VERSION ;;
-            h|H) read -r -p "New home dir 新 home 目录: " HOME_DIR ;;
-            *) warn "Invalid choice 无效选择 '$choice'" ;;
+menu() {
+    title "installer | 安装器"
+    echo "    ${B}1${N}) Install   | 安装"
+    echo "    ${B}2${N}) Upgrade   | 升级"
+    echo "    ${B}3${N}) Uninstall | 卸载"
+    echo
+    MENU_SHOWN=1
+    while :; do
+        ask "Choose | 选择" 1
+        case "$REPLY" in
+            1) ACTION=install; return ;;
+            2) ACTION=upgrade; return ;;
+            3) ACTION=uninstall; return ;;
+            *) err "Enter 1, 2 or 3 | 请输入 1、2 或 3" ;;
         esac
-        echo ""
-        read -r -p "Press Enter for menu, q to quit | 按 Enter 返回菜单，q 退出 ... " cont
-        [ "$cont" = "q" ] && exit 0
     done
 }
 
-# ===== 入口 =====
-if [ "$USE_MENU" = "yes" ] && [ "$NON_INTERACTIVE" = 0 ]; then
-    detect_os_arch || true
-    run_menu
-else
-    detect_os_arch || exit 1
-    case "$ACTION" in
-        install|reinstall|upgrade) do_install ;;
-        uninstall) do_uninstall ;;
-        status)    do_status ;;
-        latest)    do_latest ;;
-        set-phone) do_set_phone ;;
-        run)       do_run ;;
-        doctor)    do_doctor ;;
-        *) fail "Unknown action 未知 action: $ACTION"; usage 1 ;;
-    esac
-fi
+[ -n "$ACTION" ] || { if [ "$YES" = 1 ]; then ACTION=install; else menu; fi; }
+case "$ACTION" in
+    install)   do_install ;;
+    upgrade)   do_upgrade ;;
+    uninstall) do_uninstall ;;
+esac
