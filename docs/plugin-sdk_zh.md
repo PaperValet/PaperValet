@@ -64,7 +64,7 @@ func (p *Hello) Stop(context.Context) error  { return nil }
 
 | 字段 | 含义 |
 |---|---|
-| `Name`、`Aliases` | 命令名和别名，别名越少越好 |
+| `Name`、`Aliases` | 命令名和别名；插件不设别名，用户自己用 `.alias` 加 |
 | `Description`、`DescEN` | `help` 里的一行说明 |
 | `Usage`、`UsageEN` | `help 命令` 显示的用法，可用 Markdown |
 | `Plugin` | 所属插件，`help` 按它分组 |
