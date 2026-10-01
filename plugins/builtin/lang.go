@@ -37,28 +37,28 @@ func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "lang",
 		Description: "切换语言",
 		DescEN:      "Switch language",
-		Usage: `lang [zh|en]
-
-<b>示例</b>
-• <code>lang</code>  看当前语言
-• <code>lang en</code>  切到英文
-• <code>lang zh</code>  切到中文
-
-<b>机制</b>
-• 全局生效，所有命令的回复和帮助都会切换，sudo 用户看到的也一样
-• 保存在 data/lang，重启后保持
-• 外部插件需要自己支持双语，否则保持原文`,
-		UsageEN: `lang [zh|en]
-
-<b>Examples</b>
-• <code>lang</code>  show the current language
-• <code>lang en</code>  switch to English
-• <code>lang zh</code>  switch to Chinese
-
-<b>How it works</b>
-• Global: every reply and help page switches, sudo users included
-• Stored in data/lang, kept across restarts
-• External plugins switch only if they ship both languages`,
+		Usage: "lang [zh|en]\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `lang`  看当前语言\n" +
+			"• `lang en`  切到英文\n" +
+			"• `lang zh`  切到中文\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 全局生效，所有命令的回复和帮助都会切换，sudo 用户看到的也一样\n" +
+			"• 保存在 data/lang，重启后保持\n" +
+			"• 外部插件需要自己支持双语，否则保持原文",
+		UsageEN: "lang [zh|en]\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `lang`  show the current language\n" +
+			"• `lang en`  switch to English\n" +
+			"• `lang zh`  switch to Chinese\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Global: every reply and help page switches, sudo users included\n" +
+			"• Stored in data/lang, kept across restarts\n" +
+			"• External plugins switch only if they ship both languages",
 		Plugin:    p.Name(),
 		Category:  "core",
 		OwnerOnly: true,
@@ -84,8 +84,8 @@ func (p *LangPlugin) handleLang(ctx *interfaces.CommandContext) error {
 	if ctx.ArgCount() == 0 {
 		cur := p.mgr.Catalog().Default()
 		return ctx.Edit(ctx.Tlocal(
-			"🌐 当前: <code>"+string(cur)+"</code>\n<code>lang en</code> 切英文 · <code>lang zh</code> 切中文",
-			"🌐 Current: <code>"+string(cur)+"</code>\n<code>lang en</code> English · <code>lang zh</code> Chinese"))
+			"🌐 当前: `"+string(cur)+"`\n`lang en` 切英文 · `lang zh` 切中文",
+			"🌐 Current: `"+string(cur)+"`\n`lang en` English · `lang zh` Chinese"))
 	}
 	l := normalizeLang(ctx.GetArg(0))
 	if l == "" {
