@@ -182,7 +182,7 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("auth: %w", err)
 		}
 
-	self, err := a.client.Self(ctx)
+		self, err := a.client.Self(ctx)
 		if err != nil {
 			return fmt.Errorf("self: %w", err)
 		}
