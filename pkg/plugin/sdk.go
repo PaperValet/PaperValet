@@ -87,6 +87,30 @@ type Manager interface {
 	InitAll(ctx context.Context) error
 	StartAll(ctx context.Context) error
 	StopAll(ctx context.Context) error
+	// Host exposes long-lived runtime services so plugins can work outside
+	// command handlers (schedulers, restored jobs, event listeners).
+	Host() Host
+}
+
+// Host gives plugins the same services a CommandContext carries, without
+// needing a triggering message. Safe to keep from Init; network calls work
+// once Start runs (the client is connected by then).
+type Host interface {
+	API() *tg.Client
+	PeerResolver() PeerResolver
+	Media() MediaSender
+	Downloader() MediaDownloader
+	// SelfID is the logged-in account id (0 before login completes).
+	SelfID() int64
+	// Logger returns a logger named after the plugin.
+	Logger(name string) Logger
+	// DataDir returns data/<plugin>, creating it if needed.
+	DataDir(plugin string) (string, error)
+	// Send posts a Markdown message to chatID and returns its message id.
+	// replyTo 0 sends a plain message.
+	Send(ctx context.Context, chatID int64, text string, replyTo int) (int, error)
+	// Lang is the active language for userID: zh-CN or en-US.
+	Lang(userID int64) string
 }
 
 // RegistryProvider provides command registry access.
