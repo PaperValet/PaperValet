@@ -33,8 +33,6 @@ type PluginMetadata struct {
 type Plugin interface {
 	Name() string
 	Description() string
-	// DescEN optionally returns the English description. Embedders may
-	// implement DescENProvider instead of adding it here.
 	Init(ctx context.Context, mgr Manager) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
