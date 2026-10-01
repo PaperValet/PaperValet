@@ -25,7 +25,7 @@ Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 
 | 插件 | 命令 | 作用 |
 |---|---|---|
-| ping | `.ping [all\|dc2\|主机]` | 测 Telegram、数据中心或任意主机的延迟 |
+| ping | `.ping [主机]`、`.pingdc` | 测 Telegram、指定主机或各数据中心的延迟 |
 | status | `.status` | 版本、主机、资源、运行状态 |
 | info | `.info` | 用户、聊天和消息信息 |
 | re | `.re [条数] [次数]` | 复读回复的消息 |
@@ -34,7 +34,7 @@ Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 | apt | `.apt s / i / rm / ls / info` | 安装和卸载外部插件 |
 | reload | `.reload` | 重载外部插件 |
 | restart | `.restart` | 原地重启 |
-| update | `.update [now]` | 从 GitHub Release 升级 |
+| update | `.update [now\|-f]` | 从 GitHub Release 升级 |
 | backup | `.backup [restore]` | 把配置备份到收藏夹 |
 | sudo | `.sudo add / remove / list` | 授权其他人使用命令 |
 | alias | `.alias 名字=命令` | 自定义快捷命令 |
