@@ -138,18 +138,12 @@ func (p *SudoPlugin) showStatus(ctx *interfaces.CommandContext) error {
 // numeric arg. Returns the user entity too so we can show a real name.
 func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (*tg.User, error) {
 	if ctx.Message != nil && ctx.Message.IsReply && ctx.API != nil {
-		msgs, err := ctx.API.MessagesGetMessages(ctx.Context(),
-			[]tg.InputMessageClass{&tg.InputMessageID{ID: ctx.Message.ReplyToID}})
-		if err == nil {
-			for _, m := range historyMessages(msgs) {
-				if msg, ok := m.(*tg.Message); ok && msg.ID == ctx.Message.ReplyToID {
-					if pu, ok := msg.FromID.(*tg.PeerUser); ok {
-						if u := findUserInChats(msgs, pu.UserID); u != nil {
-							return u, nil
-						}
-						return &tg.User{ID: pu.UserID}, nil
-					}
+		if msg, res, err := fetchMessage(ctx, ctx.Message.ReplyToID); err == nil {
+			if pu, ok := msg.FromID.(*tg.PeerUser); ok {
+				if u := findUserInChats(res, pu.UserID); u != nil {
+					return u, nil
 				}
+				return &tg.User{ID: pu.UserID}, nil
 			}
 		}
 	}
@@ -160,21 +154,14 @@ func (p *SudoPlugin) targetUser(ctx *interfaces.CommandContext) (*tg.User, error
 		}
 	}
 	return nil, fmt.Errorf("%s", ctx.Tlocal(
-		"不知道要操作谁：回复那条人的消息再发命令，或在命令后面带上用户 ID",
+		"不知道要操作谁：回复那个人的消息再发命令，或在命令后面带上用户 ID",
 		"no target: reply to the user's message or pass a user ID",
 	))
 }
 
-// findUserInChats scans the users attached to a getMessages response.
+// findUserInChats scans the users attached to a messages response.
 func findUserInChats(msgs tg.MessagesMessagesClass, userID int64) *tg.User {
-	var users []tg.UserClass
-	switch m := msgs.(type) {
-	case *tg.MessagesMessages:
-		users = m.Users
-	case *tg.MessagesMessagesSlice:
-		users = m.Users
-	}
-	for _, u := range users {
+	for _, u := range usersOf(msgs) {
 		if user, ok := u.(*tg.User); ok && user.ID == userID {
 			return user
 		}
