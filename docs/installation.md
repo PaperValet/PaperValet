@@ -1,13 +1,8 @@
-# Installation Guide
+# Installation
 
-[English](installation.md) | [中文](installation_zh.md)
+**English** · [中文](installation_zh.md)
 
-## Requirements
-
-- Linux (amd64/arm64) or macOS
-- `curl` and `tar`
-- A Telegram account
-- API credentials (`api_id` / `api_hash`) from [my.telegram.org/apps](https://my.telegram.org/apps)
+You need a Linux or macOS machine, `curl`, and API credentials from [my.telegram.org/apps](https://my.telegram.org/apps).
 
 ## Install
 
@@ -15,109 +10,106 @@
 curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/scripts/install.sh | bash
 ```
 
-Pick `1) Install` and choose a command name (Enter gives `papervalet`). The installer only does two things:
+Choose **Install** and a command name (Enter keeps `papervalet`). The installer puts the binary in `~/.<name>/bin` and links the command into `/usr/local/bin` (root) or `~/.local/bin`.
 
-- puts the binary in `~/.papervalet/bin/papervalet`
-- registers the command in `/usr/local/bin` (root) or `~/.local/bin` (other users, added to `PATH` in `~/.bashrc`)
+Each command name is a separate instance with its own data directory, so several accounts can run side by side.
 
-Each command name is its own instance with its own data directory, so several accounts can live side by side. `papervalet` uses `~/.papervalet`, any other name `<name>` uses `~/.<name>`.
-
-## Setup
+## Set up
 
 ```bash
 papervalet initialize
 ```
 
-The installer offers to start this right away. Five steps, all in the language you pick first:
+Five steps: language, `api_id` / `api_hash`, phone number, login code (plus 2FA password if set), and an optional systemd service that starts on boot. Running it again keeps your previous answers as defaults.
 
-1. **Language** — 简体中文 or English; also becomes the bot's default language
-2. **Telegram API** — `api_id` and `api_hash`
-3. **Phone number** — with country code, e.g. `+8613800138000`
-4. **Login** — the code Telegram sends you, plus your 2FA password if you have one
-5. **Keep running** — optionally register a systemd service (Enter gives the command name) that starts on boot
+Then send `.ping` in any chat. The bot only reacts to your own messages.
 
-Running `initialize` again keeps your old answers as defaults, and lets you switch accounts.
-
-Send `.ping` to yourself in any chat (Saved Messages works well); the bot answers `🏓 Pong!`.
-
-> The bot only reacts to **your own outgoing messages**.
-
-## Running
-
-Without the service:
+## Run
 
 ```bash
-papervalet run
-```
-
-With the service (root shown; user services add `--user`):
-
-```bash
-systemctl status papervalet
+papervalet run                 # foreground
+systemctl status papervalet    # if you registered the service
 journalctl -u papervalet -f
 ```
+
+Non-root services are user units, so add `--user` to `systemctl` and `journalctl`.
+
+Data directory layout:
 
 ```
 ~/.papervalet
 ├── bin/papervalet
-├── config.json      # written by initialize (0600)
-├── session.json     # your Telegram login
+├── config.json      # 0600, holds api_hash
+├── session.json     # Telegram login
 ├── sessions.db
-├── plugins/
-└── data/
+├── plugins/         # external .so plugins
+└── data/            # plugin and runtime state
 ```
 
-## Upgrade / Uninstall
+## Upgrade and uninstall
 
-Re-run the installer and pick `2) Upgrade` or `3) Uninstall`.
+From Telegram, `.update now` downloads the latest release and restarts.
 
-- Upgrade replaces the binary, keeps all data, and restarts the instance's service if there is one.
-- Uninstall removes the command and service, then asks whether to delete the data directory too.
+From the shell, run the installer again and choose **Upgrade** or **Uninstall**. Upgrading keeps all data. Uninstalling asks before deleting the data directory.
 
-Non-interactive: `bash install.sh --upgrade --name papervalet -y`.
+```bash
+bash install.sh --upgrade --name papervalet -y
+```
 
 ## Docker
 
 ```bash
-docker run -d --name papervalet \
+docker run -d --name papervalet --restart unless-stopped \
   -v "$PWD/config:/app/config" \
   -v "$PWD/data:/app/data" \
-  --restart unless-stopped \
-  ghcr.io/papervalet/papervalet:latest
-```
-
-The container reads `/app/config/config.json`. For the first login, pass credentials through the environment:
-
-```bash
-docker run -it --rm \
   -e PAPERVALET_PHONE=+8613800138000 \
   -e PAPERVALET_CODE=12345 \
-  -e PAPERVALET_2FA_PASSWORD=yourpassword \
-  -v "$PWD/config:/app/config" \
-  -v "$PWD/data:/app/data" \
+  -e PAPERVALET_2FA_PASSWORD=secret \
   ghcr.io/papervalet/papervalet:latest
 ```
 
-The code is single-use; request a fresh one for the container login.
+Put `config.json` in `./config` (see [`config.example.json`](../config.example.json)) and point `session_file` and `database_file` at `data/` so the login survives restarts. The login variables are only needed for the first start. Login codes are single-use.
 
-## From Source
+The image is built without cgo, so it cannot load external plugins.
+
+## From source
 
 ```bash
-git clone https://github.com/PaperValet/PaperValet
-cd PaperValet
-go build -o papervalet ./cmd/papervalet
+git clone https://github.com/PaperValet/PaperValet && cd PaperValet
+make build
 ./papervalet initialize
 ./papervalet run
 ```
 
-Go 1.25+ is required. `-config path/to/config.json` still works and keeps the current directory as the working directory.
+## Configuration
+
+`initialize` writes `config.json`. Fields you might edit by hand:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `bot.command_prefix` | `.` | Main command prefix |
+| `bot.command_prefixes` | | Extra prefixes, also managed with `.prefix` |
+| `bot.owner_id` | `0` | Owner account; `0` means the logged-in account |
+| `bot.plugin_repo` | PaperValet-Plugins latest release | Where `apt` downloads plugins |
+| `logger.level` | `INFO` | `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `i18n.default_language` | `zh-CN` | `zh-CN` or `en-US` |
+
+Environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `PAPERVALET_HOME` | Data directory, default `~/.papervalet` |
+| `PAPERVALET_CONFIG` | Config file path; the working directory is not changed |
+| `PAPERVALET_PHONE`, `PAPERVALET_CODE`, `PAPERVALET_2FA_PASSWORD` | Login without a terminal |
 
 ## Troubleshooting
 
-**`papervalet: command not found`** — open a new terminal, or run `source ~/.bashrc`.
+**`command not found`**: open a new terminal or `source ~/.bashrc`.
 
-**Not logged in** — run `papervalet initialize` again.
+**Not logged in**: run `papervalet initialize` again.
 
-**Bot does not respond** — commands must come **from your own account** and start with the prefix (default `.`).
+**No reaction**: the command must come from your account and start with the prefix.
 
-**arm64 hosts** — prebuilt `.so` plugins in release bundles are amd64-only. Build them from [PaperValet-Plugins](https://github.com/PaperValet/PaperValet-Plugins) with `go build -buildmode=plugin`.
+**Plugin fails with "different version"**: the plugin was built with another Go version. Run `.update now`, then install it again.
+
+**Plugins won't load at all**: only the linux/amd64 release can load external plugins.
