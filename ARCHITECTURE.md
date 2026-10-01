@@ -46,20 +46,20 @@ github.com/TiaraBasori/PaperValet/
 │       └── helpers.go        # CommandContext helpers (Reply, Edit, etc.)
 └── plugins/
     ├── builtin/              # Built-in plugins (compiled in)
-    │   ├── core.go           # version, ping, restart
+    │   ├── core.go           # ping, restart
     │   ├── help.go           # help (categorized, i18n)
     │   ├── status.go         # detailed system status
     │   ├── apt.go            # Plugin package manager (list/install/remove/load/unload)
-    │   ├── info.go           # info, fwd
+    │   ├── info.go           # info
     │   ├── alias.go          # runtime alias set/del/list (wired into parsing)
     │   ├── exec.go           # exec/shell (owner)
     │   ├── sudo.go           # permission delegation (owner)
-    │   ├── reload.go         # external plugin hot reload
+    │   ├── reload.go         # reload all external plugins
     │   ├── log.go            # loglevel, sendlog (owner)
     │   ├── prefix.go         # prefix list/add/del/set (runtime applied)
-    │   ├── backup.go         # backup/restore (owner)
-    │   ├── update.go         # update, autofix (owner)
-    │   ├── dme.go            # dme, dme all (owner)
+    │   ├── backup.go         # config backup to Saved Messages / restore by reply
+    │   ├── update.go         # upgrade from GitHub Releases
+    │   ├── dme.go            # dme N / all / others, anti-recall
     │   └── lang.go           # per-user language switching
     └── external/             # External plugins (built separately as .so)
         # source of truth: github.com/PaperValet/PaperValet-Plugins
@@ -69,7 +69,6 @@ github.com/TiaraBasori/PaperValet/
         ├── qrcode/
         ├── ping/             # Advanced ping (DC, ICMP, HTTP)
         ├── re/               # Message repeater
-        └── tpm/              # Legacy plugin manager
 ```
 
 ---
@@ -365,20 +364,20 @@ func (e *CommandError) Unwrap() error { return e.Err }
 
 | Plugin | Commands | Category | Notes |
 |--------|----------|----------|-------|
-| **core** | version, ping, restart | core | Minimal core |
+| **core** | ping, restart | core | Minimal core |
 | **help** | help [cmd\|plugin] | core | Help & command discovery |
 | **status** | status | core | Runtime status |
 | **apt** | apt install/remove/load/unload/list/info/search | core | Plugin package manager |
-| **info** | info, fwd | tools | User info & message forwarding |
+| **info** | info | tools | User/chat IDs |
 | **alias** | alias set/del/list | tools | Command aliases (JSON persisted) |
 | **exec** | exec | admin | Shell commands (owner) |
 | **sudo** | sudo | admin | Permission delegation (owner) |
-| **reload** | reload | admin | External plugin hot reload |
+| **reload** | reload | admin | Reload all external plugins |
 | **log** | loglevel, sendlog | admin | Log level + log delivery (owner) |
 | **prefix** | prefix list/add/del/set | admin | Multi-prefix management (JSON persisted) |
-| **backup** | backup list/restore/clean/info | admin | Config/session backup (owner) |
-| **update** | update, autofix | admin | Git sync & self-repair (owner) |
-| **dme** | dme, dme all | tools | Message cleanup (owner) |
+| **backup** | backup, backup restore | admin | Config to Saved Messages, restore by reply |
+| **update** | update, update now | admin | Upgrade from GitHub Releases |
+| **dme** | dme N, dme all, dme others | tools | Bulk delete, anti-recall |
 | **lang** | lang | core | Per-user language switching |
 
 ---
@@ -411,7 +410,6 @@ External plugins are built independently as `.so` files and published to GitHub 
 | **save** | 保存/转发消息 | tools |
 | **sendat** | 定时消息发送 | tools |
 | **speedtest** | 网络速度测试 | tools |
-| **tpm** | 旧版插件管理器 | admin |
 | **weather** | 天气查询 | tools |
 
 **Installation flow:**
