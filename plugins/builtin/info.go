@@ -27,38 +27,38 @@ func (p *InfoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 		Name:        "info",
 		Description: "查看用户和聊天信息",
 		DescEN:      "Look up user and chat info",
-		Usage: `info [@用户名|用户ID]，或回复消息
-
-<b>查谁</b>
-• 不带参数  查自己
-• 回复一条消息  查发送者
-• <code>info @username</code> 或 <code>info 123456</code>  查指定用户
-
-<b>显示内容</b>
-• 名字、全部用户名（含收藏用户名）、用户 ID
-• 注册时间（按 ID 估算，误差约两个月）
-• 入群时间（仅超级群/频道）
-• 头像所在 DC、共同群数量
-• 机器人、已验证、Premium、诈骗、虚假等标签
-• 个人简介
-• 资料、聊天、打开消息三种跳转链接及可复制的链接文本
-• 当前会话 ID、消息 ID 和 t.me/c 跳转链接；回复时还有被回复消息和转发来源`,
-		UsageEN: `info [@username|user ID], or reply to a message
-
-<b>Target</b>
-• no argument  yourself
-• reply to a message  its sender
-• <code>info @username</code> or <code>info 123456</code>  a specific user
-
-<b>Shows</b>
-• name, every username (collectible ones too), user ID
-• registration date (estimated from the ID, about ±2 months)
-• join date (supergroups/channels only)
-• profile photo DC, number of common chats
-• bot, verified, Premium, scam and fake badges
-• bio
-• profile, chat and open-message links plus copyable link text
-• current chat ID, message ID and t.me/c links; on reply also the replied message and forward origin`,
+		Usage: "info [@用户名|用户ID]，或回复消息\n" +
+			"\n" +
+			"**查谁**\n" +
+			"• 不带参数  查自己\n" +
+			"• 回复一条消息  查发送者\n" +
+			"• `info @username` 或 `info 123456`  查指定用户\n" +
+			"\n" +
+			"**显示内容**\n" +
+			"• 名字、全部用户名（含收藏用户名）、用户 ID\n" +
+			"• 注册时间（按 ID 估算，误差约两个月）\n" +
+			"• 入群时间（仅超级群/频道）\n" +
+			"• 头像所在 DC、共同群数量\n" +
+			"• 机器人、已验证、Premium、诈骗、虚假等标签\n" +
+			"• 个人简介\n" +
+			"• 资料、聊天、打开消息三种跳转链接及可复制的链接文本\n" +
+			"• 当前会话 ID、消息 ID 和 t.me/c 跳转链接；回复时还有被回复消息和转发来源",
+		UsageEN: "info [@username|user ID], or reply to a message\n" +
+			"\n" +
+			"**Target**\n" +
+			"• no argument  yourself\n" +
+			"• reply to a message  its sender\n" +
+			"• `info @username` or `info 123456`  a specific user\n" +
+			"\n" +
+			"**Shows**\n" +
+			"• name, every username (collectible ones too), user ID\n" +
+			"• registration date (estimated from the ID, about ±2 months)\n" +
+			"• join date (supergroups/channels only)\n" +
+			"• profile photo DC, number of common chats\n" +
+			"• bot, verified, Premium, scam and fake badges\n" +
+			"• bio\n" +
+			"• profile, chat and open-message links plus copyable link text\n" +
+			"• current chat ID, message ID and t.me/c links; on reply also the replied message and forward origin",
 		Plugin:   p.Name(),
 		Category: "tools",
 		Handler:  p.handleInfo,
@@ -137,7 +137,7 @@ func displayName(u *tg.User) string {
 	return name
 }
 
-func code(v any) string { return "<code>" + htmlEscape(fmt.Sprint(v)) + "</code>" }
+func code(v any) string { return plugin.Code(fmt.Sprint(v)) }
 
 // profile collects everything shown on the card.
 type profile struct {
@@ -272,7 +272,7 @@ func (p *InfoPlugin) handleInfo(ctx *interfaces.CommandContext) error {
 	_ = ctx.Edit("🔍 …")
 	user, id, err := p.resolveTarget(ctx)
 	if err != nil {
-		return ctx.Edit("❌ " + htmlEscape(err.Error()))
+		return ctx.Edit("❌ " + esc(err.Error()))
 	}
 	pr := p.load(ctx, user, id)
 	return ctx.Edit(p.render(ctx, pr))
@@ -323,8 +323,8 @@ func (p *InfoPlugin) render(ctx *interfaces.CommandContext, pr *profile) string 
 		fmt.Sprintf("%s (±2 months)", reg.Format("Jan 2006")))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "👤 <b>%s</b>\n\n", htmlEscape(name))
-	fmt.Fprintf(&b, "<b>%s</b>\n", ctx.Tlocal("基本信息", "Basics"))
+	fmt.Fprintf(&b, "👤 **%s**\n\n", esc(name))
+	fmt.Fprintf(&b, "**%s**\n", ctx.Tlocal("基本信息", "Basics"))
 	fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("用户名", "Username"), code(unameText))
 	fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("用户 ID", "User ID"), code(pr.id))
 	fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("注册时间", "Registered"), code(regText))
@@ -346,7 +346,7 @@ func (p *InfoPlugin) render(ctx *interfaces.CommandContext, pr *profile) string 
 	if r := []rune(bio); len(r) > 200 {
 		bio = string(r[:200]) + "…"
 	}
-	fmt.Fprintf(&b, "\n<b>%s</b>\n%s\n", ctx.Tlocal("简介", "Bio"), code(bio))
+	fmt.Fprintf(&b, "\n**%s**\n%s\n", ctx.Tlocal("简介", "Bio"), code(bio))
 
 	link1 := fmt.Sprintf("tg://user?id=%d", pr.id)
 	link2 := fmt.Sprintf("https://t.me/@id%d", pr.id)
@@ -354,9 +354,9 @@ func (p *InfoPlugin) render(ctx *interfaces.CommandContext, pr *profile) string 
 		link2 = "https://t.me/" + unames[0]
 	}
 	link3 := fmt.Sprintf("tg://openmessage?user_id=%d", pr.id)
-	fmt.Fprintf(&b, "\n<b>%s</b>\n", ctx.Tlocal("跳转", "Links"))
-	fmt.Fprintf(&b, "• <a href=\"%s\">%s</a> · <a href=\"%s\">%s</a> · <a href=\"%s\">%s</a>\n",
-		link1, ctx.Tlocal("资料", "Profile"), link2, ctx.Tlocal("聊天", "Chat"), link3, ctx.Tlocal("打开消息", "Open"))
+	fmt.Fprintf(&b, "\n**%s**\n", ctx.Tlocal("跳转", "Links"))
+	fmt.Fprintf(&b, "• %s · %s · %s\n",
+		plugin.Link(ctx.Tlocal("资料", "Profile"), link1), plugin.Link(ctx.Tlocal("聊天", "Chat"), link2), plugin.Link(ctx.Tlocal("打开消息", "Open"), link3))
 	fmt.Fprintf(&b, "• %s\n• %s\n• %s\n", code(link1), code(link2), code(link3))
 
 	// Chat and message context.
@@ -373,13 +373,13 @@ func (p *InfoPlugin) render(ctx *interfaces.CommandContext, pr *profile) string 
 		if url == "" {
 			return code(v)
 		}
-		return fmt.Sprintf("%s (<a href=\"%s\">%s</a>)", code(v), url, jump)
+		return fmt.Sprintf("%s (%s)", code(v), plugin.Link(jump, url))
 	}
 	msgURL := ""
 	if base != "" {
 		msgURL = fmt.Sprintf("%s/%d", base, msg.Message.ID)
 	}
-	fmt.Fprintf(&b, "\n<b>%s</b>\n", ctx.Tlocal("会话", "Chat"))
+	fmt.Fprintf(&b, "\n**%s**\n", ctx.Tlocal("会话", "Chat"))
 	fmt.Fprintf(&b, "• %s：%s · %s\n", ctx.Tlocal("会话 ID", "Chat ID"), withLink(msg.ChatID, base), kind)
 	fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("消息 ID", "Message ID"), withLink(int64(msg.Message.ID), msgURL))
 
@@ -400,13 +400,13 @@ func (p *InfoPlugin) render(ctx *interfaces.CommandContext, pr *profile) string 
 					if fu := findUserInChats(res, from.UserID); fu != nil {
 						label = displayName(fu)
 					}
-					fmt.Fprintf(&b, "• %s：<a href=\"tg://user?id=%d\">%s</a> %s\n",
-						ctx.Tlocal("转发自", "Forwarded from"), from.UserID, htmlEscape(label), code(from.UserID))
+					fmt.Fprintf(&b, "• %s：%s %s\n",
+						ctx.Tlocal("转发自", "Forwarded from"), plugin.Mention(label, from.UserID), code(from.UserID))
 				case *tg.PeerChannel:
 					fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("转发自频道", "Forwarded from channel"), code(-1000000000000-from.ChannelID))
 				default:
 					if fwd.FromName != "" {
-						fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("转发自", "Forwarded from"), htmlEscape(fwd.FromName))
+						fmt.Fprintf(&b, "• %s：%s\n", ctx.Tlocal("转发自", "Forwarded from"), esc(fwd.FromName))
 					}
 				}
 			}
