@@ -33,7 +33,8 @@ Full walkthrough including systemd and Docker: **[Installation Guide](docs/insta
 | `help` | `.help` | Command help by category |
 | `status` | `.status` (alias `.version`) | Version, uptime, memory, plugins |
 | `apt` | `.apt list/install/remove/load/unload` | Plugin manager |
-| `info` | `.info` | Chat/user IDs (reply targets the sender) |
+| `info` | `.info` (alias `.ids`) | IDs and jump links; reply shows the sender |
+| `re` | `.re [count] [times]` | Repeat the replied message |
 | `alias` | `.alias set/del/list` | Runtime command aliases |
 | `exec` | `.exec` | System command execution |
 | `sudo` | `.sudo on/off/add/remove/list` | Permission delegation |
