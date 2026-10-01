@@ -64,7 +64,7 @@ Background goroutines start in `Start` and must exit in `Stop`. `apt rm` and `re
 
 | Field | Meaning |
 |---|---|
-| `Name`, `Aliases` | Command and extra names; keep aliases to a minimum |
+| `Name`, `Aliases` | Command and extra names; plugins leave `Aliases` empty, users add their own with `.alias` |
 | `Description`, `DescEN` | One line for `help` |
 | `Usage`, `UsageEN` | Shown by `help <command>`; Markdown allowed |
 | `Plugin` | Owning plugin, used to group commands in `help` |
