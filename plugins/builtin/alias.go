@@ -25,7 +25,7 @@ func NewAlias() *AliasPlugin {
 }
 
 func (p *AliasPlugin) Name() string        { return "alias" }
-func (p *AliasPlugin) Description() string { return "给命令起短名字" }
+func (p *AliasPlugin) Description() string { return "命令别名" }
 func (p *AliasPlugin) DescEN() string      { return "Short names for commands" }
 
 func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
@@ -33,15 +33,38 @@ func (p *AliasPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.load()
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "alias",
-		Aliases:     []string{"al"},
-		Description: "给长命令起个短名字，例如 .p 代替 .ping",
-		DescEN:      "Give commands short names, e.g. .p for .ping",
-		Usage:       "alias 名字=命令 | alias del 名字 | alias list",
-		UsageEN:     "alias name=command | alias del name | alias list",
-		Plugin:      p.Name(),
-		Category:    "tools",
-		OwnerOnly:   true,
-		Handler:     p.handleAlias,
+		Description: "命令别名",
+		DescEN:      "Command aliases",
+		Usage: `alias 名字=命令 · alias del 名字 · alias list
+
+<b>示例</b>
+• <code>alias p=ping</code>  以后发 .p 等于 .ping
+• <code>alias set d5 dme 5</code>  带固定参数（之后 .d5）
+• <code>alias list</code>  查看全部
+• <code>alias del p</code>  删除
+
+<b>机制</b>
+• 只展开一层，别名里再写别名不会继续展开
+• 发别名时后面跟的参数会接在固定参数后面
+• 命令部分不用写前缀
+• 保存在 data/aliases.json，重启不丢`,
+		UsageEN: `alias name=command · alias del name · alias list
+
+<b>Examples</b>
+• <code>alias p=ping</code>  .p now means .ping
+• <code>alias set d5 dme 5</code>  fixed arguments (then .d5)
+• <code>alias list</code>  list all
+• <code>alias del p</code>  remove
+
+<b>How it works</b>
+• Expands once; aliases inside aliases are not expanded
+• Extra arguments are appended after the fixed ones
+• No prefix needed in the command part
+• Stored in data/aliases.json, survives restarts`,
+		Plugin:    p.Name(),
+		Category:  "tools",
+		OwnerOnly: true,
+		Handler:   p.handleAlias,
 	})
 }
 
