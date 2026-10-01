@@ -7,12 +7,19 @@ import (
 
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
+	"github.com/TiaraBasori/PaperValet/internal/peer"
 )
+
+// PeerRegistry receives access hashes harvested from updates.
+type PeerRegistry interface {
+	RegisterPeer(peerID, accessHash int64, peerType string)
+}
 
 // UpdateHandler processes Telegram updates and emits events.
 type UpdateHandler struct {
 	bus        *eventbus.Bus
 	selfUserID int64
+	peers      PeerRegistry
 }
 
 func NewUpdateHandler(bus *eventbus.Bus) *UpdateHandler {
@@ -23,17 +30,47 @@ func (h *UpdateHandler) SetSelfUserID(id int64) {
 	h.selfUserID = id
 }
 
+// SetPeerRegistry wires the cache that learns access hashes from updates.
+// Without it, replies in channels and supergroups fail with CHANNEL_INVALID.
+func (h *UpdateHandler) SetPeerRegistry(r PeerRegistry) { h.peers = r }
+
+// harvest records every usable access hash carried by an update.
+func (h *UpdateHandler) harvest(users []tg.UserClass, chats []tg.ChatClass) {
+	if h.peers == nil {
+		return
+	}
+	for _, u := range users {
+		if user, ok := u.(*tg.User); ok && !user.Min && user.AccessHash != 0 {
+			h.peers.RegisterPeer(user.ID, user.AccessHash, "user")
+		}
+	}
+	for _, c := range chats {
+		switch ch := c.(type) {
+		case *tg.Channel:
+			if !ch.Min && ch.AccessHash != 0 {
+				h.peers.RegisterPeer(peer.ChannelChatID(ch.ID), ch.AccessHash, "channel")
+			}
+		case *tg.ChannelForbidden:
+			if ch.AccessHash != 0 {
+				h.peers.RegisterPeer(peer.ChannelChatID(ch.ID), ch.AccessHash, "channel")
+			}
+		}
+	}
+}
+
 func (h *UpdateHandler) Handle(ctx context.Context, u tg.UpdatesClass) error {
 	_ = h.bus.Emit(ctx, eventbus.EventRawUpdate, u)
 
 	switch updates := u.(type) {
 	case *tg.Updates:
+		h.harvest(updates.Users, updates.Chats)
 		for _, upd := range updates.Updates {
 			if err := h.handleOne(ctx, upd, updates); err != nil {
 				h.bus.Emit(ctx, eventbus.EventError, err)
 			}
 		}
 	case *tg.UpdatesCombined:
+		h.harvest(updates.Users, updates.Chats)
 		for _, upd := range updates.Updates {
 			if err := h.handleOne(ctx, upd, updates); err != nil {
 				h.bus.Emit(ctx, eventbus.EventError, err)
