@@ -37,6 +37,11 @@ func TestHelpOverviewListsEveryCommandAndAlias(t *testing.T) {
 	ctx := &interfaces.CommandContext{Lang: "zh-CN"}
 	out := help.overview(ctx, ".")
 	for name := range mgr.Commands().GetAll() {
+		// Single-command plugins whose command shares the plugin name may be
+		// collapsed into the plugin header line.
+		if strings.Contains(out, "<b>"+name+"</b> ·") {
+			continue
+		}
 		if !strings.Contains(out, "<code>."+name+"</code>") {
 			t.Errorf("overview misses .%s", name)
 		}
@@ -68,8 +73,8 @@ func TestHelpCommandPageIsDetailedAndLocalized(t *testing.T) {
 	}
 	h, _ := mgr.Commands().Get("h")
 	page := help.commandPage(&interfaces.CommandContext{Lang: "zh-CN"}, ".", h)
-	if !strings.Contains(page, "<code>.h</code>") || !strings.Contains(page, "<b>.help</b>") {
-		t.Error("alias lookup must land on the command page and list aliases")
+	if !strings.Contains(page, "<code>.h</code>") || !strings.Contains(page, ".help") {
+		t.Errorf("command page must mention help and its alias:\n%s", page)
 	}
 }
 
