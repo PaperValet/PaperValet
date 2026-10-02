@@ -189,7 +189,7 @@ func (a *App) registerBuiltins() error {
 		backup,
 		builtin.NewUpdate(Version, restart.Restart),
 		builtin.NewPrune(),
-		builtin.NewLang(a.i18n),
+		builtin.NewLanguage(a.i18n),
 	} {
 		if err := a.plugins.RegisterPlugin(p); err != nil {
 			return err
