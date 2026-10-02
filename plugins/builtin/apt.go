@@ -2,26 +2,15 @@ package builtin
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
-
-// registryEntry is one plugin in the external plugin repository.
-type registryEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	DescEN      string `json:"desc_en,omitempty"`
-	Version     string `json:"version"`
-}
 
 // AptPlugin manages external plugins. Installed always means loaded.
 type AptPlugin struct {
@@ -163,28 +152,11 @@ func (p *AptPlugin) handleApt(ctx *interfaces.CommandContext) error {
 }
 
 // fetchRegistry downloads the live plugin index from the release repo.
-func (p *AptPlugin) fetchRegistry(ctx *interfaces.CommandContext) ([]registryEntry, error) {
-	url := strings.TrimSuffix(p.loader.RepoURL(), "/") + "/plugins.json"
-	req, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	var entries []registryEntry
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
+func (p *AptPlugin) fetchRegistry(ctx *interfaces.CommandContext) ([]loader.IndexEntry, error) {
+	return p.loader.Index(ctx.Context(), true)
 }
 
-func entryDesc(ctx *interfaces.CommandContext, e registryEntry) string {
+func entryDesc(ctx *interfaces.CommandContext, e loader.IndexEntry) string {
 	if ctx.Lang == "en-US" && e.DescEN != "" {
 		return e.DescEN
 	}
@@ -297,17 +269,13 @@ func (p *AptPlugin) info(ctx *interfaces.CommandContext, name string) error {
 		ctx.Tlocal("，用 ", ". Try ") + cmdRef(prefix+"apt s "+name)))
 }
 
-// loadError turns Go plugin loader errors into an actionable message.
+// loadError turns loader errors into an actionable message.
 func loadError(ctx *interfaces.CommandContext, err error) string {
-	msg := err.Error()
-	if strings.Contains(msg, "different version of package") {
-		return ctx.Tlocal("和主程序的 Go 版本不一致，先 `update -f` 重装主程序再装",
-			"built with a different Go version; run `update -f` first")
+	zh, en := loader.Explain(err)
+	if zh == err.Error() {
+		return esc(zh)
 	}
-	if strings.Contains(msg, "status 404") || strings.Contains(msg, "may not exist") {
-		return ctx.Tlocal("仓库里没有这个插件", "not in the repository")
-	}
-	return esc(msg)
+	return ctx.Tlocal(zh, en)
 }
 
 func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) error {
@@ -317,18 +285,16 @@ func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) erro
 		if len(names) > 1 {
 			_ = ctx.Edit(fmt.Sprintf("⏳ %s %d/%d  `%s`", ctx.Tlocal("安装中", "Installing"), i+1, len(names), name))
 		}
-		if p.loader.IsLoaded(name) {
-			rows = append(rows, skipLine(name, ctx.Tlocal("已经装过了", "already installed")))
+		if _, builtin := p.mgr.GetInfo(name); builtin && !p.loader.IsLoaded(name) {
+			rows = append(rows, skipLine(name, ctx.Tlocal("内建插件，不用装", "built-in, nothing to install")))
 			continue
 		}
-		if err := p.loader.Install(ctx.Context(), name); err != nil && !strings.Contains(err.Error(), "already installed") {
-			rows = append(rows, failLine(name, loadError(ctx, err)))
-			continue
-		}
-		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-			// Installed means loaded: never leave a dead file behind.
-			_ = p.loader.Remove(ctx.Context(), name)
-			rows = append(rows, failLine(name, loadError(ctx, err)))
+		if err := p.loader.InstallAndLoad(ctx.Context(), name); err != nil {
+			if errors.Is(err, loader.ErrAlreadyInstalled) {
+				rows = append(rows, skipLine(name, loadError(ctx, err)))
+			} else {
+				rows = append(rows, failLine(name, loadError(ctx, err)))
+			}
 			continue
 		}
 		cmds := p.mgr.Commands().GetByPlugin(name)
@@ -350,7 +316,7 @@ func (p *AptPlugin) remove(ctx *interfaces.CommandContext, names []string) error
 			continue
 		}
 		if err := p.loader.Remove(ctx.Context(), name); err != nil {
-			rows = append(rows, failLine(name, ctx.Tlocal("没装这个插件", "not installed")))
+			rows = append(rows, failLine(name, loadError(ctx, err)))
 			continue
 		}
 		rows = append(rows, "🗑 **"+esc(name)+"**  "+ctx.Tlocal("已卸载", "removed"))
@@ -389,14 +355,9 @@ func (p *AptPlugin) installAll(ctx *interfaces.CommandContext) error {
 	return p.install(ctx, names)
 }
 
-// removeAll removes every installed external plugin.
+// removeAll removes every installed external plugin, broken files included.
 func (p *AptPlugin) removeAll(ctx *interfaces.CommandContext) error {
-	loaded := p.loader.GetLoaded()
-	names := make([]string, 0, len(loaded))
-	for n := range loaded {
-		names = append(names, n)
-	}
-	sort.Strings(names)
+	names, _ := p.loader.GetInstalled()
 	if len(names) == 0 {
 		return ctx.Edit(skipLine("apt", ctx.Tlocal("没有已安装的外部插件", "No external plugins installed")))
 	}
