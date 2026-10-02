@@ -3,7 +3,6 @@ package builtin
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -62,12 +61,7 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 		))
 	}
 
-	loaded := p.loader.GetLoaded()
-	names := make([]string, 0, len(loaded))
-	for name := range loaded {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := p.loader.LoadedNames()
 	if len(names) == 0 {
 		return ctx.Edit(ctx.Tlocal(
 			"没有已加载的外部插件。用 `apt i 名字` 安装，或 `apt s` 看仓库里有什么",
@@ -77,12 +71,8 @@ func (p *ReloadPlugin) handleReload(ctx *interfaces.CommandContext) error {
 
 	var ok, failed []string
 	for _, name := range names {
-		if err := p.loader.Unload(ctx.Context(), name); err != nil {
-			failed = append(failed, failLine(name, esc(err.Error())))
-			continue
-		}
-		if err := p.loader.LoadByName(ctx.Context(), name); err != nil {
-			failed = append(failed, failLine(name, esc(err.Error())))
+		if err := p.loader.Reload(ctx.Context(), name); err != nil {
+			failed = append(failed, failLine(name, loadError(ctx, err)))
 		} else {
 			ok = append(ok, okLine(name, ctx.Tlocal("已重载", "reloaded")))
 		}
