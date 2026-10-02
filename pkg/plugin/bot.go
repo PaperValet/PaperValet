@@ -102,7 +102,31 @@ type Button struct {
 	// Data comes back to Page.Handle as BotContext.Data, at most 32 bytes.
 	Data string
 	URL  string
+	// Style colors the button on clients that support it; others show
+	// it plain.
+	Style ButtonStyle
 }
+
+// ButtonStyle is a button background color.
+type ButtonStyle uint8
+
+// Button colors: Primary for the main action, Success for adding or
+// confirming, Danger for removing.
+const (
+	StylePlain ButtonStyle = iota
+	StylePrimary
+	StyleSuccess
+	StyleDanger
+)
+
+// Primary returns the button colored for the main action.
+func (b Button) Primary() Button { b.Style = StylePrimary; return b }
+
+// Success returns the button colored for a positive action.
+func (b Button) Success() Button { b.Style = StyleSuccess; return b }
+
+// Danger returns the button colored for a destructive action.
+func (b Button) Danger() Button { b.Style = StyleDanger; return b }
 
 // Btn builds a callback button.
 func Btn(text, data string) Button { return Button{Text: text, Data: data} }
