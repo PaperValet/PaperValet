@@ -2,7 +2,7 @@
 
 [English](installation.md) · **中文**
 
-需要一台 Linux 或 macOS 机器、`curl`，以及在 [my.telegram.org/apps](https://my.telegram.org/apps) 申请的 API 凭据。
+需要一台 Linux 或 macOS 机器、`curl`、在 [my.telegram.org/apps](https://my.telegram.org/apps) 申请的 API 凭据，以及从 [@BotFather](https://t.me/BotFather) 用 `/newbot` 拿到的 bot token。
 
 ## 安装
 
@@ -20,9 +20,11 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 papervalet initialize
 ```
 
-共五步：选语言、填 `api_id` / `api_hash`、输手机号、输验证码（开了两步验证再输密码）、可选注册开机自启的 systemd 服务。再次运行会把上次填的内容当默认值。
+共六步：选语言、填 `api_id` / `api_hash`、输手机号、输验证码（开了两步验证再输密码）、填 bot token、可选注册开机自启的 systemd 服务。再次运行会把上次填的内容当默认值。
 
-然后在任意聊天发 `.ping`。机器人只响应你自己发出的消息。
+然后在任意聊天发 `.ping`。人形机器人只响应你自己发出的消息。
+
+设置都在配套机器人里。首次启动时你的账号会自动给它发一次消息，这样它才能联系到你。给它发 `/menu` 打开按钮面板，语言、前缀、sudo、日志级别和各插件选项都在里面。除了你它谁都不理。
 
 ## 运行
 
@@ -39,11 +41,12 @@ journalctl -u papervalet -f
 ```
 ~/.papervalet
 ├── bin/papervalet
-├── config.json      # 权限 0600，含 api_hash
+├── config.json      # 权限 0600，含 api_hash 和 bot_token
 ├── session.json     # Telegram 登录信息
+├── bot_session.json # 配套机器人登录信息
 ├── sessions.db
 ├── plugins/         # 外部插件 .so
-└── data/            # 插件和运行时数据
+└── data/            # 运行时数据，data/<插件>/settings.json
 ```
 
 ## 升级与卸载
@@ -68,7 +71,7 @@ docker run -d --name papervalet --restart unless-stopped \
   ghcr.io/papervalet/papervalet:latest
 ```
 
-把 `config.json` 放进 `./config`（参考 [`config.example.json`](../config.example.json)），并把 `session_file` 和 `database_file` 指到 `data/` 下，重启后才不用重新登录。登录相关的环境变量只有第一次启动需要，验证码只能用一次。
+把 `config.json` 放进 `./config`（参考 [`config.example.json`](../config.example.json)），并把 `session_file`、`bot_session_file` 和 `database_file` 指到 `data/` 下，重启后才不用重新登录。登录相关的环境变量只有第一次启动需要，验证码只能用一次。
 
 镜像不带 cgo，加载不了外部插件。
 
@@ -87,12 +90,13 @@ make build
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
-| `bot.command_prefix` | `.` | 主命令前缀 |
-| `bot.command_prefixes` | | 额外前缀，也可以用 `.prefix` 管理 |
+| `telegram.bot_token` | | 配套机器人 token，必填 |
+| `bot.command_prefix` | `.` | 主前缀，在机器人面板改过后以面板为准 |
+| `bot.command_prefixes` | | 额外前缀，在机器人面板改过后以面板为准 |
 | `bot.owner_id` | `0` | 主人账号，`0` 表示当前登录的账号 |
 | `bot.plugin_repo` | PaperValet-Plugins 最新 Release | `apt` 下载插件的地址 |
-| `logger.level` | `INFO` | `DEBUG`、`INFO`、`WARN`、`ERROR` |
-| `i18n.default_language` | `zh-CN` | `zh-CN` 或 `en-US` |
+| `logger.level` | `INFO` | 启动时的级别，机器人面板可覆盖 |
+| `i18n.default_language` | `zh-CN` | 启动时的语言，机器人面板可覆盖 |
 
 环境变量：
 
@@ -109,6 +113,8 @@ make build
 **提示没登录**：重新跑 `papervalet initialize`。
 
 **发命令没反应**：命令必须由你的账号发出，并以前缀开头。
+
+**机器人不说话**：用自己的账号给它发一次 `/start`。机器人登录出错只会记在 `bot` 日志里，不影响人形机器人。
 
 **插件报 different version**：插件和主程序的 Go 版本不同。先 `.update -f`，再重装插件。
 
