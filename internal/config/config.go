@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 )
+
+// BotTokenRe matches a @BotFather token: numeric bot id, colon, secret.
+var BotTokenRe = regexp.MustCompile(`^[0-9]{5,20}:[A-Za-z0-9_-]{30,}$`)
 
 type Config struct {
 	Telegram TelegramConfig `json:"telegram"`
@@ -27,6 +31,9 @@ type TelegramConfig struct {
 	APIHash     string `json:"api_hash"`
 	SessionFile string `json:"session_file"`
 	Database    string `json:"database_file"`
+	// BotToken logs in the companion bot that hosts settings panels.
+	BotToken       string `json:"bot_token"`
+	BotSessionFile string `json:"bot_session_file,omitempty"`
 }
 
 type BotConfig struct {
@@ -71,6 +78,9 @@ func Load(path string) (*Config, error) {
 	if cfg.Bot.RateLimit == 0 {
 		cfg.Bot.RateLimit = 3
 	}
+	if cfg.Telegram.BotSessionFile == "" {
+		cfg.Telegram.BotSessionFile = "bot_session.json"
+	}
 	if cfg.Logger.Level == "" {
 		cfg.Logger.Level = "INFO"
 	}
@@ -97,6 +107,7 @@ func Load(path string) (*Config, error) {
 	// Expand paths
 	cfg.Telegram.SessionFile = expandPath(cfg.Telegram.SessionFile)
 	cfg.Telegram.Database = expandPath(cfg.Telegram.Database)
+	cfg.Telegram.BotSessionFile = expandPath(cfg.Telegram.BotSessionFile)
 	cfg.Bot.PluginsDir = expandPath(cfg.Bot.PluginsDir)
 
 	// Init logger
@@ -125,6 +136,7 @@ func Example() *Config {
 			APIHash:     "your_api_hash",
 			SessionFile: "session.json",
 			Database:    "sessions.db",
+			BotToken:    "123456:your_bot_token",
 		},
 		Bot: BotConfig{
 			CommandPrefix:   ".",
@@ -181,6 +193,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Telegram.APIHash == "" {
 		errs = append(errs, "telegram.api_hash is required")
+	}
+	if !BotTokenRe.MatchString(c.Telegram.BotToken) {
+		errs = append(errs, "telegram.bot_token is required (from @BotFather)")
 	}
 	if c.Bot.CommandPrefix == "" {
 		errs = append(errs, "bot.command_prefix is required")
