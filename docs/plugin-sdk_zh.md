@@ -173,6 +173,7 @@ b.SetPage(&plugin.Page{
 ```
 
 - 页面打开时 `Data` 为空，之后是被点按钮的 data（最多 32 字节，已按插件隔离，不用自己加前缀）。
+- 特殊按钮可以上色：`.Primary()` 主操作，`.Success()` 新增或确认，`.Danger()` 删除，例如 `plugin.Btn("🗑", "rm:x").Danger()`。不支持按钮颜色的客户端照常显示。
 - 返回按钮由机器人自动加。`Toast` 和 `Alert` 用来回应点击。
 - `b.Notify(ctx, view)` 发给主人，`b.Send` 发到机器人能发言的任意聊天，`b.Edit` 修改它发过的消息。这些消息上的按钮同样回到 `Handle`。
 - 机器人上线前调用会返回 `plugin.ErrBotNotReady`。`SetPage` 随时可调。
