@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,13 +18,15 @@ import (
 )
 
 // SudoPlugin implements permission delegation: the owner can let other
-// Telegram users run the userbot's commands.
+// Telegram users run the userbot's commands. Granting needs a person from
+// the chat, so add/remove stay commands; the master switch and the list
+// live in the bot panel.
 type SudoPlugin struct {
 	mu          sync.RWMutex
-	enabled     bool
 	users       map[int64]bool
 	file        string
 	mgrCommands plugin.RegistryProvider
+	set         plugin.Settings
 }
 
 func NewSudo() *SudoPlugin {
@@ -40,37 +43,54 @@ func (p *SudoPlugin) DescEN() string      { return "Delegate command access to o
 func (p *SudoPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	p.mgrCommands = mgr.Commands()
 	p.load()
+	set, err := mgr.Host().Settings(&plugin.SettingsSpec{
+		Plugin:  p.Name(),
+		Title:   "🔐 Sudo",
+		TitleEN: "🔐 Sudo",
+		Settings: []plugin.Setting{{
+			Key: "enabled", Label: "允许授权用户", LabelEN: "Delegation",
+			Hint:   "关闭时名单保留，但除了你谁都不能用命令",
+			HintEN: "Off keeps the list but only you can run commands",
+			Kind:   plugin.SettingToggle, Default: true,
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	p.set = set
+	if err := mgr.Host().Bot(p.Name()).SetPage(&plugin.Page{
+		Title: "授权名单", TitleEN: "Granted users",
+		Handle: p.page,
+	}); err != nil && !errors.Is(err, plugin.ErrBotNotReady) {
+		return err
+	}
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "sudo",
 		Description: "授权他人使用命令",
 		DescEN:      "Delegate command access",
-		Usage: "sudo add|remove [用户ID] · sudo list · sudo on|off\n" +
+		Usage: "sudo add|remove [用户ID]\n" +
 			"\n" +
 			"**示例**\n" +
 			"• 回复某人的消息发 `sudo add`  授权他\n" +
 			"• `sudo add 123456`  按 ID 授权\n" +
 			"• 回复某人发 `sudo remove`  取消授权\n" +
-			"• `sudo list`  查看名单\n" +
-			"• `sudo off` / `sudo on`  整体关闭 / 开启\n" +
+			"• `sudo`  查看状态\n" +
 			"\n" +
 			"**机制**\n" +
 			"• 名单里的人发的命令和你自己发的一样会被执行，包括仅主人可用的命令\n" +
-			"• 添加第一个人时会自动打开总开关\n" +
-			"• 总开关关闭时名单保留，但所有人都不能用\n" +
+			"• 总开关和名单在机器人面板里管理\n" +
 			"• 名单保存在 data/sudo.json，重启不丢",
-		UsageEN: "sudo add|remove [user ID] · sudo list · sudo on|off\n" +
+		UsageEN: "sudo add|remove [user ID]\n" +
 			"\n" +
 			"**Examples**\n" +
 			"• Reply to someone with `sudo add`  grant access\n" +
 			"• `sudo add 123456`  grant by ID\n" +
 			"• Reply with `sudo remove`  revoke\n" +
-			"• `sudo list`  show the list\n" +
-			"• `sudo off` / `sudo on`  master switch\n" +
+			"• `sudo`  show status\n" +
 			"\n" +
 			"**How it works**\n" +
 			"• Commands from listed users run exactly like yours, owner-only ones included\n" +
-			"• Adding someone turns the master switch on\n" +
-			"• With the switch off the list is kept but nobody can use it\n" +
+			"• The master switch and the list live in the bot panel\n" +
 			"• Stored in data/sudo.json, survives restarts",
 		Plugin:    p.Name(),
 		Category:  "admin",
@@ -85,9 +105,12 @@ func (p *SudoPlugin) Stop(_ context.Context) error  { return nil }
 // IsSudoUser reports whether the given user is permitted.
 // Delegation only works while the switch is on.
 func (p *SudoPlugin) IsSudoUser(userID int64) bool {
+	if p.set != nil && !p.set.Bool("enabled") {
+		return false
+	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.enabled && p.users[userID]
+	return p.users[userID]
 }
 
 func (p *SudoPlugin) load() {
@@ -96,11 +119,9 @@ func (p *SudoPlugin) load() {
 		return
 	}
 	var st struct {
-		Enabled bool    `json:"enabled"`
-		Users   []int64 `json:"users"`
+		Users []int64 `json:"users"`
 	}
 	if json.Unmarshal(data, &st) == nil {
-		p.enabled = st.Enabled
 		for _, id := range st.Users {
 			p.users[id] = true
 		}
@@ -108,60 +129,69 @@ func (p *SudoPlugin) load() {
 }
 
 func (p *SudoPlugin) save() {
-	p.mu.RLock()
-	enabled := p.enabled
-	users := make([]int64, 0, len(p.users))
-	for id := range p.users {
-		users = append(users, id)
-	}
-	p.mu.RUnlock()
 	_ = os.MkdirAll(filepath.Dir(p.file), 0o700)
-	data, _ := json.MarshalIndent(map[string]any{"enabled": enabled, "users": users}, "", "  ")
+	data, _ := json.MarshalIndent(map[string]any{"users": p.sortedUsers()}, "", "  ")
 	_ = os.WriteFile(p.file, data, 0o600)
 }
 
+func (p *SudoPlugin) sortedUsers() []int64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	ids := make([]int64, 0, len(p.users))
+	for id := range p.users {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+// page lists granted users with a revoke button each.
+func (p *SudoPlugin) page(ctx *plugin.BotContext) (*plugin.View, error) {
+	if id, ok := strings.CutPrefix(ctx.Data, "rm:"); ok {
+		var uid int64
+		if _, err := fmt.Sscanf(id, "%d", &uid); err == nil {
+			p.mu.Lock()
+			delete(p.users, uid)
+			p.mu.Unlock()
+			p.save()
+			ctx.Toast(ctx.Tlocal("已移除", "Revoked"))
+		}
+	}
+	ids := p.sortedUsers()
+	v := &plugin.View{Text: "🔐 **" + ctx.Tlocal("授权名单", "Granted users") + "**\n\n"}
+	if len(ids) == 0 {
+		v.Text += ctx.Tlocal("名单是空的。在聊天里回复某人发 `sudo add` 添加", "The list is empty. Reply to someone with `sudo add` in a chat")
+		return v, nil
+	}
+	for _, id := range ids {
+		v.Text += "• " + plugin.Code(id) + "\n"
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn("🗑 "+fmt.Sprint(id), fmt.Sprintf("rm:%d", id))))
+	}
+	return v, nil
+}
+
 func (p *SudoPlugin) handleSudo(ctx *interfaces.CommandContext) error {
-	if ctx.ArgCount() == 0 {
-		return p.showStatus(ctx)
-	}
 	switch strings.ToLower(ctx.GetArg(0)) {
-	case "on":
-		p.mu.Lock()
-		p.enabled = true
-		p.mu.Unlock()
-		p.save()
-		return ctx.Edit(ctx.Tlocal("✅ Sudo 已开启，名单里的用户可以使用命令", "✅ Sudo on: listed users can run commands"))
-	case "off":
-		p.mu.Lock()
-		p.enabled = false
-		p.mu.Unlock()
-		p.save()
-		return ctx.Edit(ctx.Tlocal("⏸️ Sudo 已关闭，只有你自己能用命令", "⏸️ Sudo off: only you can run commands"))
-	case "add", "allow", "grant":
+	case "add":
 		return p.addUser(ctx)
-	case "remove", "del", "rm", "revoke":
+	case "remove":
 		return p.removeUser(ctx)
-	case "list", "ls":
-		return p.listUsers(ctx)
-	default:
-		return p.showStatus(ctx)
 	}
+	return p.showStatus(ctx)
 }
 
 func (p *SudoPlugin) showStatus(ctx *interfaces.CommandContext) error {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
 	state := ctx.Tlocal("⏸️ 关闭", "⏸️ off")
-	if p.enabled {
+	if p.set.Bool("enabled") {
 		state = ctx.Tlocal("✅ 开启", "✅ on")
 	}
 	prefix := p.mgrCommandsPrefix()
 	c := newCard("🔐", "Sudo")
 	c.blank().rawField(ctx.Tlocal("状态", "Status"), state)
-	c.field(ctx.Tlocal("已授权", "Granted"), len(p.users))
+	c.field(ctx.Tlocal("已授权", "Granted"), len(p.sortedUsers()))
 	c.hint(ctx.Tlocal(
-		"回复某人发 "+cmdRef(prefix+"sudo add")+" 授权，"+cmdRef(prefix+"sudo list")+" 看名单",
-		"Reply with "+cmdRef(prefix+"sudo add")+" to grant; "+cmdRef(prefix+"sudo list")+" shows the list"))
+		"回复某人发 "+cmdRef(prefix+"sudo add")+" 授权，开关和名单在机器人面板里",
+		"Reply with "+cmdRef(prefix+"sudo add")+" to grant; switch and list are in the bot panel"))
 	return ctx.Edit(c.String())
 }
 
@@ -211,16 +241,11 @@ func (p *SudoPlugin) addUser(ctx *interfaces.CommandContext) error {
 	}
 	p.mu.Lock()
 	p.users[u.ID] = true
-	enabled := p.enabled
 	p.mu.Unlock()
-	if !enabled {
-		p.mu.Lock()
-		p.enabled = true
-		p.mu.Unlock()
-	}
 	p.save()
 	note := ctx.Tlocal("已授权，他发的命令会被执行", "granted; their commands now run")
-	if !enabled {
+	if !p.set.Bool("enabled") {
+		_ = p.set.Set("enabled", true)
 		note += ctx.Tlocal("（总开关已顺手打开）", " (master switch turned on)")
 	}
 	return ctx.Edit(okLine(displayName(u), note))
@@ -240,29 +265,6 @@ func (p *SudoPlugin) removeUser(ctx *interfaces.CommandContext) error {
 	p.mu.Unlock()
 	p.save()
 	return ctx.Edit("🗑 **" + esc(displayName(u)) + "**  " + ctx.Tlocal("已移除授权", "revoked"))
-}
-
-func (p *SudoPlugin) listUsers(ctx *interfaces.CommandContext) error {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	prefix := p.mgrCommandsPrefix()
-	if len(p.users) == 0 {
-		c := newCard("🔐", "Sudo")
-		c.blank().line(ctx.Tlocal("名单是空的", "The list is empty"))
-		c.hint(ctx.Tlocal("回复某人发 "+cmdRef(prefix+"sudo add")+" 添加", "Reply with "+cmdRef(prefix+"sudo add")+" to add"))
-		return ctx.Edit(c.String())
-	}
-	ids := make([]int64, 0, len(p.users))
-	for id := range p.users {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	c := newCard("🔐", ctx.Tlocal(fmt.Sprintf("Sudo · %d 位", len(ids)), fmt.Sprintf("Sudo · %d users", len(ids)))).blank()
-	for _, id := range ids {
-		c.rawField("•", plugin.Code(id)+" · "+plugin.Mention(ctx.Tlocal("发消息", "message"), id))
-	}
-	c.hint(ctx.Tlocal("移除：回复其消息发 "+cmdRef(prefix+"sudo remove"), "Revoke: reply with "+cmdRef(prefix+"sudo remove")))
-	return ctx.Edit(c.String())
 }
 
 func esc(s string) string {
