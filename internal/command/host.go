@@ -111,6 +111,16 @@ func (noBot) Send(context.Context, int64, *plugin.View) (int, error) {
 }
 func (noBot) Edit(context.Context, int64, int, *plugin.View) error { return plugin.ErrBotNotReady }
 
+func (h registryHost) Listen(name string, fn plugin.MessageListener) func() {
+	return h.r.AddListener(name, fn)
+}
+
+func (h registryHost) RunCommand(ctx context.Context, msg *plugin.MessageEvent) (bool, error) {
+	return h.r.RunAsOwner(ctx, msg)
+}
+
+func (h registryHost) Prefixes() []string { return h.r.GetPrefixes() }
+
 func (h registryHost) Lang(userID int64) string {
 	if h.r.i18n == nil {
 		return "zh-CN"
