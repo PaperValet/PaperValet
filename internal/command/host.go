@@ -62,6 +62,55 @@ func (h registryHost) DataDir(name string) (string, error) {
 	return dir, nil
 }
 
+// BotHost is what the registry needs from the companion bot service.
+type BotHost interface {
+	Settings(spec *plugin.SettingsSpec) (plugin.Settings, error)
+	For(plugin string) plugin.Bot
+	RemovePlugin(plugin string)
+}
+
+// SetBot wires the companion bot so plugins get settings and bot access.
+func (r *Registry) SetBot(b BotHost) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.bot = b
+}
+
+func (r *Registry) botHost() BotHost {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.bot
+}
+
+func (h registryHost) Settings(spec *plugin.SettingsSpec) (plugin.Settings, error) {
+	b := h.r.botHost()
+	if b == nil {
+		return nil, fmt.Errorf("settings unavailable")
+	}
+	return b.Settings(spec)
+}
+
+func (h registryHost) Bot(name string) plugin.Bot {
+	if b := h.r.botHost(); b != nil {
+		return b.For(name)
+	}
+	return noBot{}
+}
+
+// noBot stands in when no bot service is wired (tests).
+type noBot struct{}
+
+func (noBot) Ready() bool                { return false }
+func (noBot) Username() string           { return "" }
+func (noBot) SetPage(*plugin.Page) error { return plugin.ErrBotNotReady }
+func (noBot) Notify(context.Context, *plugin.View) (int, error) {
+	return 0, plugin.ErrBotNotReady
+}
+func (noBot) Send(context.Context, int64, *plugin.View) (int, error) {
+	return 0, plugin.ErrBotNotReady
+}
+func (noBot) Edit(context.Context, int64, int, *plugin.View) error { return plugin.ErrBotNotReady }
+
 func (h registryHost) Lang(userID int64) string {
 	if h.r.i18n == nil {
 		return "zh-CN"
