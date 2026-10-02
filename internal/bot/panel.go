@@ -16,8 +16,10 @@ import (
 //
 //	m                       main menu
 //	n                       no-op (page counter)
-//	l:<b|x>:<page>          system / external plugin panel
-//	h:<plugin>              plugin screen (info, settings, page entry)
+//	l:<b|x>:<page>          system settings / external plugin panel
+//	h:<plugin>              plugin settings screen (settings, page entry)
+//	g:<page>                plugin manager (apt) panel
+//	o:<plugin>              manage one installed external plugin
 //	e:<plugin>:<key>        edit a setting (toggle flips it)
 //	c:<plugin>:<key>:<i>    pick choice i
 //	r:<plugin>:<key>        reset to default
