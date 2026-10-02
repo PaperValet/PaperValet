@@ -37,15 +37,15 @@ scripts/               installers
 
 A second gotd client logs in with `telegram.bot_token` and runs beside the userbot; if it fails, the userbot keeps going. It answers only the owner. After login the userbot sends it `/start` once, because a bot cannot open a chat.
 
-The bot is the settings UI. Plugins declare options with `Host().Settings(spec)` (`internal/settings`, stored in `data/<plugin>/settings.json`) and the bot renders them as button panels under `/menu`, which splits plugins into a system panel and an external panel (buttons named after the plugins). The external panel also browses the repository and installs, removes and reloads plugins (`internal/app/catalog.go` feeds it from the manager, registry and loader). Plugins can also add one page each and post messages through `Host().Bot(name)`; callback data is namespaced per plugin. Unloading a plugin removes its panel and page.
+The bot is the settings UI. Plugins declare options with `Host().Settings(spec)` (`internal/settings`, stored in `data/<plugin>/settings.json`) and the bot renders them as button panels under `/menu`, which has three panels: system settings and external plugins (only plugins with settings or a page, buttons named after the plugins), and the plugin manager, which lists every installed external plugin, browses the repository and installs, removes and reloads (`internal/app/catalog.go` feeds them from the manager, registry and loader). Plugins can also add one page each and post messages through `Host().Bot(name)`; callback data is namespaced per plugin. Unloading a plugin removes its panel and page.
 
-Options are never commands. lang and prefix have no command at all; sudo and log keep only their actions.
+Options are never commands. language and prefix have no command at all; sudo and log keep only their actions.
 
 ## Plugins
 
 Built-in and external plugins implement the same `plugin.Plugin` interface and register commands through `plugin.Manager`.
 
-Built-ins are compiled in and registered in `app.registerBuiltins`. There are 16: ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log.
+Built-ins are compiled in and registered in `app.registerBuiltins`. There are 16: ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, language, log.
 
 External plugins are `.so` files in `plugins/`, loaded at startup. `apt i` downloads one from the plugin repository release, loads it and starts it right away. `apt rm` stops it and deletes the file. There is no installed-but-disabled state.
 
