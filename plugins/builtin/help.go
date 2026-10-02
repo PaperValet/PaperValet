@@ -165,7 +165,7 @@ func (p *HelpPlugin) groups() ([]string, map[string][]*interfaces.Command) {
 // builtinOrder groups related built-ins: everyday tools first, admin last.
 var builtinOrder = []string{
 	"help", "ping", "status", "info", "re", "dme", "exec",
-	"apt", "reload", "restart", "update", "backup", "sudo", "alias", "prefix", "lang", "log",
+	"apt", "reload", "restart", "update", "backup", "sudo", "alias", "log",
 }
 
 func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) string {
@@ -196,6 +196,9 @@ func (p *HelpPlugin) overview(ctx *interfaces.CommandContext, prefix string) str
 	c.hint(ctx.Tlocal(
 		cmdRef(prefix+"help 命令")+" 看详细用法",
 		cmdRef(prefix+"help command")+" for details"))
+	if bot := p.mgr.Host().Bot(p.Name()).Username(); bot != "" {
+		c.line("⚙️ " + ctx.Tlocal("语言、前缀和插件设置在 @"+esc(bot)+" 的 /menu", "Language, prefixes and plugin settings: /menu at @"+esc(bot)))
+	}
 	return c.String()
 }
 
@@ -249,5 +252,8 @@ func (p *HelpPlugin) pluginPage(ctx *interfaces.CommandContext, prefix string, i
 	c.hint(ctx.Tlocal(
 		cmdRef(prefix+"help 命令")+" 看详细用法",
 		cmdRef(prefix+"help command")+" for details"))
+	if bot := p.mgr.Host().Bot(p.Name()).Username(); bot != "" {
+		c.line("⚙️ " + ctx.Tlocal("语言、前缀和插件设置在 @"+esc(bot)+" 的 /menu", "Language, prefixes and plugin settings: /menu at @"+esc(bot)))
+	}
 	return c.String()
 }
