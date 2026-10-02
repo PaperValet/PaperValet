@@ -35,6 +35,7 @@ Some tests `t.Chdir` into a temp dir because plugins persist to `data/`. Do the 
 - **Shared card style.** Built-ins format output with the helpers in `plugins/builtin/ui.go` (`newCard`, `field`, `hint`, `okLine`…). Keep new output consistent with them.
 - **No aliases.** External plugins register no command aliases and accept one spelling per subcommand. The only built-in alias is `help` → `h`. Users make their own shortcuts with `.alias`.
 - **Options live in the bot panel.** Never add a command or subcommand that sets an option (`x set`, `x config`, `x on|off`). Declare it with `mgr.Host().Settings(spec)`; the companion bot renders it under `/menu`. Lists and anything richer go in a bot page (`Host().Bot(name).SetPage`). Commands are for actions. Validation errors use `plugin.Invalid(zh, en)`.
+- **Bot screens.** Follow the style in `internal/bot`: `header(icon, title, tag)`, values in `quote(lines)`, back button first, colors via `.Primary()` / `.Success()` / `.Danger()`. Anything that takes seconds shows live progress (`startProgress`). Edits without buttons must omit `reply_markup`; an empty inline markup is rejected.
 - **State under `data/`.** Built-ins write `data/<file>`; plugins use `data/<plugin>/` (`mgr.Host().DataDir`). Settings land in `data/<plugin>/settings.json`. Files with secrets are `0600`.
 - **Channels need channel APIs.** In supergroups and channels use `channels.deleteMessages` and friends; `messages.*` variants silently do nothing there. `ctx.DeleteMessages` already handles it.
 
@@ -55,6 +56,7 @@ To build, test or debug a plugin, use the skill in [`.agents/skills/build-plugin
 
 - Pushing `master` runs CI: vet, test, five platform builds, and a GHCR image.
 - A `v*` tag also publishes bundles to GitHub Releases. Do not tag or re-cut a release unless the maintainer asks. To replace one: `gh release delete <tag> --cleanup-tag -y`, then tag and push again.
+- Before tagging, bump the version in `internal/app/app.go` (`Version`, used by `update` and the bot menu) and the default in `cmd/papervalet/main.go`. `update` compares `Version` with the latest tag, so a stale constant keeps offering the same release.
 - The plugin repo publishes on every push to `main` into a rolling `latest` release. Removed plugins leave stale assets there; delete them by hand.
 
 ## Docs
