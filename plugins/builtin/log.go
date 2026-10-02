@@ -72,24 +72,6 @@ func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	}
 	p.set = set
 	p.applyLevel()
-	if err := mgr.RegisterCommand(&interfaces.Command{
-		Name:        "loglevel",
-		Description: "日志级别（在机器人面板设置）",
-		DescEN:      "Log level (set in the bot panel)",
-		Usage:       "loglevel",
-		UsageEN:     "loglevel",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Hidden:      true,
-		Handler: func(ctx *interfaces.CommandContext) error {
-			return ctx.Edit(ctx.Tlocal(
-				"📝 日志级别挪到机器人的 /menu 按钮面板了",
-				"📝 The log level now lives in the bot's /menu panel"))
-		},
-	}); err != nil {
-		return err
-	}
 	return mgr.RegisterCommand(&interfaces.Command{
 		Name:        "sendlog",
 		Description: "发送日志",
@@ -144,10 +126,6 @@ func (p *LogPlugin) handleSendLog(ctx *interfaces.CommandContext) error {
 			}
 		}
 		return p.sendTail(ctx, lines)
-	case "set":
-		return ctx.Edit(ctx.Tlocal(
-			"📌 日志发送目标挪到机器人的 /menu 按钮面板了",
-			"📌 The log target now lives in the bot's /menu panel"))
 	case "clean":
 		return p.cleanLogs(ctx)
 	case "":
