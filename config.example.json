@@ -3,7 +3,8 @@
     "api_id": 123456,
     "api_hash": "your_api_hash_from_my_telegram_org",
     "session_file": "session.json",
-    "database_file": "sessions.db"
+    "database_file": "sessions.db",
+    "bot_token": "123456789:token_from_botfather"
   },
   "bot": {
     "command_prefix": ".",
