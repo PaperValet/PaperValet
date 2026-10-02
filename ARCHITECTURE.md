@@ -41,6 +41,10 @@ The bot is the settings UI. Plugins declare options with `Host().Settings(spec)`
 
 Options are never commands. language and prefix have no command at all; sudo and log keep only their actions.
 
+Code: `service.go` (client, send/edit, button colors), `updates.go` (messages, commands, taps, typed answers), `panel.go` (callback data layout, settings screens, plugin pages), `catalog.go` (menu, panels, manager, install/remove/reload with a one-op lock), `progress.go` (live progress panel). Taps slower than 4s are answered early and the view follows. Typed-answer prompts expire after 15 minutes, ops after 10. Stale or unknown buttons redraw a valid screen instead of failing.
+
+Every screen is an icon plus bold title, with lists and values in a block quote. Back is always first in its row. Long operations edit their message with a bar, done/total, elapsed time and per-plugin results, refreshed within 1s of a change and at least every 3s. Results start with `✅`/`⚠️`/`❌`; failures carry a retry button. Button colors: primary for navigation into management and retry, success for install and enabled toggles, danger for remove and failed plugins.
+
 ## Plugins
 
 Built-in and external plugins implement the same `plugin.Plugin` interface and register commands through `plugin.Manager`.
