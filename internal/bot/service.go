@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gotd/td/telegram"
@@ -50,9 +51,10 @@ type Service struct {
 	username string
 	ownerID  int64
 	pages    map[string]*plugin.Page
-	pinned   []string
+	catalog  Catalog
 	pending  *pending
 	readyCh  chan struct{}
+	busy     atomic.Bool // a plugin install/remove/reload is running
 }
 
 // pending is a typed answer the bot is waiting for.
@@ -61,6 +63,15 @@ type pending struct {
 	key    string // setting key, or the page's Ask key
 	page   bool
 	msgID  int // panel message to update afterwards
+	at     time.Time
+}
+
+// backData is where the prompt's back button leads.
+func (p *pending) backData() string {
+	if p.page {
+		return "p:" + p.plugin
+	}
+	return "h:" + p.plugin
 }
 
 // New builds the service. Without a token Run returns at once and the bot
@@ -138,13 +149,6 @@ func (s *Service) owner() int64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.ownerID
-}
-
-// SetPinned lists panels shown first in the menu, in order.
-func (s *Service) SetPinned(names []string) {
-	s.mu.Lock()
-	s.pinned = append([]string(nil), names...)
-	s.mu.Unlock()
 }
 
 // Enabled reports whether a token is configured.
@@ -275,7 +279,7 @@ func cmdRe(c string) bool {
 			return false
 		}
 	}
-	return c != "start" && c != "menu"
+	return c != "start" && c != "menu" && c != "cancel"
 }
 
 func (s *Service) page(name string) *plugin.Page {
@@ -311,7 +315,10 @@ func (s *Service) resyncCommands() {
 }
 
 func (s *Service) syncCommands(ctx context.Context) {
-	cmds := []tg.BotCommand{{Command: "menu", Description: s.tl("设置面板", "Settings panel")}}
+	cmds := []tg.BotCommand{
+		{Command: "menu", Description: s.tl("插件面板", "Plugin panels")},
+		{Command: "cancel", Description: s.tl("取消输入", "Cancel typing")},
+	}
 	s.mu.RLock()
 	names := make([]string, 0, len(s.pages))
 	for n, p := range s.pages {
