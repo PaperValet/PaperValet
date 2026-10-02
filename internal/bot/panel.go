@@ -119,48 +119,45 @@ func clip(s string, n int) string {
 // editView is the screen for changing one setting.
 func (s *Service) editView(name string, st *settings.Store, set *plugin.Setting, problem string) *View {
 	var b strings.Builder
-	b.WriteString("✏️ **" + plugin.Escape(s.pick(set.Label, set.LabelEN, set.Key)) + "**\n\n")
-	b.WriteString(s.tl("当前 ", "Current ") + plugin.Code(s.display(st, set)) + "\n")
+	b.WriteString(header("✏️", plugin.Escape(s.pick(set.Label, set.LabelEN, set.Key)), ""))
+	b.WriteString("\n" + s.tl("当前  ", "Current  ") + plugin.Code(s.display(st, set)))
 	if h := s.pick(set.Hint, set.HintEN, ""); h != "" {
-		b.WriteString("\n" + plugin.Escape(h) + "\n")
+		b.WriteString("\n" + quote([]string{plugin.Escape(h)}))
 	}
 	v := &View{}
 	switch set.Kind {
 	case plugin.SettingChoice:
 		cur := st.String(set.Key)
-		var row []plugin.Button
+		var btns []plugin.Button
 		for i, c := range set.Choices {
-			label := s.pick(c.Label, c.LabelEN, c.Value)
+			btn := plugin.Btn(s.pick(c.Label, c.LabelEN, c.Value), fmt.Sprintf("c:%s:%s:%d", name, set.Key, i))
 			if c.Value == cur {
-				label = "● " + label
+				btn.Text = "● " + btn.Text
+				btn = btn.Primary()
 			}
-			row = append(row, plugin.Btn(label, fmt.Sprintf("c:%s:%s:%d", name, set.Key, i)))
-			if len(row) == 2 {
-				v.Buttons = append(v.Buttons, row)
-				row = nil
-			}
+			btns = append(btns, btn)
 		}
-		if len(row) > 0 {
-			v.Buttons = append(v.Buttons, row)
-		}
+		v.Buttons = grid(btns, 2)
 	case plugin.SettingNumber:
 		if set.Min != 0 || set.Max != 0 {
-			b.WriteString("\n" + s.tl("发送 ", "Send a number from ") + fmt.Sprintf("%d–%d", set.Min, set.Max) + s.tl(" 之间的数字", ""))
+			b.WriteString("\n\n💬 " + s.tl("发送 ", "Send a number from ") + fmt.Sprintf("%d–%d", set.Min, set.Max) + s.tl(" 之间的数字", ""))
 		} else {
-			b.WriteString("\n" + s.tl("发送一个数字", "Send a number"))
+			b.WriteString("\n\n💬 " + s.tl("发送一个数字", "Send a number"))
 		}
 	case plugin.SettingText:
-		b.WriteString("\n" + s.tl("直接发送新的值", "Send the new value"))
+		b.WriteString("\n\n💬 " + s.tl("直接发送新的值", "Send the new value"))
+	}
+	if set.Kind == plugin.SettingNumber || set.Kind == plugin.SettingText {
+		b.WriteString(s.tl("，/cancel 取消", ", /cancel to stop"))
 	}
 	if problem != "" {
 		b.WriteString("\n\n❌ " + plugin.Escape(problem))
 	}
 	v.Text = b.String()
-	var last []plugin.Button
+	last := []plugin.Button{s.back("h:" + name)}
 	if !st.IsDefault(set.Key) {
 		last = append(last, plugin.Btn(s.tl("↺ 恢复默认", "↺ Default"), "r:"+name+":"+set.Key))
 	}
-	last = append(last, plugin.Btn(s.tl("« 返回", "« Back"), "h:"+name))
 	v.Buttons = append(v.Buttons, last)
 	return v
 }
