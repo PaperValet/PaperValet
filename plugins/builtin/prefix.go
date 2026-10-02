@@ -72,7 +72,19 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	}
 	p.set = set
 	p.apply()
-	return nil
+	// The old command is gone; a hidden stub points to the panel.
+	return p.mgr.RegisterCommand(&plugin.Command{
+		Name:        "prefix",
+		Description: "命令前缀（在机器人面板设置）",
+		DescEN:      "Command prefixes (set in the bot panel)",
+		Usage:       "prefix",
+		UsageEN:     "prefix",
+		Plugin:      p.Name(),
+		Category:    "admin",
+		OwnerOnly:   true,
+		Hidden:      true,
+		Handler:     panelHint,
+	})
 }
 
 // Prefixes returns main first, then the extras without duplicates.
@@ -95,6 +107,13 @@ func (p *PrefixPlugin) Prefixes() []string {
 }
 
 func (p *PrefixPlugin) apply() { p.mgr.Commands().SetPrefixes(p.Prefixes()) }
+
+// panelHint is the reply of the hidden redirect command.
+func panelHint(ctx *plugin.CommandContext) error {
+	return ctx.Edit(ctx.Tlocal(
+		"🔧 前缀设置挪到机器人的 /menu 按钮面板了",
+		"🔧 Prefixes now live in the bot's /menu panel"))
+}
 
 func (p *PrefixPlugin) Start(_ context.Context) error { return nil }
 func (p *PrefixPlugin) Stop(_ context.Context) error  { return nil }
