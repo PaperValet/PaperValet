@@ -44,37 +44,38 @@ func TestPanelEditsSettings(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	menu := s.menuView()
+	menu := s.listView("b", 0)
 	if !hasButton(menu, "h:demo") {
-		t.Fatalf("menu misses plugin: %+v", menu.Buttons)
+		t.Fatalf("list misses plugin: %+v", menu.Buttons)
 	}
-	v, _, err := s.dispatch(ctx, "h:demo", 1)
-	if err != nil || !hasButton(v, "e:demo:on") || !hasButton(v, "m") {
+	v, _, err := s.dispatch(ctx, "h:demo", target{msgID: 1})
+	if err != nil || !hasButton(v, "e:demo:on") || !hasButton(v, "l:b:0") {
 		t.Fatalf("plugin view: %v %+v", err, v)
 	}
-	if _, _, err := s.dispatch(ctx, "e:demo:on", 1); err != nil || !st.Bool("on") {
+	if _, _, err := s.dispatch(ctx, "e:demo:on", target{msgID: 1}); err != nil || !st.Bool("on") {
 		t.Fatal("toggle did not flip")
 	}
-	v, _, _ = s.dispatch(ctx, "e:demo:mode", 1)
+	v, _, _ = s.dispatch(ctx, "e:demo:mode", target{msgID: 1})
 	if !hasButton(v, "c:demo:mode:1") {
 		t.Fatalf("choice buttons missing: %+v", v.Buttons)
 	}
-	if _, _, err := s.dispatch(ctx, "c:demo:mode:1", 1); err != nil || st.String("mode") != "b" {
+	if _, _, err := s.dispatch(ctx, "c:demo:mode:1", target{msgID: 1}); err != nil || st.String("mode") != "b" {
 		t.Fatal("choice not stored")
 	}
-	if _, _, err := s.dispatch(ctx, "c:demo:mode:9", 1); err == nil {
-		t.Fatal("out of range choice accepted")
+	// A stale choice index redraws the picker instead of storing anything.
+	if v, notice, err := s.dispatch(ctx, "c:demo:mode:9", target{msgID: 1}); err != nil || notice == "" || !hasButton(v, "c:demo:mode:0") || st.String("mode") != "b" {
+		t.Fatalf("stale choice: %v %q", err, notice)
 	}
-	v, _, _ = s.dispatch(ctx, "e:demo:mode", 1)
+	v, _, _ = s.dispatch(ctx, "e:demo:mode", target{msgID: 1})
 	if !hasButton(v, "r:demo:mode") {
 		t.Fatal("reset offered only for changed values")
 	}
-	if _, _, err := s.dispatch(ctx, "r:demo:mode", 1); err != nil || st.String("mode") != "a" {
+	if _, _, err := s.dispatch(ctx, "r:demo:mode", target{msgID: 1}); err != nil || st.String("mode") != "a" {
 		t.Fatal("reset failed")
 	}
 
 	// Typed number: edit arms a pending answer for the panel message.
-	s.dispatch(ctx, "e:demo:n", 7)
+	s.dispatch(ctx, "e:demo:n", target{msgID: 7})
 	p := s.currentPending()
 	if p == nil || p.key != "n" || p.msgID != 7 || p.page {
 		t.Fatalf("pending = %+v", p)
@@ -88,9 +89,9 @@ func TestPanelEditsSettings(t *testing.T) {
 	if s.currentPending() != nil || st.Int("n") != 4 {
 		t.Fatalf("answer not stored: %d", st.Int("n"))
 	}
-	s.dispatch(ctx, "e:demo:n", 7)
+	s.dispatch(ctx, "e:demo:n", target{msgID: 7})
 	// Leaving the screen cancels it.
-	s.dispatch(ctx, "m", 7)
+	s.dispatch(ctx, "m", target{msgID: 7})
 	if s.currentPending() != nil {
 		t.Fatal("pending survived navigation")
 	}
@@ -119,9 +120,12 @@ func TestPageRoutingAndAsk(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	// No settings: the plugin entry opens the page directly.
-	v, _, err := s.dispatch(ctx, "h:demo", 3)
-	if err != nil || !hasButton(v, "p:demo:hi") || !hasButton(v, "m") {
+	// The plugin screen links to its page.
+	if v, _, _ := s.dispatch(ctx, "h:demo", target{msgID: 3}); !hasButton(v, "p:demo") {
+		t.Fatalf("page entry missing: %+v", v.Buttons)
+	}
+	v, _, err := s.dispatch(ctx, "p:demo", target{msgID: 3})
+	if err != nil || !hasButton(v, "p:demo:hi") || !hasButton(v, "h:demo") {
 		t.Fatalf("page view: %v %+v", err, v)
 	}
 	for _, row := range v.Buttons {
@@ -134,11 +138,11 @@ func TestPageRoutingAndAsk(t *testing.T) {
 			}
 		}
 	}
-	_, notice, _ := s.dispatch(ctx, "p:demo:hi", 3)
+	_, notice, _ := s.dispatch(ctx, "p:demo:hi", target{msgID: 3})
 	if notice != "!hello" {
 		t.Fatalf("notice = %q", notice)
 	}
-	s.dispatch(ctx, "p:demo:ask", 3)
+	s.dispatch(ctx, "p:demo:ask", target{msgID: 3})
 	if p := s.currentPending(); p == nil || !p.page || p.key != "name" || p.msgID != 3 {
 		t.Fatalf("ask pending = %+v", p)
 	}
@@ -149,19 +153,6 @@ func TestPageRoutingAndAsk(t *testing.T) {
 	s.RemovePlugin("demo")
 	if s.page("demo") != nil || s.currentPending() != nil {
 		t.Fatal("unload left state behind")
-	}
-}
-
-func TestPinnedFirst(t *testing.T) {
-	s := newTestService(t)
-	for _, n := range []string{"zeta", "alpha", "lang"} {
-		if _, err := s.Settings(&plugin.SettingsSpec{Plugin: n, Settings: []plugin.Setting{{Key: "k", Label: "K"}}}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	s.SetPinned([]string{"lang"})
-	if got := strings.Join(s.entries(), ","); got != "lang,alpha,zeta" {
-		t.Fatalf("order = %s", got)
 	}
 }
 
