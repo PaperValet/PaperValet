@@ -111,6 +111,12 @@ type Host interface {
 	Send(ctx context.Context, chatID int64, text string, replyTo int) (int, error)
 	// Lang is the active language for userID: zh-CN or en-US.
 	Lang(userID int64) string
+	// Settings registers the plugin's settings panel (spec.Plugin must be
+	// the plugin name) and returns its values. Call it from Init. Options
+	// are edited in the bot panel, never through commands.
+	Settings(spec *SettingsSpec) (Settings, error)
+	// Bot returns the companion bot scoped to the named plugin.
+	Bot(plugin string) Bot
 }
 
 // RegistryProvider provides command registry access.
