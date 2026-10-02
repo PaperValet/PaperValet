@@ -11,6 +11,7 @@ import (
 
 const (
 	EventMessage   = "message"
+	EventEdit      = "message_edit"
 	EventCommand   = "command"
 	EventRawUpdate = "raw_update"
 	EventShutdown  = "shutdown"
