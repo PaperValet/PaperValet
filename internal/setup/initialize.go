@@ -14,11 +14,12 @@ import (
 
 	"github.com/gotd/td/telegram"
 
+	"github.com/TiaraBasori/PaperValet/internal/bot"
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
 )
 
-const totalSteps = 5
+const totalSteps = 6
 
 var hashRe = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
 
@@ -31,6 +32,8 @@ type Options struct {
 	Home      string // data home, already resolved
 	Command   string // registered shell command name
 	NewClient ClientFactory
+	// NewBotClient builds the companion bot client for a config.
+	NewBotClient ClientFactory
 }
 
 // guessLang picks the starting language from the existing config or $LANG.
@@ -87,7 +90,7 @@ func Initialize(ctx context.Context, opt Options) error {
 	// 1. Language. Shown bilingually because nothing is chosen yet.
 	u.Title("PaperValet · " + u.cat.T(i18n.ZhCN, "setup.title") + " / " + u.cat.T(i18n.EnUS, "setup.title"))
 	u.Blank()
-	u.line(u.paint(ansiBold, "[1/5] 语言 / Language"))
+	u.line(u.paint(ansiBold, fmt.Sprintf("[1/%d] 语言 / Language", totalSteps)))
 	langs := []i18n.Lang{i18n.ZhCN, i18n.EnUS}
 	idx, err := u.Choose([]string{"简体中文", "English"}, guessLang(cfg), "请输入 1 或 2 / Enter 1 or 2")
 	if err != nil {
@@ -133,7 +136,12 @@ func Initialize(ctx context.Context, opt Options) error {
 		return err
 	}
 
-	// 5. Service.
+	// 5. Companion bot.
+	if err := setupBot(ctx, u, opt, cfg, cfgPath); err != nil {
+		return err
+	}
+
+	// 6. Service.
 	return offerService(u, opt)
 }
 
@@ -221,9 +229,59 @@ func checkSession(ctx context.Context, u *UI, opt Options, cfg *config.Config) (
 	return relogin, nil
 }
 
+// setupBot asks for the bot token and checks it by logging the bot in.
+func setupBot(ctx context.Context, u *UI, opt Options, cfg *config.Config, cfgPath string) error {
+	u.Step(5, totalSteps, "setup.step_bot")
+	u.Hint(u.T("setup.bot_hint"))
+	def := cfg.Telegram.BotToken
+	if !config.BotTokenRe.MatchString(def) {
+		def = ""
+	}
+	for {
+		token, err := u.AskMasked(u.T("setup.bot_token"), def, config.BotTokenRe.MatchString, "setup.bot_token_invalid")
+		if err != nil {
+			return err
+		}
+		resolved := *cfg
+		resolved.Telegram.BotToken = token
+		if resolved.Telegram.BotSessionFile == "" {
+			resolved.Telegram.BotSessionFile = "bot_session.json"
+		}
+		if !filepath.IsAbs(resolved.Telegram.BotSessionFile) {
+			resolved.Telegram.BotSessionFile = filepath.Join(opt.Home, resolved.Telegram.BotSessionFile)
+		}
+		u.Hint(u.T("setup.connecting"))
+		client := opt.NewBotClient(&resolved)
+		var name string
+		err = client.Run(ctx, func(ctx context.Context) error {
+			self, err := bot.Login(ctx, client, token)
+			if err != nil {
+				return err
+			}
+			name = "@" + self.Username
+			return nil
+		})
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+		if err != nil {
+			u.Err(u.T("setup.bot_failed", err))
+			def = ""
+			continue
+		}
+		cfg.Telegram.BotToken = token
+		if err := cfg.Save(cfgPath); err != nil {
+			return err
+		}
+		u.OK(u.T("setup.bot_ok", name))
+		u.Hint(u.T("setup.bot_next", name))
+		return nil
+	}
+}
+
 func offerService(u *UI, opt Options) error {
 	runCmd := opt.Command + " run"
-	u.Step(5, totalSteps, "setup.step_service")
+	u.Step(6, totalSteps, "setup.step_service")
 	want, err := u.Confirm(u.T("setup.service_ask"), true)
 	if err != nil {
 		return err
