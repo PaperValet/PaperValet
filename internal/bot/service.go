@@ -34,6 +34,8 @@ type Options struct {
 	SessionFile string
 	PeersFile   string
 	Device      telegram.DeviceConfig
+	// Version is shown in the menu header.
+	Version string
 }
 
 // Service is the companion bot.
@@ -436,10 +438,10 @@ func (s *Service) edit(ctx context.Context, chatID int64, msgID int, v *View) er
 	plain, ents := plugin.ParseMarkdown(v.Text, noUsers)
 	req := &tg.MessagesEditMessageRequest{Peer: p, ID: msgID, Message: plain, NoWebpage: true}
 	req.SetEntities(ents)
+	// Without reply_markup the edit drops the keyboard; an empty inline
+	// markup is rejected with REPLY_MARKUP_INVALID.
 	if m := markup(v.Buttons); m != nil {
 		req.SetReplyMarkup(m)
-	} else {
-		req.SetReplyMarkup(&tg.ReplyInlineMarkup{})
 	}
 	_, err = s.api.MessagesEditMessage(ctx, req)
 	if err != nil && strings.Contains(err.Error(), "MESSAGE_NOT_MODIFIED") {
