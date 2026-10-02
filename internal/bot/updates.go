@@ -142,6 +142,7 @@ func (s *Service) onMessage(from int64, msgID int, text string) {
 	} else {
 		s.setPending(nil)
 		v, _ = s.infoView(p.plugin)
+		v.Text = "✅ " + s.tl("已保存", "Saved") + "\n\n" + v.Text
 	}
 	s.afterChange(lang)
 	s.showPanel(ctx, p.msgID, v)
@@ -161,11 +162,11 @@ func (s *Service) onCommand(ctx context.Context, cmd string) {
 		s.sendView(ctx, s.menuView())
 		return
 	case "cancel":
-		text := s.tl("没有在等你输入", "Nothing to cancel")
+		text := "⚪ " + s.tl("没有在等你输入", "Nothing to cancel")
 		if had {
-			text = s.tl("已取消", "Cancelled")
+			text = "↩️ " + s.tl("已取消输入", "Input cancelled")
 		}
-		s.sendView(ctx, &View{Text: text, Buttons: [][]plugin.Button{plugin.Row(plugin.Btn(s.tl("« 菜单", "« Menu"), "m"))}})
+		s.sendView(ctx, &View{Text: text, Buttons: [][]plugin.Button{plugin.Row(plugin.Btn(s.tl("‹ 菜单", "‹ Menu"), "m"))}})
 		return
 	}
 	s.mu.RLock()
@@ -229,7 +230,7 @@ func (s *Service) localErr(err error) string {
 }
 
 func (s *Service) errView(err error) *View {
-	return &View{Text: "❌ " + plugin.Escape(s.localErr(err)), Buttons: [][]plugin.Button{plugin.Row(plugin.Btn(s.tl("« 菜单", "« Menu"), "m"))}}
+	return &View{Text: "❌ **" + s.tl("出错了", "Something went wrong") + "**\n" + quote([]string{plugin.Escape(s.localErr(err))}), Buttons: [][]plugin.Button{plugin.Row(plugin.Btn(s.tl("‹ 菜单", "‹ Menu"), "m"))}}
 }
 
 func (s *Service) sendView(ctx context.Context, v *View) {
