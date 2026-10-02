@@ -164,7 +164,7 @@ func (p *HelpPlugin) groups() ([]string, map[string][]*interfaces.Command) {
 
 // builtinOrder groups related built-ins: everyday tools first, admin last.
 var builtinOrder = []string{
-	"help", "ping", "status", "info", "re", "dme", "exec",
+	"help", "ping", "status", "info", "dc", "re", "dme", "exec",
 	"apt", "reload", "restart", "update", "backup", "sudo", "alias", "log",
 }
 
