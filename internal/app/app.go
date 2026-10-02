@@ -85,7 +85,6 @@ func New(cfg *config.Config) (*App, error) {
 	mediaMgr := media.NewManager(api, resolver, "downloads")
 	cmdReg.SetMediaSender(mediaMgr)
 	botSvc := bot.New(BotOptions(cfg), settings.NewRegistry("data"), i18nMgr)
-	botSvc.SetPinned(builtinPanels)
 	cmdReg.SetBot(botSvc)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
@@ -96,6 +95,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	pluginLoader := loader.NewLoader(pluginsDir, pluginMgr)
 	pluginLoader.SetRepoURL(cfg.Bot.PluginRepo)
+	botSvc.SetCatalog(&catalog{mgr: pluginMgr, commands: cmdReg, loader: pluginLoader})
 
 	app := &App{
 		cfg:          cfg,
@@ -116,9 +116,6 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	return app, nil
 }
-
-// builtinPanels are the built-in settings panels, shown first in the bot menu.
-var builtinPanels = []string{"lang", "prefix", "sudo", "log"}
 
 // device is the client identity both accounts present to Telegram.
 var device = telegram.DeviceConfig{
