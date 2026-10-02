@@ -34,12 +34,13 @@ Some tests `t.Chdir` into a temp dir because plugins persist to `data/`. Do the 
 - **Markdown output.** Replies are Telegram Markdown. Escape anything user-controlled with `plugin.Escape`, `plugin.Code` or `esc` in built-ins. Backslash escapes do not work inside code spans.
 - **Shared card style.** Built-ins format output with the helpers in `plugins/builtin/ui.go` (`newCard`, `field`, `hint`, `okLine`…). Keep new output consistent with them.
 - **No aliases.** External plugins register no command aliases and accept one spelling per subcommand. The only built-in alias is `help` → `h`. Users make their own shortcuts with `.alias`.
-- **State under `data/`.** Built-ins write `data/<file>`; plugins use `data/<plugin>/` (`mgr.Host().DataDir`). Files with secrets are `0600`.
+- **Options live in the bot panel.** Never add a command or subcommand that sets an option (`x set`, `x config`, `x on|off`). Declare it with `mgr.Host().Settings(spec)`; the companion bot renders it under `/menu`. Lists and anything richer go in a bot page (`Host().Bot(name).SetPage`). Commands are for actions. Validation errors use `plugin.Invalid(zh, en)`.
+- **State under `data/`.** Built-ins write `data/<file>`; plugins use `data/<plugin>/` (`mgr.Host().DataDir`). Settings land in `data/<plugin>/settings.json`. Files with secrets are `0600`.
 - **Channels need channel APIs.** In supergroups and channels use `channels.deleteMessages` and friends; `messages.*` variants silently do nothing there. `ctx.DeleteMessages` already handles it.
 
 ## Built-in plugins
 
-`plugins/builtin/`, registered in `internal/app/app.go` (`registerBuiltins`): ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log. Adding one means also adding it to `builtinOrder` in `help.go` and the fixture in `help_test.go`, which checks that `help` lists every command.
+`plugins/builtin/`, registered in `internal/app/app.go` (`registerBuiltins`): ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log. lang and prefix are settings only and register no command. Adding one with commands means also adding it to `builtinOrder` in `help.go` and the fixture in `help_test.go`, which checks that `help` lists every command. A built-in with a settings panel also goes in `builtinPanels` in `app.go` so it sorts first in `/menu`.
 
 ## The SDK and external plugins
 
