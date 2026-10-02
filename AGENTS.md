@@ -40,7 +40,7 @@ Some tests `t.Chdir` into a temp dir because plugins persist to `data/`. Do the 
 
 ## Built-in plugins
 
-`plugins/builtin/`, registered in `internal/app/app.go` (`registerBuiltins`): ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log. lang and prefix are settings only and register no command. Adding one with commands means also adding it to `builtinOrder` in `help.go` and the fixture in `help_test.go`, which checks that `help` lists every command. A built-in with a settings panel also goes in `builtinPanels` in `app.go` so it sorts first in `/menu`.
+`plugins/builtin/`, registered in `internal/app/app.go` (`registerBuiltins`): ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, lang, log. lang and prefix are settings only and register no command. Adding one with commands means also adding it to `builtinOrder` in `help.go` and the fixture in `help_test.go`, which checks that `help` lists every command.
 
 ## The SDK and external plugins
 
