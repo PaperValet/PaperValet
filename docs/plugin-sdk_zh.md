@@ -102,6 +102,39 @@ h.Send(ctx, chatID, md, 0)   // 返回新消息 id
 h.Lang(userID)               // "zh-CN" 或 "en-US"
 h.Settings(spec)             // 注册设置面板，见下文
 h.Bot("hello")               // 配套机器人，限定在本插件范围
+h.Prefixes()                 // 命令前缀，主前缀在前
+```
+
+### 监听消息
+
+自动回复、验证码、自动删除这类功能要看到所有消息，不只是命令。`Listen` 会在命令执行前收到每条新消息和编辑（收发都有，命令消息也在内）：
+
+```go
+func (p *Hello) Start(context.Context) error {
+	p.stop = p.host.Listen("hello", func(ctx context.Context, m *plugin.MessageEvent, edited bool) {
+		if edited || m.IsOut || !strings.Contains(m.Text, "hi") {
+			return
+		}
+		go p.host.Send(context.Background(), m.ChatID, "👋", m.Message.ID)
+	})
+	return nil
+}
+
+func (p *Hello) Stop(context.Context) error { p.stop(); return nil }
+```
+
+监听器在更新链路上依次执行，要尽快返回，慢活放进 goroutine。卸载插件时会自动移除。
+
+`h.RunCommand(ctx, ev)` 以主人身份在 `ev` 所在聊天执行 `ev.Text` 命令，比如定时跑 `.status`：先发出文本，再传 `plugin.EventFromMessage(sent)`。
+
+### 消息工具
+
+```go
+ctx.ReplyMessage()                              // 被回复的 *tg.Message
+plugin.GetMessages(ctx, api, peer, ids...)      // 自动区分频道的拉取
+plugin.DeleteMessages(ctx, api, peer, ids...)   // 自动区分频道的删除，不限条数
+plugin.EventFromMessage(msg)                    // *tg.Message → *MessageEvent（给 Downloader、RunCommand 用）
+plugin.ChatIDOf(peer), plugin.SenderID(msg)
 ```
 
 ## 设置：走机器人面板，不走命令
