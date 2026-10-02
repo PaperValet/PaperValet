@@ -373,10 +373,19 @@ func markup(rows [][]plugin.Button) tg.ReplyMarkupClass {
 	for _, row := range rows {
 		var kr tg.KeyboardButtonRow
 		for _, b := range row {
+			st, styled := style(b.Style)
 			if b.URL != "" {
-				kr.Buttons = append(kr.Buttons, &tg.KeyboardButtonURL{Text: b.Text, URL: b.URL})
+				k := &tg.KeyboardButtonURL{Text: b.Text, URL: b.URL}
+				if styled {
+					k.SetStyle(st)
+				}
+				kr.Buttons = append(kr.Buttons, k)
 			} else {
-				kr.Buttons = append(kr.Buttons, &tg.KeyboardButtonCallback{Text: b.Text, Data: []byte(b.Data)})
+				k := &tg.KeyboardButtonCallback{Text: b.Text, Data: []byte(b.Data)}
+				if styled {
+					k.SetStyle(st)
+				}
+				kr.Buttons = append(kr.Buttons, k)
 			}
 		}
 		if len(kr.Buttons) > 0 {
@@ -384,6 +393,19 @@ func markup(rows [][]plugin.Button) tg.ReplyMarkupClass {
 		}
 	}
 	return m
+}
+
+// style maps a button color to Telegram's keyboard button style.
+func style(s plugin.ButtonStyle) (tg.KeyboardButtonStyle, bool) {
+	switch s {
+	case plugin.StylePrimary:
+		return tg.KeyboardButtonStyle{BgPrimary: true}, true
+	case plugin.StyleSuccess:
+		return tg.KeyboardButtonStyle{BgSuccess: true}, true
+	case plugin.StyleDanger:
+		return tg.KeyboardButtonStyle{BgDanger: true}, true
+	}
+	return tg.KeyboardButtonStyle{}, false
 }
 
 func (s *Service) send(ctx context.Context, chatID int64, v *View) (int, error) {
