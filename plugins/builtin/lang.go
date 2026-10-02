@@ -48,23 +48,7 @@ func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	}
 	p.set = set
 	p.apply()
-	// The old command is gone; a hidden stub points to the panel.
-	return mgr.RegisterCommand(&plugin.Command{
-		Name:        "lang",
-		Description: "界面语言（在机器人面板设置）",
-		DescEN:      "Interface language (set in the bot panel)",
-		Usage:       "lang",
-		UsageEN:     "lang",
-		Plugin:      p.Name(),
-		Category:    "core",
-		OwnerOnly:   true,
-		Hidden:      true,
-		Handler: func(ctx *plugin.CommandContext) error {
-			return ctx.Edit(ctx.Tlocal(
-				"🌐 语言设置挪到机器人的 /menu 按钮面板了",
-				"🌐 The language now lives in the bot's /menu panel"))
-		},
-	})
+	return nil
 }
 
 func (p *LangPlugin) apply() {
