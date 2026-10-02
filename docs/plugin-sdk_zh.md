@@ -56,7 +56,7 @@ func (p *Hello) Stop(context.Context) error  { return nil }
 
 ## 生命周期
 
-`New` → `Init`（注册命令）→ `Start` → … → `Stop`。
+`New` → `Init`（注册命令、设置和页面）→ `Start` → … → `Stop`。
 
 后台 goroutine 在 `Start` 里启动，在 `Stop` 里退出。`apt rm` 和 `reload` 也会调用 `Stop`，不只是关机时。
 
@@ -100,7 +100,84 @@ h.Logger("hello")
 h.DataDir("hello")           // data/hello，按需创建
 h.Send(ctx, chatID, md, 0)   // 返回新消息 id
 h.Lang(userID)               // "zh-CN" 或 "en-US"
+h.Settings(spec)             // 注册设置面板，见下文
+h.Bot("hello")               // 配套机器人，限定在本插件范围
 ```
+
+## 设置：走机器人面板，不走命令
+
+**规范：选项一律不用命令设置。** 不要 `hello set x`、`hello config`，也不要开关子命令。把选项声明一次，PaperValet 会在配套机器人（`/menu`）里渲染成按钮面板。命令只负责执行动作。
+
+```go
+func (p *Hello) Init(_ context.Context, mgr plugin.Manager) error {
+	set, err := mgr.Host().Settings(&plugin.SettingsSpec{
+		Plugin: "hello", Title: "👋 打招呼", TitleEN: "👋 Hello",
+		Settings: []plugin.Setting{
+			{Key: "emoji", Label: "表情", LabelEN: "Emoji", Kind: plugin.SettingToggle, Default: true},
+			{Key: "style", Label: "风格", LabelEN: "Style", Kind: plugin.SettingChoice, Default: "plain",
+				Choices: []plugin.Choice{{Value: "plain", Label: "普通", LabelEN: "Plain"}, {Value: "bold", Label: "加粗", LabelEN: "Bold"}}},
+			{Key: "name", Label: "默认名字", LabelEN: "Default name", Kind: plugin.SettingText,
+				Validate: func(s string) (string, error) {
+					if len(s) > 32 {
+						return "", plugin.Invalid("太长了", "too long")
+					}
+					return s, nil
+				}},
+			{Key: "times", Label: "次数", LabelEN: "Times", Kind: plugin.SettingNumber, Default: 1, Min: 1, Max: 5},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	p.set = set // 用 set.Bool("emoji")、set.String("style")、set.Int("times") 读
+	...
+}
+```
+
+| Kind | 面板里 | Go 类型 |
+|---|---|---|
+| `SettingToggle` | 点一下切换 | `bool` |
+| `SettingChoice` | 每个选项一个按钮 | `string` |
+| `SettingText` | 主人直接发文字，`Validate` 校验并规范化 | `string` |
+| `SettingNumber` | 主人发数字，限制在 `Min..Max` | `int` |
+
+值存在 `data/<插件>/settings.json`。用到时再读，运行中随时会变。需要立即响应就用 `OnChange(key)`，每次改动后调用。`Secret` 会在面板里打码。校验错误用 `plugin.Invalid(中文, 英文)`，主人看到的是自己的语言。
+
+## 机器人页面和消息
+
+比一个选项复杂的东西，比如带逐项按钮的列表、仪表盘、确认框，就加一个页面。它出现在 `/menu` 里该插件下面，设置了 `Command` 还能用 `/<命令>` 直接打开。
+
+```go
+b := mgr.Host().Bot("hello")
+b.SetPage(&plugin.Page{
+	Title: "收到的问候", TitleEN: "Greetings",
+	Handle: func(c *plugin.BotContext) (*plugin.View, error) {
+		switch {
+		case strings.HasPrefix(c.Data, "rm:"):
+			remove(strings.TrimPrefix(c.Data, "rm:"))
+			c.Toast(c.Tlocal("已删除", "Deleted"))
+		case c.Data == "add":
+			c.Ask("new") // 主人接下来发的文字会以 Data "new" 回到这里
+			return &plugin.View{Text: c.Tlocal("发送名字", "Send a name")}, nil
+		case c.Data == "new":
+			add(c.Input)
+		}
+		v := &plugin.View{Text: "👋 " + c.Tlocal("问候", "Greetings")}
+		for _, g := range list() {
+			v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn("🗑 "+g, "rm:"+g)))
+		}
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn("➕", "add")))
+		return v, nil
+	},
+})
+```
+
+- 页面打开时 `Data` 为空，之后是被点按钮的 data（最多 32 字节，已按插件隔离，不用自己加前缀）。
+- 返回按钮由机器人自动加。`Toast` 和 `Alert` 用来回应点击。
+- `b.Notify(ctx, view)` 发给主人，`b.Send` 发到机器人能发言的任意聊天，`b.Edit` 修改它发过的消息。这些消息上的按钮同样回到 `Handle`。
+- 机器人上线前调用会返回 `plugin.ErrBotNotReady`。`SetPage` 随时可调。
+- 插件卸载时页面和设置自动移除，保存的值保留。
+- 机器人只回应主人。
 
 ## Markdown
 
