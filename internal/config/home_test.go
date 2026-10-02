@@ -58,6 +58,7 @@ func TestDefaultLoadsBack(t *testing.T) {
 	cfg := Default()
 	cfg.Telegram.APIID = 1
 	cfg.Telegram.APIHash = "0123456789abcdef0123456789abcdef"
+	cfg.Telegram.BotToken = "123456789:AAHhkcC0-psN4RMtfJ4NJ2aaHTlK-YClwnX"
 	path := filepath.Join(t.TempDir(), FileName)
 	if err := cfg.Save(path); err != nil {
 		t.Fatal(err)
