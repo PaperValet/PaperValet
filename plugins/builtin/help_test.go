@@ -5,11 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/TiaraBasori/PaperValet/internal/bot"
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	pluginmgr "github.com/TiaraBasori/PaperValet/internal/plugin"
+	"github.com/TiaraBasori/PaperValet/internal/settings"
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
@@ -19,6 +21,7 @@ func newHelpFixture(t *testing.T) (*HelpPlugin, *pluginmgr.Manager) {
 	t.Chdir(t.TempDir()) // plugins persist to data/
 	bus := eventbus.New(nil)
 	reg := command.NewRegistry([]string{"."}, bus, nil, nil, 1, i18n.NewManager(i18n.CoreCatalog()))
+	reg.SetBot(bot.New(bot.Options{}, settings.NewRegistry("data"), nil))
 	mgr := pluginmgr.NewManager(reg, bus)
 	help := NewHelp()
 	for _, p := range []interfaces.Plugin{help, NewPing(), NewRestart(), NewExec(), NewPrune(), NewRe(), NewInfo(), NewAlias(),
