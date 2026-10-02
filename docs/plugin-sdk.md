@@ -173,6 +173,7 @@ b.SetPage(&plugin.Page{
 ```
 
 - `Data` is `""` when the page opens, otherwise the pressed button's data (32 bytes max, scoped to your plugin, so no prefixes needed).
+- Color special buttons with `.Primary()` (main action), `.Success()` (add, confirm) or `.Danger()` (remove), e.g. `plugin.Btn("🗑", "rm:x").Danger()`. Clients without button colors show them plain.
 - The bot adds the back button. `Toast` and `Alert` answer the tap.
 - `b.Notify(ctx, view)` messages the owner, `b.Send` posts to any chat the bot can write to, `b.Edit` updates a message it sent. Buttons on those messages also come back to `Handle`.
 - Calls fail with `plugin.ErrBotNotReady` until the bot is online. `SetPage` works any time.
