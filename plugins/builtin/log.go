@@ -2,7 +2,6 @@ package builtin
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,126 +15,105 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// LogPlugin manages runtime logging: level control + log file delivery.
-// Absorbs the old sendlog plugin.
+// LogPlugin delivers log files. The level and the delivery target are
+// settings in the bot panel; the command only performs actions.
 type LogPlugin struct {
-	configFile string
-	target     string // "me" (saved messages) or a numeric chat ID
+	set plugin.Settings
 }
 
-func NewLog() *LogPlugin {
-	return &LogPlugin{
-		configFile: "data/sendlog_config.json",
-		target:     "me",
-	}
-}
+func NewLog() *LogPlugin { return &LogPlugin{} }
 
 func (p *LogPlugin) Name() string        { return "log" }
 func (p *LogPlugin) Description() string { return "运行日志" }
-func (p *LogPlugin) DescEN() string      { return "Logs: send, tail, level" }
+func (p *LogPlugin) DescEN() string      { return "Logs: send, tail, clean" }
+
+func validLogTarget(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "me" {
+		return s, nil
+	}
+	if id, err := strconv.ParseInt(s, 10, 64); err == nil && id != 0 {
+		return s, nil
+	}
+	return "", plugin.Invalid("填 me 或数字 chatID", "me or a numeric chat ID")
+}
 
 func (p *LogPlugin) Init(_ context.Context, mgr plugin.Manager) error {
-	p.loadConfig()
-	cmds := []*interfaces.Command{
-		{
-			Name:        "loglevel",
-			Description: "调日志级别",
-			DescEN:      "Set log level",
-			Usage: `loglevel [debug|info|warn|error]
-
-**机制**
-• 不带参数显示当前级别
-• 立即生效，只影响本次运行；重启后回到配置文件里的级别
-• 排查问题时临时切 debug，用完切回 info`,
-			UsageEN: `loglevel [debug|info|warn|error]
-
-**How it works**
-• No argument shows the current level
-• Applies immediately for this run only; restart returns to the config value
-• Switch to debug while debugging, back to info afterwards`,
-			Plugin:    p.Name(),
-			Category:  "admin",
-			OwnerOnly: true,
-			Handler:   p.handleLogLevel,
+	set, err := mgr.Host().Settings(&plugin.SettingsSpec{
+		Plugin:  p.Name(),
+		Title:   "📋 日志",
+		TitleEN: "📋 Logs",
+		Settings: []plugin.Setting{
+			{
+				Key: "level", Label: "日志级别", LabelEN: "Log level",
+				Hint:   "排查问题时切 debug，用完切回 info",
+				HintEN: "Switch to debug while debugging, back to info afterwards",
+				Kind:   plugin.SettingChoice, Default: strings.ToLower(logger.GetLevel()),
+				Choices: []plugin.Choice{
+					{Value: "debug", Label: "debug"}, {Value: "info", Label: "info"},
+					{Value: "warn", Label: "warn"}, {Value: "error", Label: "error"},
+				},
+			},
+			{
+				Key: "target", Label: "日志发到", LabelEN: "Send logs to",
+				Hint:   "me 是收藏夹，也可以填数字 chatID",
+				HintEN: "me is Saved Messages, or a numeric chat ID",
+				Kind:   plugin.SettingText, Default: "me", Validate: validLogTarget,
+			},
 		},
-		{
-			Name:        "sendlog",
-			Description: "发送日志",
-			DescEN:      "Send logs",
-			Usage: "sendlog · sendlog tail [行数] · sendlog set <me|chatID> · sendlog clean\n" +
-				"\n" +
-				"**示例**\n" +
-				"• `sendlog`  把最新日志文件发到收藏夹\n" +
-				"• `sendlog tail 50`  直接在聊天里看最后 50 行\n" +
-				"• `sendlog set -100123`  改成发到指定聊天\n" +
-				"• `sendlog clean`  删除日志文件\n" +
-				"\n" +
-				"**机制**\n" +
-				"• 在 ./logs、~/.pm2/logs、/var/log/papervalet 里找文件名含 paper 的 .log\n" +
-				"• 超过 50MB 不发送，请用 tail\n" +
-				"• systemd 运行时日志在 journald，用 `exec journalctl -u 服务名 -n 50` 查看",
-			UsageEN: "sendlog · sendlog tail [lines] · sendlog set <me|chatID> · sendlog clean\n" +
-				"\n" +
-				"**Examples**\n" +
-				"• `sendlog`  send the newest log file to Saved Messages\n" +
-				"• `sendlog tail 50`  print the last 50 lines here\n" +
-				"• `sendlog set -100123`  send to another chat instead\n" +
-				"• `sendlog clean`  delete log files\n" +
-				"\n" +
-				"**How it works**\n" +
-				"• Looks for *.log files containing \"paper\" in ./logs, ~/.pm2/logs and /var/log/papervalet\n" +
-				"• Files over 50MB are not sent; use tail\n" +
-				"• Under systemd logs go to journald: `exec journalctl -u service -n 50`",
-			Plugin:    p.Name(),
-			Category:  "admin",
-			OwnerOnly: true,
-			Handler:   p.handleSendLog,
+		OnChange: func(key string) {
+			if key == "level" {
+				p.applyLevel()
+			}
 		},
+	})
+	if err != nil {
+		return err
 	}
-	for _, cmd := range cmds {
-		if err := mgr.RegisterCommand(cmd); err != nil {
-			return err
-		}
-	}
-	return nil
+	p.set = set
+	p.applyLevel()
+	return mgr.RegisterCommand(&interfaces.Command{
+		Name:        "sendlog",
+		Description: "发送日志",
+		DescEN:      "Send logs",
+		Usage: "sendlog · sendlog tail [行数] · sendlog clean\n" +
+			"\n" +
+			"**示例**\n" +
+			"• `sendlog`  把最新日志文件发到设置的目标（默认收藏夹）\n" +
+			"• `sendlog tail 50`  直接在聊天里看最后 50 行\n" +
+			"• `sendlog clean`  删除日志文件\n" +
+			"\n" +
+			"**机制**\n" +
+			"• 日志级别和发送目标在机器人面板里调\n" +
+			"• 在 ./logs、~/.pm2/logs、/var/log/papervalet 里找文件名含 paper 的 .log\n" +
+			"• 超过 50MB 不发送，请用 tail\n" +
+			"• systemd 运行时日志在 journald，用 `exec journalctl -u 服务名 -n 50` 查看",
+		UsageEN: "sendlog · sendlog tail [lines] · sendlog clean\n" +
+			"\n" +
+			"**Examples**\n" +
+			"• `sendlog`  send the newest log file to the configured target (Saved Messages by default)\n" +
+			"• `sendlog tail 50`  print the last 50 lines here\n" +
+			"• `sendlog clean`  delete log files\n" +
+			"\n" +
+			"**How it works**\n" +
+			"• Level and target are set in the bot panel\n" +
+			"• Looks for *.log files containing \"paper\" in ./logs, ~/.pm2/logs and /var/log/papervalet\n" +
+			"• Files over 50MB are not sent; use tail\n" +
+			"• Under systemd logs go to journald: `exec journalctl -u service -n 50`",
+		Plugin:    p.Name(),
+		Category:  "admin",
+		OwnerOnly: true,
+		Handler:   p.handleSendLog,
+	})
 }
 
 func (p *LogPlugin) Start(_ context.Context) error { return nil }
 func (p *LogPlugin) Stop(_ context.Context) error  { return nil }
 
-func (p *LogPlugin) loadConfig() {
-	data, err := os.ReadFile(p.configFile)
-	if err != nil {
-		return
+func (p *LogPlugin) applyLevel() {
+	if l := p.set.String("level"); parseZapLevel(l) != zapcore.InvalidLevel {
+		_ = logger.SetLevel(l)
 	}
-	var st struct {
-		Target string `json:"target"`
-	}
-	if json.Unmarshal(data, &st) == nil && st.Target != "" {
-		p.target = st.Target
-	}
-}
-
-func (p *LogPlugin) saveConfig() {
-	_ = os.MkdirAll(filepath.Dir(p.configFile), 0o755)
-	data, _ := json.MarshalIndent(map[string]string{"target": p.target}, "", "  ")
-	_ = os.WriteFile(p.configFile, data, 0o600)
-}
-
-func (p *LogPlugin) handleLogLevel(ctx *interfaces.CommandContext) error {
-	if ctx.ArgCount() == 0 {
-		return ctx.Edit(fmt.Sprintf("📝 **日志级别**\n\n当前: `%s`\n\n用法: `loglevel debug|info|warn|error`", logger.GetLevel()))
-	}
-
-	levelStr := strings.ToLower(ctx.GetArg(0))
-	if parseZapLevel(levelStr) == zapcore.InvalidLevel {
-		return ctx.Edit(fmt.Sprintf("❌ 无效级别: %s\n支持: debug, info, warn, error", levelStr))
-	}
-
-	if err := logger.SetLevel(levelStr); err != nil {
-		return ctx.Edit("❌ 设置失败: " + esc(err.Error()))
-	}
-	return ctx.Edit(fmt.Sprintf("✅ 日志级别已切换为: **%s**", levelStr))
 }
 
 func (p *LogPlugin) handleSendLog(ctx *interfaces.CommandContext) error {
@@ -148,26 +126,12 @@ func (p *LogPlugin) handleSendLog(ctx *interfaces.CommandContext) error {
 			}
 		}
 		return p.sendTail(ctx, lines)
-	case "set":
-		if ctx.ArgCount() < 2 {
-			return ctx.Edit("用法: sendlog set <me|chatID>")
-		}
-		target := ctx.GetArg(1)
-		if target != "me" {
-			var id int64
-			if _, err := fmt.Sscanf(target, "%d", &id); err != nil || id == 0 {
-				return ctx.Edit("❌ 目标无效: 只支持 `me` 或数字 chatID")
-			}
-		}
-		p.target = target
-		p.saveConfig()
-		return ctx.Edit(fmt.Sprintf("✅ 日志发送目标已设为: `%s`", target))
 	case "clean":
 		return p.cleanLogs(ctx)
 	case "":
 		return p.sendFile(ctx)
 	default:
-		return ctx.Edit("用法: sendlog [tail [行数]|set <me|chatID>|clean]")
+		return ctx.Edit(ctx.Tlocal("用法: `sendlog [tail [行数]|clean]`", "Usage: `sendlog [tail [lines]|clean]`"))
 	}
 }
 
@@ -188,11 +152,12 @@ func (p *LogPlugin) sendFile(ctx *interfaces.CommandContext) error {
 		return ctx.Edit(fmt.Sprintf("⚠️ 日志过大 (%dKB)，请用 `sendlog tail` 查看尾部", info.Size()/1024))
 	}
 
+	target := p.set.String("target")
 	chatID := ctx.Message.UserID
-	if p.target != "me" {
-		var id int64
-		if _, err := fmt.Sscanf(p.target, "%d", &id); err != nil || id == 0 {
-			return ctx.Edit("❌ 目标配置无效，请用 `sendlog set` 重新设置")
+	if target != "me" {
+		id, err := strconv.ParseInt(target, 10, 64)
+		if err != nil || id == 0 {
+			return ctx.Edit(ctx.Tlocal("❌ 发送目标无效，去机器人面板改一下", "❌ Invalid target, fix it in the bot panel"))
 		}
 		chatID = id
 	}
@@ -201,7 +166,7 @@ func (p *LogPlugin) sendFile(ctx *interfaces.CommandContext) error {
 		fmt.Sprintf("📋 %s (%dKB)", filepath.Base(logFile), info.Size()/1024), 0); err != nil {
 		return ctx.Edit("❌ 发送失败: " + esc(err.Error()))
 	}
-	return ctx.Edit(fmt.Sprintf("✅ 日志已发送到 `%s`", p.target))
+	return ctx.Edit(ctx.Tlocal("✅ 日志已发送到 ", "✅ Log sent to ") + plugin.Code(target))
 }
 
 // sendTail prints the last N lines of the newest log file into the chat.
