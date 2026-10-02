@@ -26,13 +26,15 @@ func NewParser(registry *Registry, bus *eventbus.Bus) *Parser {
 	}
 }
 
-// Start registers the message listener (userbot: outgoing only).
+// Start registers the message listener: plugin listeners see every
+// message and edit, commands run for the owner and sudo users.
 func (p *Parser) Start() {
 	p.bus.Subscribe(eventbus.EventMessage, func(ctx context.Context, event *eventbus.Event) error {
 		msg, ok := event.Data.(*interfaces.MessageEvent)
 		if !ok || msg == nil || msg.Message == nil {
 			return nil
 		}
+		p.registry.NotifyListeners(ctx, msg, false)
 		if !msg.IsOut && !p.registry.CanUseCommands(msg.UserID) {
 			return nil
 		}
@@ -46,5 +48,11 @@ func (p *Parser) Start() {
 		}
 		p.logger.Debug("dispatch", "name", name, "args", args)
 		return p.registry.ExecuteCommand(ctx, msg, name, args)
+	}, eventbus.WithPriority(100))
+	p.bus.Subscribe(eventbus.EventEdit, func(ctx context.Context, event *eventbus.Event) error {
+		if msg, ok := event.Data.(*interfaces.MessageEvent); ok && msg != nil && msg.Message != nil {
+			p.registry.NotifyListeners(ctx, msg, true)
+		}
+		return nil
 	}, eventbus.WithPriority(100))
 }
