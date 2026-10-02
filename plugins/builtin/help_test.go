@@ -24,7 +24,7 @@ func newHelpFixture(t *testing.T) (*HelpPlugin, *pluginmgr.Manager) {
 	reg.SetBot(bot.New(bot.Options{}, settings.NewRegistry("data"), nil))
 	mgr := pluginmgr.NewManager(reg, bus)
 	help := NewHelp()
-	for _, p := range []interfaces.Plugin{help, NewPing(), NewRestart(), NewExec(), NewPrune(), NewRe(), NewInfo(), NewAlias(),
+	for _, p := range []interfaces.Plugin{help, NewPing(), NewRestart(), NewExec(), NewPrune(), NewRe(), NewInfo(), NewDC(), NewAlias(),
 		NewApt(nil), NewBackup(), NewLog(), NewPrefix(), NewReload(nil), NewStatus("test", nil), NewSudo(), NewUpdate("test", nil)} {
 		if err := mgr.RegisterPlugin(p); err != nil {
 			t.Fatal(err)
