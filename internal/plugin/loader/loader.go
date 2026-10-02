@@ -322,7 +322,9 @@ func (l *Loader) InstallAndLoad(ctx context.Context, name string) error {
 	if l.IsLoaded(name) {
 		return fmt.Errorf("plugin %s: %w", name, ErrAlreadyInstalled)
 	}
-	if err := l.download(ctx, name); err != nil && !errors.Is(err, ErrAlreadyInstalled) {
+	// A file that is there but not loaded is broken or stale: fetch it again.
+	_ = os.Remove(filepath.Join(l.dir, name+".so"))
+	if err := l.download(ctx, name); err != nil {
 		return err
 	}
 	if err := l.load(ctx, filepath.Join(l.dir, name+".so")); err != nil {
