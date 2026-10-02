@@ -327,6 +327,12 @@ func (s *Service) dispatch(ctx context.Context, data string, at target) (*View, 
 	case "p":
 		name, pd, _ := strings.Cut(rest, ":")
 		return s.pageView(ctx, name, pd, "", at.msgID)
+	case "g":
+		n, _ := strconv.Atoi(rest)
+		return s.managerView(n), "", nil
+	case "o":
+		v, notice := s.manageView(rest)
+		return v, notice, nil
 	case "s":
 		pg, f, _ := strings.Cut(rest, ":")
 		n, _ := strconv.Atoi(pg)
