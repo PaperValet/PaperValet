@@ -6,6 +6,7 @@
 cmd/papervalet/        CLI: run, initialize, version
 internal/
   app/                 wiring, login, update handler
+  bot/                 companion bot: settings panels, plugin pages
   command/             parser, registry, middleware, plugin Host
   config/              config.json, data home, defaults
   eventbus/            pub/sub with priorities
@@ -15,6 +16,7 @@ internal/
   plugin/              plugin manager
   plugin/loader/       .so loader and apt downloads
   session/             SQLite session store
+  settings/            per-plugin settings store
   setup/               interactive initialize
 pkg/
   plugin/              public SDK, the only package plugins import
@@ -30,6 +32,14 @@ scripts/               installers
 2. `command.Parser` subscribes to `message`. It checks the sender (owner, or a sudo user's incoming message), strips a prefix, expands user aliases once, and matches the longest registered command.
 3. `command.Registry` builds a `CommandContext` and runs the handler through recovery, logging and rate-limit middleware. `OwnerOnly` commands are checked here.
 4. Handlers answer with `ctx.Edit` or `ctx.Reply`. Text is Telegram Markdown, converted to entities by `pkg/plugin.ParseMarkdown`.
+
+## Companion bot
+
+A second gotd client logs in with `telegram.bot_token` and runs beside the userbot; if it fails, the userbot keeps going. It answers only the owner. After login the userbot sends it `/start` once, because a bot cannot open a chat.
+
+The bot is the settings UI. Plugins declare options with `Host().Settings(spec)` (`internal/settings`, stored in `data/<plugin>/settings.json`) and the bot renders them as button panels under `/menu`. Plugins can also add one page each and post messages through `Host().Bot(name)`; callback data is namespaced per plugin. Unloading a plugin removes its panel and page.
+
+Options are never commands. lang and prefix have no command at all; sudo and log keep only their actions.
 
 ## Plugins
 
@@ -47,9 +57,9 @@ Go plugins cannot be unloaded. `reload` re-runs `Init`/`Start` on the loaded cod
 
 Everything lives in the data home (default `~/.papervalet`, the working directory of the process):
 
-- `config.json`: API credentials and settings, mode 0600
-- `session.json`, `sessions.db`: Telegram login and per-chat session state
-- `data/`: peers cache, aliases, prefixes, sudo list, language, restart marker, and one `data/<plugin>/` per plugin
+- `config.json`: API credentials, bot token and startup defaults, mode 0600
+- `session.json`, `bot_session.json`, `sessions.db`: account and bot logins, per-chat session state
+- `data/`: peer caches, aliases, sudo list, restart marker, and one `data/<plugin>/` per plugin holding its `settings.json`
 - `plugins/`: external plugins
 
 ## Restart and update
