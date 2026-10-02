@@ -160,8 +160,19 @@ func (s *Service) pager(prefix string, page, pages int) []plugin.Button {
 
 // ---------------------------------------------------------------- views
 
+// withPanel keeps plugins that have settings or a page.
+func (s *Service) withPanel(list []PluginInfo) []PluginInfo {
+	var out []PluginInfo
+	for _, p := range list {
+		if p.Failed == "" && s.hasPanel(p.Name) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func (s *Service) menuView() *View {
-	b, x := s.builtins(), s.externals()
+	b, x := s.withPanel(s.builtins()), s.externals()
 	broken := 0
 	for _, p := range x {
 		if p.Failed != "" {
@@ -170,95 +181,121 @@ func (s *Service) menuView() *View {
 	}
 	var t strings.Builder
 	t.WriteString("🗂 **PaperValet**\n\n")
-	t.WriteString(fmt.Sprintf(s.tl("🧩 系统插件  %d 个", "🧩 System plugins  %d"), len(b)) + "\n")
-	t.WriteString(fmt.Sprintf(s.tl("🔌 外置插件  %d 个", "🔌 External plugins  %d"), len(x)))
-	if broken > 0 {
-		t.WriteString(fmt.Sprintf(s.tl("  ·  ⚠️ %d 个加载失败", "  ·  ⚠️ %d failed"), broken))
+	t.WriteString(fmt.Sprintf(s.tl("⚙️ 系统设置  %d 项", "⚙️ System settings  %d"), len(b)) + "\n")
+	t.WriteString(fmt.Sprintf(s.tl("🔌 外置插件  %d 个有设置", "🔌 External plugins  %d with settings"), len(s.withPanel(x))))
+	rows := [][]plugin.Button{plugin.Row(
+		plugin.Btn(s.tl("⚙️ 系统设置", "⚙️ System settings"), "l:b:0"),
+		plugin.Btn(s.tl("🔌 外置插件", "🔌 External plugins"), "l:x:0"),
+	)}
+	if s.cat() != nil {
+		t.WriteString("\n" + fmt.Sprintf(s.tl("📦 插件管理  已装 %d 个", "📦 Plugin manager  %d installed"), len(x)))
+		if broken > 0 {
+			t.WriteString(fmt.Sprintf(s.tl("  ·  ⚠️ %d 个加载失败", "  ·  ⚠️ %d failed"), broken))
+		}
+		rows = append(rows, plugin.Row(plugin.Btn(s.tl("📦 插件管理", "📦 Plugin manager"), "g:0")))
 	}
-	return &View{Text: t.String(), Buttons: [][]plugin.Button{plugin.Row(
-		plugin.Btn(s.tl("🧩 系统插件", "🧩 System"), "l:b:0"),
-		plugin.Btn(s.tl("🔌 外置插件", "🔌 External"), "l:x:0"),
-	)}}
+	return &View{Text: t.String(), Buttons: rows}
 }
 
-// listView is the system ("b") or external ("x") plugin panel. Buttons
-// carry the plugin names as they are.
+// listView is the system settings ("b") or external plugin ("x") panel.
+// Only plugins with settings or a page appear; buttons carry their names.
 func (s *Service) listView(kind string, page int) *View {
 	external := kind == "x"
-	list := s.builtins()
-	title := s.tl("🧩 **系统插件**", "🧩 **System plugins**")
+	list := s.withPanel(s.builtins())
+	title := s.tl("⚙️ **系统设置**", "⚙️ **System settings**")
 	if external {
-		list = s.externals()
+		list = s.withPanel(s.externals())
 		title = s.tl("🔌 **外置插件**", "🔌 **External plugins**")
 	}
 	page, pages := clampPage(page, len(list), listPerPage)
 	var t strings.Builder
-	t.WriteString(title + fmt.Sprintf("  %d\n", len(list)))
+	t.WriteString(title + "\n")
 	if len(list) == 0 {
 		if external {
-			t.WriteString("\n" + s.tl("还没有安装外置插件，去仓库看看", "No external plugins yet, browse the repository"))
+			t.WriteString("\n" + s.tl("没有带设置项的外置插件", "No external plugin has settings"))
 		} else {
-			t.WriteString("\n" + s.tl("没有系统插件", "No system plugins"))
+			t.WriteString("\n" + s.tl("没有系统设置", "No system settings"))
 		}
 	}
 	var btns []plugin.Button
 	for _, p := range list[page*listPerPage : min(len(list), (page+1)*listPerPage)] {
-		mark := "▫️"
-		switch {
-		case p.Failed != "":
-			mark = "⚠️"
-		case s.hasPanel(p.Name):
-			mark = "⚙️"
-		}
-		line := "\n" + mark + " " + plugin.Code(p.Name)
-		if p.Failed != "" {
-			line += "  " + s.tl("加载失败", "failed to load")
-		} else if d := s.desc(p); d != "" {
+		line := "\n• " + plugin.Code(p.Name)
+		if d := s.desc(p); d != "" {
 			line += "  " + plugin.Escape(d)
 		}
 		t.WriteString(line)
 		btns = append(btns, plugin.Btn(p.Name, "h:"+p.Name))
-	}
-	if len(list) > 0 {
-		t.WriteString("\n\n" + s.tl("⚙️ 有设置项  ▫️ 只有命令", "⚙️ has settings  ▫️ commands only"))
 	}
 	v := &View{Text: t.String(), Buttons: grid(btns, listCols)}
 	if row := s.pager("l:"+kind+":", page, pages); row != nil {
 		v.Buttons = append(v.Buttons, row)
 	}
 	if external && s.cat() != nil {
-		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📦 插件仓库", "📦 Repository"), "s:0")))
-		if len(list) > 0 {
-			v.Buttons = append(v.Buttons, plugin.Row(
-				plugin.Btn(s.tl("🔄 全部重载", "🔄 Reload all"), "a:la"),
-				plugin.Btn(s.tl("🗑 全部卸载", "🗑 Remove all"), "a:ra"),
-			))
-		}
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📦 插件管理", "📦 Plugin manager"), "g:0")))
 	}
 	v.Buttons = append(v.Buttons, plugin.Row(s.back("m")))
 	return v
 }
 
-// infoView is a plugin's screen: what it is, its commands, its settings,
-// its page and, for external plugins, reload and remove. The notice is
-// set when the plugin is gone.
-func (s *Service) infoView(name string) (*View, string) {
-	p, builtin, ok := s.find(name)
-	if !ok {
-		if !s.hasPanel(name) {
-			return s.menuView(), s.tl("这个插件已经不在了", "That plugin is gone")
-		}
-		p, builtin = PluginInfo{Name: name}, s.cat() == nil
+// managerView is the apt panel: every installed external plugin, broken
+// files included, plus the repository and bulk actions.
+func (s *Service) managerView(page int) *View {
+	if s.cat() == nil {
+		return s.menuView()
 	}
-	listBack := "l:x:0"
-	if builtin {
-		listBack = "l:b:0"
+	list := s.externals()
+	page, pages := clampPage(page, len(list), listPerPage)
+	var t strings.Builder
+	t.WriteString(s.tl("📦 **插件管理**", "📦 **Plugin manager**") + fmt.Sprintf(s.tl("  已装 %d 个\n", "  %d installed\n"), len(list)))
+	if len(list) == 0 {
+		t.WriteString("\n" + s.tl("还没有安装外置插件，去仓库看看", "No external plugins yet, browse the repository"))
+	}
+	var btns []plugin.Button
+	for _, p := range list[page*listPerPage : min(len(list), (page+1)*listPerPage)] {
+		line := "\n✅ " + plugin.Code(p.Name)
+		if p.Failed != "" {
+			line = "\n⚠️ " + plugin.Code(p.Name) + "  " + s.tl("加载失败", "failed to load")
+		} else {
+			if p.Version != "" {
+				line += " " + plugin.Code("v"+p.Version)
+			}
+			if d := s.desc(p); d != "" {
+				line += "  " + plugin.Escape(d)
+			}
+		}
+		t.WriteString(line)
+		btns = append(btns, plugin.Btn(p.Name, "o:"+p.Name))
+	}
+	v := &View{Text: t.String(), Buttons: grid(btns, listCols)}
+	if row := s.pager("g:", page, pages); row != nil {
+		v.Buttons = append(v.Buttons, row)
+	}
+	v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📥 插件仓库", "📥 Repository"), "s:0")))
+	if len(list) > 0 {
+		v.Buttons = append(v.Buttons, plugin.Row(
+			plugin.Btn(s.tl("🔄 全部重载", "🔄 Reload all"), "a:la"),
+			plugin.Btn(s.tl("🗑 全部卸载", "🗑 Remove all"), "a:ra"),
+		))
+	}
+	v.Buttons = append(v.Buttons, plugin.Row(s.back("m")))
+	return v
+}
+
+// manageView is one installed external plugin in the apt panel: version,
+// commands, reload and remove (retry and delete when it failed to load).
+func (s *Service) manageView(name string) (*View, string) {
+	var p PluginInfo
+	found := false
+	for _, x := range s.externals() {
+		if x.Name == name {
+			p, found = x, true
+		}
+	}
+	if !found {
+		return s.managerView(0), s.tl("这个插件已经不在了", "That plugin is gone")
 	}
 	var t strings.Builder
-	t.WriteString("🔹 **" + plugin.Escape(p.Name) + "**")
-	if builtin {
-		t.WriteString(s.tl("  · 系统", "  · system"))
-	}
+	t.WriteString("📦 **" + plugin.Escape(p.Name) + "**")
 	if p.Version != "" {
 		t.WriteString("  " + plugin.Code("v"+p.Version))
 	}
@@ -270,25 +307,78 @@ func (s *Service) infoView(name string) (*View, string) {
 		t.WriteString(s.tl("作者 ", "Author ") + plugin.Escape(p.Author) + "\n")
 	}
 	if p.Failed != "" {
-		reason := p.Failed
-		if c := s.cat(); c != nil {
-			reason = s.tl(c.Explain(errors.New(p.Failed)))
-		}
+		reason := s.tl(s.cat().Explain(errors.New(p.Failed)))
 		t.WriteString("\n⚠️ " + s.tl("加载失败：", "Failed to load: ") + plugin.Escape(clip(reason, 300)))
 		return &View{Text: t.String(), Buttons: [][]plugin.Button{
 			plugin.Row(
 				plugin.Btn(s.tl("🔁 重试", "🔁 Retry"), "y:rl:"+name),
 				plugin.Btn(s.tl("🗑 删除", "🗑 Delete"), "a:rm:"+name),
 			),
-			plugin.Row(s.back(listBack)),
+			plugin.Row(s.back("g:0")),
 		}}, ""
 	}
-	if len(p.Commands) > 0 {
-		codes := make([]string, len(p.Commands))
-		for i, c := range p.Commands {
-			codes[i] = plugin.Code(c)
+	if cmds := s.commandLine(p); cmds != "" {
+		t.WriteString("\n" + cmds + "\n")
+	}
+	v := &View{}
+	if s.hasPanel(name) {
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("⚙️ 设置", "⚙️ Settings"), "h:"+name)))
+	}
+	v.Buttons = append(v.Buttons,
+		plugin.Row(
+			plugin.Btn(s.tl("🔄 重载", "🔄 Reload"), "y:rl:"+name),
+			plugin.Btn(s.tl("🗑 卸载", "🗑 Remove"), "a:rm:"+name),
+		),
+		plugin.Row(s.back("g:0")),
+	)
+	v.Text = strings.TrimRight(t.String(), "\n")
+	return v, ""
+}
+
+func (s *Service) commandLine(p PluginInfo) string {
+	if len(p.Commands) == 0 {
+		return ""
+	}
+	codes := make([]string, len(p.Commands))
+	for i, c := range p.Commands {
+		codes[i] = plugin.Code(c)
+	}
+	return s.tl("命令  ", "Commands  ") + strings.Join(codes, " ")
+}
+
+// infoView is a plugin's settings screen: what it is, its commands, its
+// settings and its page. Plugins without either are not shown here:
+// external ones go to their apt screen, others back to the menu. The
+// notice is set when the plugin is gone.
+func (s *Service) infoView(name string) (*View, string) {
+	p, builtin, ok := s.find(name)
+	if !s.hasPanel(name) || p.Failed != "" {
+		if ok && !builtin && s.cat() != nil {
+			return s.manageView(name)
 		}
-		t.WriteString("\n" + s.tl("命令  ", "Commands  ") + strings.Join(codes, " ") + "\n")
+		if ok {
+			return s.menuView(), s.tl("这个插件没有设置项", "That plugin has no settings")
+		}
+		return s.menuView(), s.tl("这个插件已经不在了", "That plugin is gone")
+	}
+	if !ok {
+		p, builtin = PluginInfo{Name: name}, s.cat() == nil
+	}
+	listBack := "l:x:0"
+	if builtin {
+		listBack = "l:b:0"
+	}
+	var t strings.Builder
+	t.WriteString("🔹 **" + plugin.Escape(p.Name) + "**")
+	if p.Version != "" {
+		t.WriteString("  " + plugin.Code("v"+p.Version))
+	}
+	t.WriteString("\n")
+	if d := s.desc(p); d != "" {
+		t.WriteString(plugin.Escape(d) + "\n")
+	}
+	if cmds := s.commandLine(p); cmds != "" {
+		t.WriteString("\n" + cmds + "\n")
 	}
 	v := &View{}
 	if st, ok := s.settings.Get(name); ok {
@@ -309,17 +399,12 @@ func (s *Service) infoView(name string) (*View, string) {
 			}
 			v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(label, "e:"+name+":"+set.Key)))
 		}
-	} else if s.page(name) == nil {
-		t.WriteString("\n" + s.tl("没有设置项，直接用命令", "No settings, just use its commands"))
 	}
 	if pg := s.page(name); pg != nil {
 		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn("📋 "+s.pick(pg.Title, pg.TitleEN, name), "p:"+name)))
 	}
 	if !builtin && ok && s.cat() != nil {
-		v.Buttons = append(v.Buttons, plugin.Row(
-			plugin.Btn(s.tl("🔄 重载", "🔄 Reload"), "y:rl:"+name),
-			plugin.Btn(s.tl("🗑 卸载", "🗑 Remove"), "a:rm:"+name),
-		))
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📦 管理", "📦 Manage"), "o:"+name)))
 	}
 	v.Buttons = append(v.Buttons, plugin.Row(s.back(listBack)))
 	v.Text = strings.TrimRight(t.String(), "\n")
@@ -331,7 +416,7 @@ func (s *Service) infoView(name string) (*View, string) {
 func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
 	c := s.cat()
 	if c == nil {
-		return s.listView("x", 0)
+		return s.menuView()
 	}
 	head := "📦 **" + s.tl("插件仓库", "Repository") + "**"
 	entries, err := c.Repo(ctx, fresh)
@@ -340,7 +425,7 @@ func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
 			Text: head + "\n\n❌ " + s.tl("拉取插件清单失败：", "Could not fetch the index: ") + plugin.Escape(err.Error()),
 			Buttons: [][]plugin.Button{
 				plugin.Row(plugin.Btn(s.tl("🔁 重试", "🔁 Retry"), "s:0:f")),
-				plugin.Row(s.back("l:x:0")),
+				plugin.Row(s.back("g:0")),
 			},
 		}
 	}
@@ -360,7 +445,7 @@ func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
 	for _, e := range entries[page*repoPerPage : min(len(entries), (page+1)*repoPerPage)] {
 		mark, data := "▫️", "i:"+e.Name
 		if e.Installed {
-			mark, data = "✅", "h:"+e.Name
+			mark, data = "✅", "o:"+e.Name
 		}
 		line := "\n" + mark + " " + plugin.Code(e.Name)
 		if d := s.pick(e.Desc, e.DescEN, ""); d != "" {
@@ -380,7 +465,7 @@ func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
 	if installed < len(entries) {
 		last = append(last, plugin.Btn(s.tl("📥 全部安装", "📥 Install all"), "a:ia"))
 	}
-	v.Buttons = append(v.Buttons, last, plugin.Row(s.back("l:x:0")))
+	v.Buttons = append(v.Buttons, last, plugin.Row(s.back("g:0")))
 	return v
 }
 
@@ -388,7 +473,7 @@ func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
 func (s *Service) repoEntryView(ctx context.Context, name string) (*View, string) {
 	c := s.cat()
 	if c == nil {
-		return s.listView("x", 0), ""
+		return s.menuView(), ""
 	}
 	entries, err := c.Repo(ctx, false)
 	if err != nil {
@@ -399,7 +484,7 @@ func (s *Service) repoEntryView(ctx context.Context, name string) (*View, string
 			continue
 		}
 		if e.Installed {
-			return s.infoView(name)
+			return s.manageView(name)
 		}
 		var t strings.Builder
 		t.WriteString("📦 **" + plugin.Escape(e.Name) + "**")
@@ -424,16 +509,16 @@ func (s *Service) confirmView(op, name string) *View {
 	switch op {
 	case "rm":
 		if name == "" {
-			return s.listView("x", 0)
+			return s.managerView(0)
 		}
 		q = fmt.Sprintf(s.tl("卸载 %s？插件文件会被删除，设置会保留，重新安装后还在。", "Remove %s? The file is deleted; its settings stay for a reinstall."), plugin.Code(name))
-		cancel = "h:" + name
+		cancel = "o:" + name
 	case "ra":
 		q = s.tl("卸载全部外置插件？设置会保留。", "Remove every external plugin? Settings stay.")
-		cancel = "l:x:0"
+		cancel = "g:0"
 	case "la":
 		q = s.tl("重载全部外置插件？", "Reload every external plugin?")
-		cancel = "l:x:0"
+		cancel = "g:0"
 	case "ia":
 		q = s.tl("安装仓库里全部未安装的插件？", "Install every plugin not installed yet?")
 		cancel = "s:0"
@@ -495,24 +580,24 @@ func (s *Service) runOp(ctx context.Context, at target, op, name string) (*View,
 		if err := c.Install(ctx, name); err != nil {
 			return s.resultView(fail(err), "s:0"), "", nil
 		}
-		v, _ := s.infoView(name)
+		v, _ := s.manageView(name)
 		return v, s.tl("已安装", "Installed"), nil
 	case "rm":
 		progress(s.tl("正在卸载 ", "Removing ") + plugin.Code(name))
 		if err := c.Remove(ctx, name); err != nil {
-			return s.resultView(fail(err), "l:x:0"), "", nil
+			return s.resultView(fail(err), "g:0"), "", nil
 		}
-		return s.listView("x", 0), s.tl("已卸载", "Removed"), nil
+		return s.managerView(0), s.tl("已卸载", "Removed"), nil
 	case "rl":
 		progress(s.tl("正在重载 ", "Reloading ") + plugin.Code(name))
 		if err := c.Reload(ctx, name); err != nil {
-			v, gone := s.infoView(name)
+			v, gone := s.manageView(name)
 			if gone != "" {
-				return s.resultView(fail(err), "l:x:0"), "", nil
+				return s.resultView(fail(err), "g:0"), "", nil
 			}
 			return v, "!" + reason(err), nil
 		}
-		v, _ := s.infoView(name)
+		v, _ := s.manageView(name)
 		return v, s.tl("已重载", "Reloaded"), nil
 	}
 	return s.bulk(ctx, c, op, progress, reason), "", nil
@@ -520,7 +605,7 @@ func (s *Service) runOp(ctx context.Context, at target, op, name string) (*View,
 
 func (s *Service) bulk(ctx context.Context, c Catalog, op string, progress func(string), reason func(error) string) *View {
 	var names []string
-	back, verb, done := "l:x:0", "", ""
+	back, verb, done := "g:0", "", ""
 	act := c.Reload
 	switch op {
 	case "ia":
