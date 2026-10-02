@@ -55,7 +55,7 @@ func (p *BackupPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"\n" +
 			"**备份内容**\n" +
 			"• config.json\n" +
-			"• data/ 下的插件配置（别名、前缀、sudo 名单、插件数据等）\n" +
+			"• data/ 下的设置和插件数据（面板设置、别名、sudo 名单等）\n" +
 			"• plugins/ 下已安装的外部插件（单个文件超过 2MB 跳过）\n" +
 			"\n" +
 			"**不备份**\n" +
@@ -74,7 +74,7 @@ func (p *BackupPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"\n" +
 			"**Included**\n" +
 			"• config.json\n" +
-			"• plugin settings under data/ (aliases, prefixes, sudo list, plugin data)\n" +
+			"• settings and plugin data under data/ (panel settings, aliases, sudo list)\n" +
 			"• installed external plugins under plugins/ (files over 2MB skipped)\n" +
 			"\n" +
 			"**Not included**\n" +
@@ -154,7 +154,7 @@ func (p *BackupPlugin) collect() ([]backupEntry, error) {
 			}
 			// Exclude caches and the session/peers state: a backup must
 			// restore onto a fresh login, and peers re-learn themselves.
-			if rel == "data/peers.json" || strings.HasSuffix(rel, "-wal") || strings.HasSuffix(rel, "-shm") {
+			if rel == "data/peers.json" || rel == "data/bot_peers.json" || strings.HasSuffix(rel, "-wal") || strings.HasSuffix(rel, "-shm") {
 				return nil
 			}
 			addFile(rel, path)
