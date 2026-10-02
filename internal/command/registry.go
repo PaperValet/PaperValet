@@ -35,6 +35,7 @@ type Registry struct {
 	sudoChecker     func(int64) bool
 	media           interfaces.MediaSender
 	mediaDownloader interfaces.MediaDownloader
+	bot             BotHost
 }
 
 func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
@@ -159,6 +160,9 @@ func (r *Registry) Unregister(name string) {
 }
 
 func (r *Registry) UnregisterPlugin(plugin string) {
+	if b := r.botHost(); b != nil {
+		b.RemovePlugin(plugin)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for name, cmd := range r.commands {
