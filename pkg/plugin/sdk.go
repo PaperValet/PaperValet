@@ -117,6 +117,15 @@ type Host interface {
 	Settings(spec *SettingsSpec) (Settings, error)
 	// Bot returns the companion bot scoped to the named plugin.
 	Bot(plugin string) Bot
+	// Listen registers a listener for every new and edited message. The
+	// returned func removes it; unloading the plugin removes it too.
+	Listen(plugin string, fn MessageListener) (remove func())
+	// RunCommand runs msg.Text as a command with owner rights, as if the
+	// owner had sent it in msg's chat (msg.Message must be a real message,
+	// e.g. one the plugin just sent). It reports whether a command matched.
+	RunCommand(ctx context.Context, msg *MessageEvent) (bool, error)
+	// Prefixes returns the command prefixes, main prefix first.
+	Prefixes() []string
 }
 
 // RegistryProvider provides command registry access.
