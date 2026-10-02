@@ -102,6 +102,39 @@ h.Send(ctx, chatID, md, 0)   // returns the new message id
 h.Lang(userID)               // "zh-CN" or "en-US"
 h.Settings(spec)             // register the settings panel, see below
 h.Bot("hello")               // the companion bot, scoped to this plugin
+h.Prefixes()                 // command prefixes, main first
+```
+
+### Listening to messages
+
+Auto replies, captchas and auto-delete need every message, not only commands. `Listen` gets each new and edited message (incoming and outgoing, command messages included) before commands run:
+
+```go
+func (p *Hello) Start(context.Context) error {
+	p.stop = p.host.Listen("hello", func(ctx context.Context, m *plugin.MessageEvent, edited bool) {
+		if edited || m.IsOut || !strings.Contains(m.Text, "hi") {
+			return
+		}
+		go p.host.Send(context.Background(), m.ChatID, "👋", m.Message.ID)
+	})
+	return nil
+}
+
+func (p *Hello) Stop(context.Context) error { p.stop(); return nil }
+```
+
+Listeners run in turn on the update path: return fast and move slow work into a goroutine. Unloading the plugin removes them.
+
+`h.RunCommand(ctx, ev)` runs `ev.Text` as a command with owner rights in `ev`'s chat, e.g. for a scheduled `.status`: send the text, then pass `plugin.EventFromMessage(sent)`.
+
+### Message helpers
+
+```go
+ctx.ReplyMessage()                              // the replied *tg.Message
+plugin.GetMessages(ctx, api, peer, ids...)      // channel-aware fetch
+plugin.DeleteMessages(ctx, api, peer, ids...)   // channel-aware delete, any count
+plugin.EventFromMessage(msg)                    // *tg.Message → *MessageEvent (for Downloader, RunCommand)
+plugin.ChatIDOf(peer), plugin.SenderID(msg)
 ```
 
 ## Settings: the bot panel, not commands
