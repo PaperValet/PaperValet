@@ -23,7 +23,7 @@ Docker, upgrades and troubleshooting: **[Installation](docs/installation.md)**.
 
 Everything is triggered by your own messages. `.help` lists all commands, `.help <command>` explains one.
 
-Settings are not commands. Language, prefixes, sudo, log level and every plugin's options live in the companion bot: send it `/menu` and tap.
+Settings are not commands. Language, prefixes, sudo, log level and every plugin's options live in the companion bot: send it `/menu` and tap. Plugins are split into system and external panels; the external one also installs, removes and reloads plugins from the repository.
 
 | Plugin | Command | What it does |
 |---|---|---|
