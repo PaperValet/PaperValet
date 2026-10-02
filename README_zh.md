@@ -15,13 +15,15 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 papervalet initialize
 ```
 
-`initialize` 会带你选语言、填 API、登录，并可选注册 systemd 服务。`api_id` / `api_hash` 在 [my.telegram.org](https://my.telegram.org/apps) 申请。装好后在任意聊天发 `.ping`。
+`initialize` 会带你选语言、填 API、登录、接入配套机器人，并可选注册 systemd 服务。`api_id` / `api_hash` 在 [my.telegram.org](https://my.telegram.org/apps) 申请，bot token 找 [@BotFather](https://t.me/BotFather) 要。装好后在任意聊天发 `.ping`。
 
 Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 
 ## 命令
 
 只响应你自己发出的消息。`.help` 列出全部命令，`.help 命令` 看详细说明。
+
+设置不走命令。语言、前缀、sudo、日志级别和各插件的选项都在配套机器人里，给它发 `/menu` 点按钮就行。
 
 | 插件 | 命令 | 作用 |
 |---|---|---|
@@ -36,11 +38,9 @@ Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 | restart | `.restart` | 原地重启 |
 | update | `.update [now\|-f]` | 从 GitHub Release 升级 |
 | backup | `.backup [restore]` | 把配置备份到收藏夹 |
-| sudo | `.sudo add / remove / list` | 授权其他人使用命令 |
+| sudo | `.sudo add / remove` | 授权其他人使用命令 |
 | alias | `.alias 名字=命令` | 自定义快捷命令 |
-| prefix | `.prefix add / del / set` | 命令前缀 |
-| lang | `.lang zh\|en` | 界面语言 |
-| log | `.loglevel`、`.sendlog` | 日志级别和日志文件 |
+| log | `.sendlog [tail\|clean]` | 日志文件 |
 
 ## 插件
 
