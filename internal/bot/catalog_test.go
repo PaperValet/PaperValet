@@ -136,27 +136,30 @@ func TestMenuHasThreePanels(t *testing.T) {
 		t.Fatalf("menu text: %s", m.Text)
 	}
 
-	// Only plugins with settings show, named as they are.
+	// Settings panels: only plugins with settings, named as they are,
+	// and no management buttons.
 	b, _, _ := s.dispatch(ctx, "l:b:0", target{})
 	if got := strings.Join(buttonTexts(b), ","); got != "sudo,« 返回" {
 		t.Fatalf("system settings: %s", got)
 	}
 	x, _, _ := s.dispatch(ctx, "l:x:0", target{})
-	if got := strings.Join(buttonTexts(x), ","); !strings.HasPrefix(got, "weather,") || hasButton(x, "h:broken") || hasButton(x, "a:ra") {
-		t.Fatalf("external panel: %s", got)
-	}
-	if !hasButton(x, "g:0") {
-		t.Fatal("external panel lacks a link to the manager")
+	if got := strings.Join(buttonTexts(x), ","); got != "weather,« 返回" {
+		t.Fatalf("external settings: %s", got)
 	}
 
-	// The manager lists every installed plugin, broken ones too.
+	// The manager merges installed plugins and the repository.
 	g, _, _ := s.dispatch(ctx, "g:0", target{})
-	if got := strings.Join(buttonTexts(g), ","); !strings.HasPrefix(got, "broken,weather,") {
+	if got := strings.Join(buttonTexts(g), ","); !strings.HasPrefix(got, "bad,broken,gt,weather,") {
 		t.Fatalf("manager: %s", got)
 	}
-	for _, d := range []string{"o:weather", "s:0", "a:la", "a:ra", "m"} {
+	for _, d := range []string{"o:weather", "o:gt", "a:ia", "a:la", "a:ra", "g:0:f", "m"} {
 		if !hasButton(g, d) {
 			t.Fatalf("manager misses %s", d)
+		}
+	}
+	for _, d := range []string{"e:weather:on", "h:weather"} {
+		if hasButton(g, d) {
+			t.Fatalf("manager shows a settings button %s", d)
 		}
 	}
 }
@@ -167,28 +170,32 @@ func TestPluginScreens(t *testing.T) {
 	f.external["rev"] = PluginInfo{Name: "rev", Commands: []string{".rev"}}
 	ctx := context.Background()
 	v, _, _ := s.dispatch(ctx, "h:sudo", target{})
-	if !strings.Contains(v.Text, "`.sudo`") || hasButton(v, "o:sudo") || !hasButton(v, "l:b:0") || !hasButton(v, "e:sudo:on") {
+	if !strings.Contains(v.Text, "`.sudo`") || !hasButton(v, "l:b:0") || !hasButton(v, "e:sudo:on") {
 		t.Fatalf("builtin screen: %s %+v", v.Text, v.Buttons)
 	}
-	// A system plugin without settings is not reachable.
-	if v, notice, _ := s.dispatch(ctx, "h:help", target{}); notice == "" || !hasButton(v, "l:b:0") {
-		t.Fatalf("settingless builtin: %q", notice)
+	// Plugins without settings are not reachable from the settings side.
+	for _, d := range []string{"h:help", "h:rev"} {
+		if v, notice, _ := s.dispatch(ctx, d, target{}); notice == "" || hasButton(v, "a:rm:rev") {
+			t.Fatalf("%s: %q %+v", d, notice, v.Buttons)
+		}
 	}
+	// Settings screens carry no management buttons.
 	v, _, _ = s.dispatch(ctx, "h:weather", target{})
-	if !hasButton(v, "o:weather") || !hasButton(v, "l:x:0") || hasButton(v, "a:rm:weather") {
+	if !hasButton(v, "l:x:0") || hasButton(v, "o:weather") || hasButton(v, "a:rm:weather") || hasButton(v, "y:rl:weather") {
 		t.Fatalf("external settings screen: %+v", v.Buttons)
 	}
+	// Manager screens carry no settings buttons.
 	v, _, _ = s.dispatch(ctx, "o:weather", target{})
-	if !hasButton(v, "h:weather") || !hasButton(v, "y:rl:weather") || !hasButton(v, "a:rm:weather") || !hasButton(v, "g:0") || !strings.Contains(v.Text, "v1.0") {
+	if hasButton(v, "h:weather") || hasButton(v, "e:weather:on") || !hasButton(v, "y:rl:weather") || !hasButton(v, "a:rm:weather") || !hasButton(v, "g:0") || !strings.Contains(v.Text, "v1.0") {
 		t.Fatalf("manage screen: %s %+v", v.Text, v.Buttons)
 	}
-	// Settingless external: manage screen without a settings button.
 	v, _, _ = s.dispatch(ctx, "o:rev", target{})
-	if hasButton(v, "h:rev") || !hasButton(v, "a:rm:rev") || !strings.Contains(v.Text, "`.rev`") {
+	if !hasButton(v, "a:rm:rev") || !strings.Contains(v.Text, "`.rev`") {
 		t.Fatalf("settingless manage: %+v", v.Buttons)
 	}
-	if v, _, _ := s.dispatch(ctx, "h:rev", target{}); !hasButton(v, "a:rm:rev") {
-		t.Fatal("h: on a settingless external should land on its manage screen")
+	v, _, _ = s.dispatch(ctx, "o:gt", target{})
+	if !hasButton(v, "y:in:gt") || hasButton(v, "a:rm:gt") {
+		t.Fatalf("not installed: %+v", v.Buttons)
 	}
 	v, _, _ = s.dispatch(ctx, "o:broken", target{})
 	if !strings.Contains(v.Text, "原因 plugin.Open") || !hasButton(v, "y:rl:broken") || !hasButton(v, "a:rm:broken") {
@@ -201,27 +208,15 @@ func TestPluginScreens(t *testing.T) {
 	}
 }
 
-func TestRepoInstallRemove(t *testing.T) {
+func TestInstallRemove(t *testing.T) {
 	s, _ := newCatalogService(t)
 	ctx := context.Background()
-	v, _, _ := s.dispatch(ctx, "s:0", target{})
-	if !hasButton(v, "o:weather") || !hasButton(v, "i:gt") || !hasButton(v, "a:ia") || !hasButton(v, "g:0") {
-		t.Fatalf("repo: %+v", v.Buttons)
-	}
-	v, _, _ = s.dispatch(ctx, "i:gt", target{})
-	if !hasButton(v, "y:in:gt") {
-		t.Fatalf("install screen: %+v", v.Buttons)
-	}
 	v, notice, _ := s.dispatch(ctx, "y:in:gt", target{})
 	if notice == "" || !hasButton(v, "a:rm:gt") {
 		t.Fatalf("after install: %q %+v", notice, v.Buttons)
 	}
-	// Installed entries in the repo open the manage screen.
-	if v, _, _ := s.dispatch(ctx, "i:gt", target{}); !hasButton(v, "a:rm:gt") {
-		t.Fatal("installed repo entry did not open the manage screen")
-	}
 	v, _, _ = s.dispatch(ctx, "y:in:bad", target{})
-	if !strings.Contains(v.Text, "原因 boom") {
+	if !strings.Contains(v.Text, "原因 boom") || !hasButton(v, "g:0") {
 		t.Fatalf("install failure: %s", v.Text)
 	}
 	// Remove asks first; cancel goes back to the plugin.
@@ -229,16 +224,13 @@ func TestRepoInstallRemove(t *testing.T) {
 	if !hasButton(v, "y:rm:gt") || !hasButton(v, "o:gt") {
 		t.Fatalf("confirm: %+v", v.Buttons)
 	}
-	if v, _, _ = s.dispatch(ctx, "y:rm:gt", target{}); !hasButton(v, "s:0") {
+	if v, _, _ = s.dispatch(ctx, "y:rm:gt", target{}); !hasButton(v, "o:gt") || !hasButton(v, "g:0:f") {
 		t.Fatalf("after remove: %+v", v.Buttons)
 	}
 	// A second tap on the same confirm reports instead of crashing.
 	v, _, _ = s.dispatch(ctx, "y:rm:gt", target{})
 	if !strings.Contains(v.Text, "原因 not installed") {
 		t.Fatalf("double remove: %s", v.Text)
-	}
-	if v, notice, _ := s.dispatch(ctx, "i:nope", target{}); notice == "" || v == nil {
-		t.Fatal("vanished repo entry")
 	}
 	if _, _, err := s.dispatch(ctx, "y:in", target{}); err == nil {
 		t.Fatal("install without a name accepted")
@@ -296,23 +288,25 @@ func TestOneOperationAtATime(t *testing.T) {
 func TestRepoErrorAndPaging(t *testing.T) {
 	s, f := newCatalogService(t)
 	ctx := context.Background()
+	// Without the index the installed plugins still show.
 	f.repoErr = errors.New("offline")
-	v, _, _ := s.dispatch(ctx, "s:0", target{})
-	if !strings.Contains(v.Text, "offline") || !hasButton(v, "s:0:f") {
+	v, _, _ := s.dispatch(ctx, "g:0", target{})
+	if !strings.Contains(v.Text, "offline") || !hasButton(v, "o:weather") || hasButton(v, "a:ia") || !hasButton(v, "g:0:f") {
 		t.Fatalf("repo error: %+v", v)
 	}
 	f.repoErr = nil
+	f.external = map[string]PluginInfo{}
 	f.repo = nil
 	for i := 0; i < 40; i++ {
 		f.repo = append(f.repo, RepoEntry{Name: fmt.Sprintf("p%02d", i)})
 	}
-	v, _, _ = s.dispatch(ctx, "s:1", target{})
-	if !hasButton(v, "i:p15") || hasButton(v, "i:p14") || !hasButton(v, "s:0") || !hasButton(v, "s:2") || !hasButton(v, "n") {
+	v, _, _ = s.dispatch(ctx, "g:1", target{})
+	if !hasButton(v, "o:p30") || hasButton(v, "o:p29") || !hasButton(v, "g:0") || !hasButton(v, "n") || hasButton(v, "a:ra") {
 		t.Fatalf("page 2: %+v", v.Buttons)
 	}
 	// Out-of-range pages clamp.
-	v, _, _ = s.dispatch(ctx, "s:99", target{})
-	if !hasButton(v, "i:p39") || hasButton(v, "s:3") {
+	v, _, _ = s.dispatch(ctx, "g:99", target{})
+	if !hasButton(v, "o:p39") || hasButton(v, "g:2") {
 		t.Fatalf("clamped: %+v", v.Buttons)
 	}
 	if v, _, _ := s.dispatch(ctx, "n", target{}); v != nil {
@@ -323,7 +317,7 @@ func TestRepoErrorAndPaging(t *testing.T) {
 func TestStaleButtons(t *testing.T) {
 	s, _ := newCatalogService(t)
 	ctx := context.Background()
-	for _, d := range []string{"zz", "e:", "e:ghost:k", "c:ghost:k:0", "r:ghost", "l:q:abc", "a:zz", "g:abc", "o:", "a:rm"} {
+	for _, d := range []string{"zz", "e:", "e:ghost:k", "c:ghost:k:0", "r:ghost", "l:q:abc", "a:zz", "g:abc", "g:1:x", "o:", "a:rm", "s:0", "i:gt"} {
 		v, _, err := s.dispatch(ctx, d, target{})
 		if err != nil || v == nil {
 			t.Fatalf("%q: %v %v", d, err, v)
