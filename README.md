@@ -30,6 +30,7 @@ Settings are not commands. Language, prefixes, sudo, log level and every plugin'
 | ping | `.ping [host]`, `.pingdc` | Latency to Telegram, a host, or every DC |
 | status | `.status` | Version, host, resources, runtime |
 | info | `.info` | User, chat and message details |
+| dc | `.dc [@user\|ID]` | Data center of a user, group or channel |
 | re | `.re [count] [times]` | Repeat the replied message |
 | dme | `.dme <n\|all> [-f]` | Delete your recent messages |
 | exec | `.exec <cmd>` | Run a shell command |
