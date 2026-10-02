@@ -29,7 +29,7 @@ scripts/               installers
 ## Message flow
 
 1. gotd delivers updates to `app.UpdateHandler`, which records access hashes and emits a `message` event.
-2. `command.Parser` subscribes to `message`. It checks the sender (owner, or a sudo user's incoming message), strips a prefix, expands user aliases once, and matches the longest registered command.
+2. `command.Parser` subscribes to `message` and `message_edit`. It first hands every message to plugin listeners (`Host().Listen`), then checks the sender (owner, or a sudo user's incoming message), strips a prefix, expands user aliases once, and matches the longest registered command.
 3. `command.Registry` builds a `CommandContext` and runs the handler through recovery, logging and rate-limit middleware. `OwnerOnly` commands are checked here.
 4. Handlers answer with `ctx.Edit` or `ctx.Reply`. Text is Telegram Markdown, converted to entities by `pkg/plugin.ParseMarkdown`.
 
@@ -49,11 +49,11 @@ Every screen is an icon plus bold title, with lists and values in a block quote.
 
 Built-in and external plugins implement the same `plugin.Plugin` interface and register commands through `plugin.Manager`.
 
-Built-ins are compiled in and registered in `app.registerBuiltins`. There are 16: ping, restart, status, info, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, language, log.
+Built-ins are compiled in and registered in `app.registerBuiltins`. There are 17: ping, restart, status, info, dc, re, dme, exec, apt, reload, update, backup, sudo, alias, prefix, language, log.
 
 External plugins are `.so` files in `plugins/`, loaded at startup. `apt i` downloads one from the plugin repository release, loads it and starts it right away. `apt rm` stops it and deletes the file. There is no installed-but-disabled state.
 
-Plugins that work outside command handlers (schedulers, restored tasks) take long-lived services from `mgr.Host()`.
+Plugins that work outside command handlers (schedulers, restored tasks, auto replies) take long-lived services from `mgr.Host()`: `Listen` for every new and edited message, `RunCommand` to run a command as the owner. Unloading a plugin drops its listeners.
 
 Go plugins cannot be unloaded. `reload` re-runs `Init`/`Start` on the loaded code. Replacing a `.so` takes a `restart`.
 
