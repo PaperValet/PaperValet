@@ -41,7 +41,11 @@ func TestHelpOverviewListsEveryCommandAndAlias(t *testing.T) {
 	help, mgr := newHelpFixture(t)
 	ctx := &interfaces.CommandContext{Lang: "zh-CN"}
 	out := help.overview(ctx, ".")
-	for name := range mgr.Commands().GetAll() {
+	for name, cmd := range mgr.Commands().GetAll() {
+		// Hidden commands are redirects and never appear in help.
+		if cmd.Hidden {
+			continue
+		}
 		// Single-command plugins whose command shares the plugin name may be
 		// collapsed into the plugin header line.
 		if strings.Contains(out, "**"+name+"** ·") {
