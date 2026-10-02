@@ -37,3 +37,20 @@ func TestSaveOwnerOnlyAndRoundTrip(t *testing.T) {
 		t.Fatalf("round trip mismatch: %+v", got.Telegram)
 	}
 }
+
+func TestValidateRequiresBotToken(t *testing.T) {
+	cfg := Example()
+	cfg.Telegram.BotToken = ""
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("missing bot token must fail validation")
+	}
+	cfg.Telegram.BotToken = "8863893462:AAHhkcC0-psN4RMtfJ4NJ2aaHTlK-YClwnX"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("valid token rejected: %v", err)
+	}
+	for _, bad := range []string{"abc:def", "123:short", "8863893462AAHhkcC0psN4RMtfJ4NJ2aaHTlKYClwnX"} {
+		if BotTokenRe.MatchString(bad) {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
