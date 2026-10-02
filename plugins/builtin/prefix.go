@@ -72,19 +72,7 @@ func (p *PrefixPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	}
 	p.set = set
 	p.apply()
-	// The old command is gone; a hidden stub points to the panel.
-	return p.mgr.RegisterCommand(&plugin.Command{
-		Name:        "prefix",
-		Description: "命令前缀（在机器人面板设置）",
-		DescEN:      "Command prefixes (set in the bot panel)",
-		Usage:       "prefix",
-		UsageEN:     "prefix",
-		Plugin:      p.Name(),
-		Category:    "admin",
-		OwnerOnly:   true,
-		Hidden:      true,
-		Handler:     panelHint,
-	})
+	return nil
 }
 
 // Prefixes returns main first, then the extras without duplicates.
