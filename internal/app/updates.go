@@ -86,7 +86,7 @@ func (h *UpdateHandler) Handle(ctx context.Context, u tg.UpdatesClass) error {
 			Out:     updates.Out,
 			PeerID:  &tg.PeerUser{UserID: updates.UserID},
 		}
-		return h.dispatchMessage(ctx, msg, updates)
+		return h.dispatchMessage(ctx, msg, updates, false)
 	case *tg.UpdateShortChatMessage:
 		msg := &tg.Message{
 			ID:      updates.ID,
@@ -96,7 +96,7 @@ func (h *UpdateHandler) Handle(ctx context.Context, u tg.UpdatesClass) error {
 			PeerID:  &tg.PeerChat{ChatID: updates.ChatID},
 			FromID:  &tg.PeerUser{UserID: updates.FromID},
 		}
-		return h.dispatchMessage(ctx, msg, updates)
+		return h.dispatchMessage(ctx, msg, updates, false)
 	}
 	return nil
 }
@@ -105,17 +105,25 @@ func (h *UpdateHandler) handleOne(ctx context.Context, upd tg.UpdateClass, raw t
 	switch u := upd.(type) {
 	case *tg.UpdateNewMessage:
 		if msg, ok := u.Message.(*tg.Message); ok {
-			return h.dispatchMessage(ctx, msg, raw)
+			return h.dispatchMessage(ctx, msg, raw, false)
 		}
 	case *tg.UpdateNewChannelMessage:
 		if msg, ok := u.Message.(*tg.Message); ok {
-			return h.dispatchMessage(ctx, msg, raw)
+			return h.dispatchMessage(ctx, msg, raw, false)
+		}
+	case *tg.UpdateEditMessage:
+		if msg, ok := u.Message.(*tg.Message); ok {
+			return h.dispatchMessage(ctx, msg, raw, true)
+		}
+	case *tg.UpdateEditChannelMessage:
+		if msg, ok := u.Message.(*tg.Message); ok {
+			return h.dispatchMessage(ctx, msg, raw, true)
 		}
 	}
 	return nil
 }
 
-func (h *UpdateHandler) dispatchMessage(ctx context.Context, msg *tg.Message, raw tg.UpdatesClass) error {
+func (h *UpdateHandler) dispatchMessage(ctx context.Context, msg *tg.Message, raw tg.UpdatesClass, edited bool) error {
 	userID := extractUserID(msg)
 	if userID == 0 && msg.Out && h.selfUserID != 0 {
 		userID = h.selfUserID
@@ -137,6 +145,9 @@ func (h *UpdateHandler) dispatchMessage(ctx context.Context, msg *tg.Message, ra
 	if reply, ok := msg.ReplyTo.(*tg.MessageReplyHeader); ok {
 		ev.IsReply = true
 		ev.ReplyToID = reply.ReplyToMsgID
+	}
+	if edited {
+		return h.bus.Emit(ctx, eventbus.EventEdit, ev)
 	}
 	return h.bus.Emit(ctx, eventbus.EventMessage, ev)
 }
