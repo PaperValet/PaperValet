@@ -36,6 +36,8 @@ type Registry struct {
 	media           interfaces.MediaSender
 	mediaDownloader interfaces.MediaDownloader
 	bot             BotHost
+	listeners       []listener
+	nextListener    int
 }
 
 func NewRegistry(prefixes []string, emitter interfaces.Emitter, api *tg.Client, resolver interfaces.PeerResolver, ownerID int64, i18nMgr *i18n.Manager) *Registry {
@@ -165,6 +167,13 @@ func (r *Registry) UnregisterPlugin(plugin string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	kept := r.listeners[:0]
+	for _, l := range r.listeners {
+		if l.plugin != plugin {
+			kept = append(kept, l)
+		}
+	}
+	r.listeners = kept
 	for name, cmd := range r.commands {
 		if cmd.Plugin == plugin {
 			for _, a := range cmd.Aliases {
