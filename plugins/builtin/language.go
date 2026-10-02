@@ -7,23 +7,23 @@ import (
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
-// LangPlugin holds the interface language. It has no command: the
+// LanguagePlugin holds the interface language. It has no command: the
 // language is a setting, switched in the bot panel. The choice is global
 // (one person's userbot) and persists across restarts.
-type LangPlugin struct {
+type LanguagePlugin struct {
 	mgr *i18n.Manager
 	set plugin.Settings
 }
 
-func NewLang(mgr *i18n.Manager) *LangPlugin {
-	return &LangPlugin{mgr: mgr}
+func NewLanguage(mgr *i18n.Manager) *LanguagePlugin {
+	return &LanguagePlugin{mgr: mgr}
 }
 
-func (p *LangPlugin) Name() string        { return "lang" }
-func (p *LangPlugin) Description() string { return "界面语言" }
-func (p *LangPlugin) DescEN() string      { return "Interface language" }
+func (p *LanguagePlugin) Name() string        { return "language" }
+func (p *LanguagePlugin) Description() string { return "界面语言" }
+func (p *LanguagePlugin) DescEN() string      { return "Interface language" }
 
-func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
+func (p *LanguagePlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	set, err := mgr.Host().Settings(&plugin.SettingsSpec{
 		Plugin:  p.Name(),
 		Title:   "🌐 语言",
@@ -51,7 +51,7 @@ func (p *LangPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 	return nil
 }
 
-func (p *LangPlugin) apply() {
+func (p *LanguagePlugin) apply() {
 	l := i18n.Lang(p.set.String("language"))
 	if l != i18n.ZhCN && l != i18n.EnUS {
 		return
@@ -60,5 +60,5 @@ func (p *LangPlugin) apply() {
 	p.mgr.ClearUserLangs()
 }
 
-func (p *LangPlugin) Start(_ context.Context) error { return nil }
-func (p *LangPlugin) Stop(_ context.Context) error  { return nil }
+func (p *LanguagePlugin) Start(_ context.Context) error { return nil }
+func (p *LanguagePlugin) Stop(_ context.Context) error  { return nil }
