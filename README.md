@@ -15,13 +15,15 @@ curl -fsSL https://raw.githubusercontent.com/PaperValet/PaperValet/master/script
 papervalet initialize
 ```
 
-`initialize` walks you through language, API credentials, login and an optional systemd service. Get `api_id` / `api_hash` at [my.telegram.org](https://my.telegram.org/apps). Then send `.ping` in any chat.
+`initialize` walks you through language, API credentials, login, a companion bot and an optional systemd service. Get `api_id` / `api_hash` at [my.telegram.org](https://my.telegram.org/apps) and a bot token from [@BotFather](https://t.me/BotFather). Then send `.ping` in any chat.
 
 Docker, upgrades and troubleshooting: **[Installation](docs/installation.md)**.
 
 ## Commands
 
 Everything is triggered by your own messages. `.help` lists all commands, `.help <command>` explains one.
+
+Settings are not commands. Language, prefixes, sudo, log level and every plugin's options live in the companion bot: send it `/menu` and tap.
 
 | Plugin | Command | What it does |
 |---|---|---|
@@ -36,11 +38,9 @@ Everything is triggered by your own messages. `.help` lists all commands, `.help
 | restart | `.restart` | Restart in place |
 | update | `.update [now\|-f]` | Upgrade from GitHub Releases |
 | backup | `.backup [restore]` | Back up config to Saved Messages |
-| sudo | `.sudo add / remove / list` | Let other users run commands |
+| sudo | `.sudo add / remove` | Let other users run commands |
 | alias | `.alias name=command` | Your own shortcuts |
-| prefix | `.prefix add / del / set` | Command prefixes |
-| lang | `.lang zh\|en` | Interface language |
-| log | `.loglevel`, `.sendlog` | Log level and log files |
+| log | `.sendlog [tail\|clean]` | Log files |
 
 ## Plugins
 
