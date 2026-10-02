@@ -230,107 +230,173 @@ func (s *Service) listView(kind string, page int) *View {
 	if row := s.pager("l:"+kind+":", page, pages); row != nil {
 		v.Buttons = append(v.Buttons, row)
 	}
-	if external && s.cat() != nil {
-		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📦 插件管理", "📦 Plugin manager"), "g:0")))
-	}
 	v.Buttons = append(v.Buttons, plugin.Row(s.back("m")))
 	return v
 }
 
-// managerView is the apt panel: every installed external plugin, broken
-// files included, plus the repository and bulk actions.
-func (s *Service) managerView(page int) *View {
+// mgrEntry is one row of the manager: installed, failed or only in the
+// repository.
+type mgrEntry struct {
+	PluginInfo
+	installed bool
+	inRepo    bool
+	repoVer   string
+}
+
+// mgrEntries merges installed plugins with the repository index. The
+// error is the index fetch failure; installed plugins are listed anyway.
+func (s *Service) mgrEntries(ctx context.Context, fresh bool) ([]mgrEntry, error) {
+	by := map[string]*mgrEntry{}
+	var out []mgrEntry
+	for _, p := range s.externals() {
+		by[p.Name] = &mgrEntry{PluginInfo: p, installed: true}
+	}
+	repo, err := s.cat().Repo(ctx, fresh)
+	for _, r := range repo {
+		if e, ok := by[r.Name]; ok {
+			e.inRepo, e.repoVer = true, r.Version
+			continue
+		}
+		by[r.Name] = &mgrEntry{PluginInfo: PluginInfo{Name: r.Name, Desc: r.Desc, DescEN: r.DescEN}, inRepo: true, repoVer: r.Version}
+	}
+	for _, e := range by {
+		out = append(out, *e)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, err
+}
+
+// managerView is the plugin manager: installed plugins and the
+// repository in one list, with install, reload and remove.
+func (s *Service) managerView(ctx context.Context, page int, fresh bool) *View {
 	if s.cat() == nil {
 		return s.menuView()
 	}
-	list := s.externals()
+	list, repoErr := s.mgrEntries(ctx, fresh)
+	installed, missing := 0, 0
+	for _, e := range list {
+		if e.installed {
+			installed++
+		} else {
+			missing++
+		}
+	}
 	page, pages := clampPage(page, len(list), listPerPage)
 	var t strings.Builder
-	t.WriteString(s.tl("📦 **插件管理**", "📦 **Plugin manager**") + fmt.Sprintf(s.tl("  已装 %d 个\n", "  %d installed\n"), len(list)))
-	if len(list) == 0 {
-		t.WriteString("\n" + s.tl("还没有安装外置插件，去仓库看看", "No external plugins yet, browse the repository"))
+	t.WriteString(s.tl("📦 **插件管理**", "📦 **Plugin manager**") + fmt.Sprintf(s.tl("  已装 %d 个", "  %d installed"), installed))
+	if repoErr == nil {
+		t.WriteString(fmt.Sprintf(s.tl(" · 可装 %d 个", " · %d available"), missing))
+	}
+	t.WriteString("\n")
+	if repoErr != nil {
+		t.WriteString("\n⚠️ " + s.tl("拉取插件仓库失败：", "Could not fetch the repository: ") + plugin.Escape(clip(repoErr.Error(), 120)) + "\n")
+	}
+	if len(list) == 0 && repoErr == nil {
+		t.WriteString("\n" + s.tl("仓库是空的", "The repository is empty"))
 	}
 	var btns []plugin.Button
-	for _, p := range list[page*listPerPage : min(len(list), (page+1)*listPerPage)] {
-		line := "\n✅ " + plugin.Code(p.Name)
-		if p.Failed != "" {
-			line = "\n⚠️ " + plugin.Code(p.Name) + "  " + s.tl("加载失败", "failed to load")
-		} else {
-			if p.Version != "" {
-				line += " " + plugin.Code("v"+p.Version)
-			}
-			if d := s.desc(p); d != "" {
+	for _, e := range list[page*listPerPage : min(len(list), (page+1)*listPerPage)] {
+		var line string
+		switch {
+		case e.Failed != "":
+			line = "\n⚠️ " + plugin.Code(e.Name) + "  " + s.tl("加载失败", "failed to load")
+		case e.installed:
+			line = "\n✅ " + plugin.Code(e.Name)
+		default:
+			line = "\n▫️ " + plugin.Code(e.Name)
+		}
+		if e.Failed == "" {
+			if d := s.desc(e.PluginInfo); d != "" {
 				line += "  " + plugin.Escape(d)
 			}
 		}
 		t.WriteString(line)
-		btns = append(btns, plugin.Btn(p.Name, "o:"+p.Name))
+		btns = append(btns, plugin.Btn(e.Name, "o:"+e.Name))
+	}
+	if len(list) > 0 {
+		t.WriteString("\n\n" + s.tl("✅ 已安装  ▫️ 未安装  点名字操作", "✅ installed  ▫️ not installed  tap a name"))
 	}
 	v := &View{Text: t.String(), Buttons: grid(btns, listCols)}
 	if row := s.pager("g:", page, pages); row != nil {
 		v.Buttons = append(v.Buttons, row)
 	}
-	v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📥 插件仓库", "📥 Repository"), "s:0")))
-	if len(list) > 0 {
-		v.Buttons = append(v.Buttons, plugin.Row(
-			plugin.Btn(s.tl("🔄 全部重载", "🔄 Reload all"), "a:la"),
-			plugin.Btn(s.tl("🗑 全部卸载", "🗑 Remove all"), "a:ra"),
-		))
+	var bulk []plugin.Button
+	if missing > 0 && repoErr == nil {
+		bulk = append(bulk, plugin.Btn(s.tl("📥 全部安装", "📥 Install all"), "a:ia"))
 	}
-	v.Buttons = append(v.Buttons, plugin.Row(s.back("m")))
+	if installed > 0 {
+		bulk = append(bulk,
+			plugin.Btn(s.tl("🔄 全部重载", "🔄 Reload all"), "a:la"),
+			plugin.Btn(s.tl("🗑 全部卸载", "🗑 Remove all"), "a:ra"))
+	}
+	if len(bulk) > 0 {
+		v.Buttons = append(v.Buttons, bulk)
+	}
+	v.Buttons = append(v.Buttons, plugin.Row(
+		plugin.Btn(s.tl("🔄 刷新仓库", "🔄 Refresh"), fmt.Sprintf("g:%d:f", page)),
+		s.back("m"),
+	))
 	return v
 }
 
-// manageView is one installed external plugin in the apt panel: version,
-// commands, reload and remove (retry and delete when it failed to load).
-func (s *Service) manageView(name string) (*View, string) {
-	var p PluginInfo
+// manageView is one plugin in the manager: install when missing, reload
+// and remove when installed, retry and delete when it failed to load.
+func (s *Service) manageView(ctx context.Context, name string) (*View, string) {
+	if s.cat() == nil {
+		return s.menuView(), ""
+	}
+	list, _ := s.mgrEntries(ctx, false)
+	var e mgrEntry
 	found := false
-	for _, x := range s.externals() {
+	for _, x := range list {
 		if x.Name == name {
-			p, found = x, true
+			e, found = x, true
 		}
 	}
 	if !found {
-		return s.managerView(0), s.tl("这个插件已经不在了", "That plugin is gone")
+		return s.managerView(ctx, 0, false), s.tl("这个插件已经不在了", "That plugin is gone")
 	}
 	var t strings.Builder
-	t.WriteString("📦 **" + plugin.Escape(p.Name) + "**")
-	if p.Version != "" {
-		t.WriteString("  " + plugin.Code("v"+p.Version))
+	t.WriteString("📦 **" + plugin.Escape(e.Name) + "**")
+	ver := e.Version
+	if ver == "" {
+		ver = e.repoVer
+	}
+	if ver != "" {
+		t.WriteString("  " + plugin.Code("v"+ver))
+	}
+	if e.installed && e.repoVer != "" && e.Version != "" && e.repoVer != e.Version {
+		t.WriteString(s.tl("  仓库 ", "  repo ") + plugin.Code("v"+e.repoVer))
 	}
 	t.WriteString("\n")
-	if d := s.desc(p); d != "" {
+	if d := s.desc(e.PluginInfo); d != "" && e.Failed == "" {
 		t.WriteString(plugin.Escape(d) + "\n")
 	}
-	if p.Author != "" {
-		t.WriteString(s.tl("作者 ", "Author ") + plugin.Escape(p.Author) + "\n")
-	}
-	if p.Failed != "" {
-		reason := s.tl(s.cat().Explain(errors.New(p.Failed)))
-		t.WriteString("\n⚠️ " + s.tl("加载失败：", "Failed to load: ") + plugin.Escape(clip(reason, 300)))
-		return &View{Text: t.String(), Buttons: [][]plugin.Button{
-			plugin.Row(
-				plugin.Btn(s.tl("🔁 重试", "🔁 Retry"), "y:rl:"+name),
-				plugin.Btn(s.tl("🗑 删除", "🗑 Delete"), "a:rm:"+name),
-			),
-			plugin.Row(s.back("g:0")),
-		}}, ""
-	}
-	if cmds := s.commandLine(p); cmds != "" {
-		t.WriteString("\n" + cmds + "\n")
+	if e.Author != "" {
+		t.WriteString(s.tl("作者 ", "Author ") + plugin.Escape(e.Author) + "\n")
 	}
 	v := &View{}
-	if s.hasPanel(name) {
-		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("⚙️ 设置", "⚙️ Settings"), "h:"+name)))
-	}
-	v.Buttons = append(v.Buttons,
-		plugin.Row(
+	switch {
+	case e.Failed != "":
+		reason := s.tl(s.cat().Explain(errors.New(e.Failed)))
+		t.WriteString("\n⚠️ " + s.tl("加载失败：", "Failed to load: ") + plugin.Escape(clip(reason, 300)))
+		v.Buttons = append(v.Buttons, plugin.Row(
+			plugin.Btn(s.tl("🔁 重试", "🔁 Retry"), "y:rl:"+name),
+			plugin.Btn(s.tl("🗑 删除", "🗑 Delete"), "a:rm:"+name),
+		))
+	case e.installed:
+		if cmds := s.commandLine(e.PluginInfo); cmds != "" {
+			t.WriteString("\n" + cmds)
+		}
+		v.Buttons = append(v.Buttons, plugin.Row(
 			plugin.Btn(s.tl("🔄 重载", "🔄 Reload"), "y:rl:"+name),
 			plugin.Btn(s.tl("🗑 卸载", "🗑 Remove"), "a:rm:"+name),
-		),
-		plugin.Row(s.back("g:0")),
-	)
+		))
+	default:
+		t.WriteString("\n" + s.tl("还没安装", "Not installed"))
+		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📥 安装", "📥 Install"), "y:in:"+name)))
+	}
+	v.Buttons = append(v.Buttons, plugin.Row(s.back("g:0")))
 	v.Text = strings.TrimRight(t.String(), "\n")
 	return v, ""
 }
@@ -347,15 +413,11 @@ func (s *Service) commandLine(p PluginInfo) string {
 }
 
 // infoView is a plugin's settings screen: what it is, its commands, its
-// settings and its page. Plugins without either are not shown here:
-// external ones go to their apt screen, others back to the menu. The
-// notice is set when the plugin is gone.
+// settings and its page. Plugins without either are not shown. The notice
+// is set when the plugin is gone or has no settings.
 func (s *Service) infoView(name string) (*View, string) {
 	p, builtin, ok := s.find(name)
 	if !s.hasPanel(name) || p.Failed != "" {
-		if ok && !builtin && s.cat() != nil {
-			return s.manageView(name)
-		}
 		if ok {
 			return s.menuView(), s.tl("这个插件没有设置项", "That plugin has no settings")
 		}
@@ -403,104 +465,9 @@ func (s *Service) infoView(name string) (*View, string) {
 	if pg := s.page(name); pg != nil {
 		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn("📋 "+s.pick(pg.Title, pg.TitleEN, name), "p:"+name)))
 	}
-	if !builtin && ok && s.cat() != nil {
-		v.Buttons = append(v.Buttons, plugin.Row(plugin.Btn(s.tl("📦 管理", "📦 Manage"), "o:"+name)))
-	}
 	v.Buttons = append(v.Buttons, plugin.Row(s.back(listBack)))
 	v.Text = strings.TrimRight(t.String(), "\n")
 	return v, ""
-}
-
-// repoView lists the repository; installed entries open their screen,
-// the rest open the install screen.
-func (s *Service) repoView(ctx context.Context, page int, fresh bool) *View {
-	c := s.cat()
-	if c == nil {
-		return s.menuView()
-	}
-	head := "📦 **" + s.tl("插件仓库", "Repository") + "**"
-	entries, err := c.Repo(ctx, fresh)
-	if err != nil {
-		return &View{
-			Text: head + "\n\n❌ " + s.tl("拉取插件清单失败：", "Could not fetch the index: ") + plugin.Escape(err.Error()),
-			Buttons: [][]plugin.Button{
-				plugin.Row(plugin.Btn(s.tl("🔁 重试", "🔁 Retry"), "s:0:f")),
-				plugin.Row(s.back("g:0")),
-			},
-		}
-	}
-	installed := 0
-	for _, e := range entries {
-		if e.Installed {
-			installed++
-		}
-	}
-	page, pages := clampPage(page, len(entries), repoPerPage)
-	var t strings.Builder
-	t.WriteString(head + "  " + fmt.Sprintf(s.tl("%d 个 · 已装 %d", "%d · %d installed"), len(entries), installed) + "\n")
-	if len(entries) == 0 {
-		t.WriteString("\n" + s.tl("仓库是空的", "The repository is empty"))
-	}
-	var btns []plugin.Button
-	for _, e := range entries[page*repoPerPage : min(len(entries), (page+1)*repoPerPage)] {
-		mark, data := "▫️", "i:"+e.Name
-		if e.Installed {
-			mark, data = "✅", "o:"+e.Name
-		}
-		line := "\n" + mark + " " + plugin.Code(e.Name)
-		if d := s.pick(e.Desc, e.DescEN, ""); d != "" {
-			line += "  " + plugin.Escape(d)
-		}
-		t.WriteString(line)
-		btns = append(btns, plugin.Btn(e.Name, data))
-	}
-	if len(entries) > 0 {
-		t.WriteString("\n\n" + s.tl("✅ 已安装  ▫️ 点名字安装", "✅ installed  ▫️ tap a name to install"))
-	}
-	v := &View{Text: t.String(), Buttons: grid(btns, listCols)}
-	if row := s.pager("s:", page, pages); row != nil {
-		v.Buttons = append(v.Buttons, row)
-	}
-	last := []plugin.Button{plugin.Btn(s.tl("🔄 刷新", "🔄 Refresh"), fmt.Sprintf("s:%d:f", page))}
-	if installed < len(entries) {
-		last = append(last, plugin.Btn(s.tl("📥 全部安装", "📥 Install all"), "a:ia"))
-	}
-	v.Buttons = append(v.Buttons, last, plugin.Row(s.back("g:0")))
-	return v
-}
-
-// repoEntryView is the install screen of one repository plugin.
-func (s *Service) repoEntryView(ctx context.Context, name string) (*View, string) {
-	c := s.cat()
-	if c == nil {
-		return s.menuView(), ""
-	}
-	entries, err := c.Repo(ctx, false)
-	if err != nil {
-		return s.repoView(ctx, 0, false), ""
-	}
-	for _, e := range entries {
-		if e.Name != name {
-			continue
-		}
-		if e.Installed {
-			return s.manageView(name)
-		}
-		var t strings.Builder
-		t.WriteString("📦 **" + plugin.Escape(e.Name) + "**")
-		if e.Version != "" {
-			t.WriteString("  " + plugin.Code("v"+e.Version))
-		}
-		if d := s.pick(e.Desc, e.DescEN, ""); d != "" {
-			t.WriteString("\n" + plugin.Escape(d))
-		}
-		t.WriteString("\n\n" + s.tl("还没安装", "Not installed"))
-		return &View{Text: t.String(), Buttons: [][]plugin.Button{
-			plugin.Row(plugin.Btn(s.tl("📥 安装", "📥 Install"), "y:in:"+name)),
-			plugin.Row(s.back("s:0")),
-		}}, ""
-	}
-	return s.repoView(ctx, 0, false), s.tl("仓库里没有这个插件了", "No longer in the repository")
 }
 
 // confirmView asks before a destructive or bulk operation.
@@ -509,7 +476,7 @@ func (s *Service) confirmView(op, name string) *View {
 	switch op {
 	case "rm":
 		if name == "" {
-			return s.managerView(0)
+			return s.menuView()
 		}
 		q = fmt.Sprintf(s.tl("卸载 %s？插件文件会被删除，设置会保留，重新安装后还在。", "Remove %s? The file is deleted; its settings stay for a reinstall."), plugin.Code(name))
 		cancel = "o:" + name
@@ -521,7 +488,7 @@ func (s *Service) confirmView(op, name string) *View {
 		cancel = "g:0"
 	case "ia":
 		q = s.tl("安装仓库里全部未安装的插件？", "Install every plugin not installed yet?")
-		cancel = "s:0"
+		cancel = "g:0"
 	default:
 		return s.menuView()
 	}
@@ -578,26 +545,26 @@ func (s *Service) runOp(ctx context.Context, at target, op, name string) (*View,
 	case "in":
 		progress(s.tl("正在安装 ", "Installing ") + plugin.Code(name))
 		if err := c.Install(ctx, name); err != nil {
-			return s.resultView(fail(err), "s:0"), "", nil
+			return s.resultView(fail(err), "g:0"), "", nil
 		}
-		v, _ := s.manageView(name)
+		v, _ := s.manageView(ctx, name)
 		return v, s.tl("已安装", "Installed"), nil
 	case "rm":
 		progress(s.tl("正在卸载 ", "Removing ") + plugin.Code(name))
 		if err := c.Remove(ctx, name); err != nil {
 			return s.resultView(fail(err), "g:0"), "", nil
 		}
-		return s.managerView(0), s.tl("已卸载", "Removed"), nil
+		return s.managerView(ctx, 0, false), s.tl("已卸载", "Removed"), nil
 	case "rl":
 		progress(s.tl("正在重载 ", "Reloading ") + plugin.Code(name))
 		if err := c.Reload(ctx, name); err != nil {
-			v, gone := s.manageView(name)
+			v, gone := s.manageView(ctx, name)
 			if gone != "" {
 				return s.resultView(fail(err), "g:0"), "", nil
 			}
 			return v, "!" + reason(err), nil
 		}
-		v, _ := s.manageView(name)
+		v, _ := s.manageView(ctx, name)
 		return v, s.tl("已重载", "Reloaded"), nil
 	}
 	return s.bulk(ctx, c, op, progress, reason), "", nil
@@ -609,7 +576,7 @@ func (s *Service) bulk(ctx context.Context, c Catalog, op string, progress func(
 	act := c.Reload
 	switch op {
 	case "ia":
-		back, verb, done, act = "s:0", s.tl("安装中", "Installing"), s.tl("已安装", "installed"), c.Install
+		verb, done, act = s.tl("安装中", "Installing"), s.tl("已安装", "installed"), c.Install
 		entries, err := c.Repo(ctx, true)
 		if err != nil {
 			return s.resultView("❌ "+s.tl("拉取插件清单失败：", "Could not fetch the index: ")+plugin.Escape(err.Error()), back)
