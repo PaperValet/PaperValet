@@ -18,15 +18,13 @@ import (
 //	n                       no-op (page counter)
 //	l:<b|x>:<page>          system settings / external plugin panel
 //	h:<plugin>              plugin settings screen (settings, page entry)
-//	g:<page>                plugin manager (apt) panel
-//	o:<plugin>              manage one installed external plugin
+//	g:<page>[:f]            plugin manager: install, reload, remove; f refetches
+//	o:<plugin>              one plugin in the manager
 //	e:<plugin>:<key>        edit a setting (toggle flips it)
 //	c:<plugin>:<key>:<i>    pick choice i
 //	r:<plugin>:<key>        reset to default
 //	p:<plugin>              open the plugin page
 //	p:<plugin>:<data>       page button
-//	s:<page>[:f]            repository, f refetches
-//	i:<plugin>              install screen of a repository plugin
 //	a:<op>[:<plugin>]       ask to confirm op (rm, ra, la, ia)
 //	y:<op>[:<plugin>]       run op (in, rm, rl, ra, la, ia)
 const maxPageData = 32
