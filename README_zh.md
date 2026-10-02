@@ -30,6 +30,7 @@ Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 | ping | `.ping [主机]`、`.pingdc` | 测 Telegram、指定主机或各数据中心的延迟 |
 | status | `.status` | 版本、主机、资源、运行状态 |
 | info | `.info` | 用户、聊天和消息信息 |
+| dc | `.dc [@用户\|ID]` | 用户、群组或频道所在数据中心 |
 | re | `.re [条数] [次数]` | 复读回复的消息 |
 | dme | `.dme <数量\|all> [-f]` | 删除自己最近的消息 |
 | exec | `.exec <命令>` | 执行 shell 命令 |
