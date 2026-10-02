@@ -139,11 +139,11 @@ func TestMenuHasThreePanels(t *testing.T) {
 	// Settings panels: only plugins with settings, named as they are,
 	// and no management buttons.
 	b, _, _ := s.dispatch(ctx, "l:b:0", target{})
-	if got := strings.Join(buttonTexts(b), ","); got != "sudo,« 返回" {
+	if got := strings.Join(buttonTexts(b), ","); got != "sudo,‹ 返回" {
 		t.Fatalf("system settings: %s", got)
 	}
 	x, _, _ := s.dispatch(ctx, "l:x:0", target{})
-	if got := strings.Join(buttonTexts(x), ","); got != "weather,« 返回" {
+	if got := strings.Join(buttonTexts(x), ","); got != "weather,‹ 返回" {
 		t.Fatalf("external settings: %s", got)
 	}
 
@@ -216,8 +216,8 @@ func TestInstallRemove(t *testing.T) {
 		t.Fatalf("after install: %q %+v", notice, v.Buttons)
 	}
 	v, _, _ = s.dispatch(ctx, "y:in:bad", target{})
-	if !strings.Contains(v.Text, "原因 boom") || !hasButton(v, "g:0") {
-		t.Fatalf("install failure: %s", v.Text)
+	if !strings.Contains(v.Text, "原因 boom") || !hasButton(v, "o:bad") || !hasButton(v, "y:in:bad") {
+		t.Fatalf("install failure: %s %+v", v.Text, v.Buttons)
 	}
 	// Remove asks first; cancel goes back to the plugin.
 	v, _, _ = s.dispatch(ctx, "a:rm:gt", target{})
@@ -244,7 +244,7 @@ func TestBulkOps(t *testing.T) {
 	s, f := newCatalogService(t)
 	ctx := context.Background()
 	v, _, _ := s.dispatch(ctx, "y:ia", target{})
-	if !strings.Contains(v.Text, "1/2") || !strings.Contains(v.Text, "`gt`") || !strings.Contains(v.Text, "原因 boom") {
+	if !strings.Contains(v.Text, "部分失败") || !strings.Contains(v.Text, "成功 1 · 失败 1") || !strings.Contains(v.Text, "✅ `gt`") || !strings.Contains(v.Text, "原因 boom") {
 		t.Fatalf("install all: %s", v.Text)
 	}
 	v, _, _ = s.dispatch(ctx, "y:la", target{})
