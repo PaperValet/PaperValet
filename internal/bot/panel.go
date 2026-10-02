@@ -456,21 +456,51 @@ func (s *Service) answer(ctx context.Context, q *tg.UpdateBotCallbackQuery, noti
 	_, _ = s.api.MessagesSetBotCallbackAnswer(ctx, req)
 }
 
+// answerDeadline is how long a tap waits for its view before it is
+// answered empty.
+const answerDeadline = 4 * time.Second
+
 func (s *Service) onCallback(q *tg.UpdateBotCallbackQuery) {
 	ctx, cancel := opCtx()
 	defer cancel()
-	if q.UserID != s.owner() || s.owner() == 0 {
+	userID, msgID, data := q.UserID, q.MsgID, string(q.Data)
+	if userID != s.owner() || s.owner() == 0 {
 		s.answer(ctx, q, "!"+s.tl("这个机器人只为主人服务", "This bot only serves its owner"))
 		return
 	}
-	v, notice, err := s.dispatch(ctx, string(q.Data), q.MsgID)
-	if err != nil {
-		s.answer(ctx, q, "!"+s.localErr(err))
-		return
+	type result struct {
+		v      *View
+		notice string
+		err    error
 	}
-	s.answer(ctx, q, notice)
+	done := make(chan result, 1)
+	go func() {
+		v, n, err := s.dispatch(ctx, data, msgID)
+		done <- result{v, n, err}
+	}()
+	// Telegram wants the tap answered within seconds. Slow pages get an
+	// empty answer first and their view when ready.
+	var r result
+	select {
+	case r = <-done:
+	case <-time.After(answerDeadline):
+		s.answer(ctx, q, "")
+		r = <-done
+		q = nil
+	}
+	if q != nil {
+		if r.err != nil {
+			s.answer(ctx, q, "!"+s.localErr(r.err))
+			return
+		}
+		s.answer(ctx, q, r.notice)
+	}
+	if r.err != nil {
+		r.v = &View{Text: "❌ " + plugin.Escape(s.localErr(r.err)), Buttons: [][]plugin.Button{plugin.Row(plugin.Btn(s.tl("« 菜单", "« Menu"), "m"))}}
+	}
+	v := r.v
 	if v != nil {
-		if err := s.edit(ctx, q.UserID, q.MsgID, v); err != nil {
+		if err := s.edit(ctx, userID, msgID, v); err != nil {
 			s.log.Warn("edit panel", "error", err)
 		}
 	}
