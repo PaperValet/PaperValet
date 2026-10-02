@@ -136,6 +136,7 @@ func BotOptions(cfg *config.Config) bot.Options {
 		SessionFile: cfg.Telegram.BotSessionFile,
 		PeersFile:   filepath.Join("data", "bot_peers.json"),
 		Device:      device,
+		Version:     Version,
 	}
 }
 
