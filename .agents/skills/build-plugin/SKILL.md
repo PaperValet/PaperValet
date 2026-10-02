@@ -56,7 +56,7 @@ plugins-external/<name>/
 
 ## Shipping
 
-1. One file per commit in PaperValet-Plugins. Push `main`.
+1. One commit per logical change in PaperValet-Plugins (a new plugin with its tests and README row is one commit). Push `main`.
 2. CI (`plugins-release.yml`) builds each plugin in a workspace against PaperValet master and republishes the `latest` release with every `.so` and `plugins.json`.
 3. A removed plugin keeps its old asset in the release. Delete it with `gh release delete-asset latest <name>.so -R PaperValet/PaperValet-Plugins -y`.
 4. On a running bot: `.apt i <name>` for a new plugin. To replace an installed `.so`, copy it into `plugins/` and `.restart`. Go cannot swap code in-process, so `.reload` is not enough.

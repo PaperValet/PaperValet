@@ -28,7 +28,7 @@ Some tests `t.Chdir` into a temp dir because plugins persist to `data/`. Do the 
 
 ## Conventions
 
-- **Small commits.** One file per commit where practical, with conventional messages (`feat(apt): …`, `fix(loader): …`, `test(…)`, `docs: …`).
+- **Focused commits.** One logical change per commit (code, tests and docs of that change together), never one commit per file and never unrelated changes mixed, with conventional messages (`feat(apt): …`, `fix(loader): …`, `test(…)`, `docs: …`).
 - **No compatibility shims.** Remove replaced code and docs outright. No deprecation paths, no "legacy" flags unless asked.
 - **Bilingual.** User-facing text comes in zh-CN and en-US. Commands set `Description` + `DescEN` and `Usage` + `UsageEN`. Handlers choose with `ctx.Tlocal(zh, en)`. CLI and setup strings live in `internal/i18n` and have a parity test.
 - **Markdown output.** Replies are Telegram Markdown. Escape anything user-controlled with `plugin.Escape`, `plugin.Code` or `esc` in built-ins. Backslash escapes do not work inside code spans.
