@@ -10,6 +10,7 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
 
+	"github.com/TiaraBasori/PaperValet/internal/bot"
 	"github.com/TiaraBasori/PaperValet/internal/command"
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/eventbus"
@@ -19,6 +20,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/internal/plugin"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
 	"github.com/TiaraBasori/PaperValet/internal/session"
+	"github.com/TiaraBasori/PaperValet/internal/settings"
 	"github.com/TiaraBasori/PaperValet/pkg/logger"
 	pkgplugin "github.com/TiaraBasori/PaperValet/pkg/plugin"
 	"github.com/TiaraBasori/PaperValet/plugins/builtin"
@@ -41,6 +43,7 @@ type App struct {
 	accessHash   *peer.AccessHashManager
 	updates      *UpdateHandler
 	i18n         *i18n.Manager
+	bot          *bot.Service
 	logger       pkgplugin.Logger
 	configPath   string
 }
@@ -81,6 +84,9 @@ func New(cfg *config.Config) (*App, error) {
 	cmdReg := command.NewRegistry(cfg.GetPrefixes(), bus, api, resolver, cfg.Bot.OwnerID, i18nMgr)
 	mediaMgr := media.NewManager(api, resolver, "downloads")
 	cmdReg.SetMediaSender(mediaMgr)
+	botSvc := bot.New(BotOptions(cfg), settings.NewRegistry("data"), i18nMgr)
+	botSvc.SetPinned(builtinPanels)
+	cmdReg.SetBot(botSvc)
 	parser := command.NewParser(cmdReg, bus)
 	pluginMgr := plugin.NewManager(cmdReg, bus)
 
@@ -105,9 +111,35 @@ func New(cfg *config.Config) (*App, error) {
 		accessHash:   accessHash,
 		updates:      updates,
 		i18n:         i18nMgr,
+		bot:          botSvc,
 		logger:       log,
 	}
 	return app, nil
+}
+
+// builtinPanels are the built-in settings panels, shown first in the bot menu.
+var builtinPanels = []string{"lang", "prefix", "sudo", "log"}
+
+// device is the client identity both accounts present to Telegram.
+var device = telegram.DeviceConfig{
+	DeviceModel:    "PaperValet",
+	SystemVersion:  "Linux",
+	AppVersion:     Version,
+	SystemLangCode: "en",
+	LangCode:       "en",
+}
+
+// BotOptions derives the companion bot settings from cfg. initialize uses
+// it too, so its login lands in the session file run reads.
+func BotOptions(cfg *config.Config) bot.Options {
+	return bot.Options{
+		APIID:       cfg.Telegram.APIID,
+		APIHash:     cfg.Telegram.APIHash,
+		Token:       cfg.Telegram.BotToken,
+		SessionFile: cfg.Telegram.BotSessionFile,
+		PeersFile:   filepath.Join("data", "bot_peers.json"),
+		Device:      device,
+	}
 }
 
 // NewTelegramClient builds the gotd client with PaperValet's device info.
@@ -116,16 +148,10 @@ func NewTelegramClient(cfg *config.Config, h telegram.UpdateHandler) *telegram.C
 	return telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
 		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionFile},
 		UpdateHandler:  h,
-		Device: telegram.DeviceConfig{
-			DeviceModel:    "PaperValet",
-			SystemVersion:  "Linux",
-			AppVersion:     Version,
-			SystemLangCode: "en",
-			LangCode:       "en",
-		},
-		RetryInterval: time.Second,
-		MaxRetries:    -1,
-		DialTimeout:   15 * time.Second,
+		Device:         device,
+		RetryInterval:  time.Second,
+		MaxRetries:     -1,
+		DialTimeout:    15 * time.Second,
 	})
 }
 
@@ -189,6 +215,14 @@ func (a *App) Run(ctx context.Context) error {
 
 	a.parser.Start()
 
+	// The bot runs beside the userbot; losing it never stops the userbot.
+	botDone := make(chan struct{})
+	go func() {
+		defer close(botDone)
+		_ = a.bot.Run(ctx)
+	}()
+	defer func() { <-botDone }()
+
 	return a.client.Run(ctx, func(ctx context.Context) error {
 		if err := EnsureAuth(ctx, a.client); err != nil {
 			return fmt.Errorf("auth: %w", err)
@@ -207,6 +241,7 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		a.commands.SetOwnerID(a.cfg.Bot.OwnerID)
 		a.commands.SetSelfID(self.ID)
+		a.bot.SetOwner(self.ID)
 		a.logger.Info("authenticated", "user_id", self.ID, "username", self.Username)
 
 		if err := a.plugins.InitAll(ctx); err != nil {
@@ -221,12 +256,43 @@ func (a *App) Run(ctx context.Context) error {
 		}
 
 		builtin.FinishRestart(ctx, a.api, a.peers.ResolveFromChatID)
+		go a.introduceBot(ctx)
 
 		a.bus.Emit(ctx, eventbus.EventStart, map[string]any{"version": Version})
 
 		<-ctx.Done()
 		return nil
 	})
+}
+
+// introduceBot has the account message its bot once. Bots cannot start a
+// chat, so without this the bot could not reach the owner.
+func (a *App) introduceBot(ctx context.Context) {
+	wait, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if !a.bot.WaitReady(wait) || a.bot.KnowsOwner() {
+		return
+	}
+	p, err := a.peers.ResolveUsername(ctx, a.bot.Username())
+	if err != nil {
+		a.logger.Warn("resolve bot", "error", err)
+		return
+	}
+	if _, err := a.api.MessagesStartBot(ctx, &tg.MessagesStartBotRequest{
+		Bot:        inputUser(p),
+		Peer:       p,
+		RandomID:   time.Now().UnixNano(),
+		StartParam: "papervalet",
+	}); err != nil {
+		a.logger.Warn("start bot", "error", err)
+	}
+}
+
+func inputUser(p tg.InputPeerClass) tg.InputUserClass {
+	if u, ok := p.(*tg.InputPeerUser); ok {
+		return &tg.InputUser{UserID: u.UserID, AccessHash: u.AccessHash}
+	}
+	return &tg.InputUserEmpty{}
 }
 
 // Shutdown gracefully stops the app.

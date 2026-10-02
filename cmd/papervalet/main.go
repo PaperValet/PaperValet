@@ -17,6 +17,7 @@ import (
 	"github.com/gotd/td/telegram"
 
 	"github.com/TiaraBasori/PaperValet/internal/app"
+	"github.com/TiaraBasori/PaperValet/internal/bot"
 	"github.com/TiaraBasori/PaperValet/internal/config"
 	"github.com/TiaraBasori/PaperValet/internal/i18n"
 	"github.com/TiaraBasori/PaperValet/internal/setup"
@@ -123,6 +124,9 @@ func initialize(cmdName string) {
 		Command: cmdName,
 		NewClient: func(cfg *config.Config) *telegram.Client {
 			return app.NewTelegramClient(cfg, nil)
+		},
+		NewBotClient: func(cfg *config.Config) *telegram.Client {
+			return bot.NewClient(app.BotOptions(cfg), nil)
 		},
 	})
 	if err != nil {
