@@ -54,6 +54,11 @@ The loader looks up two symbols:
 - `New`: takes no arguments and returns anything that implements `plugin.Plugin`, optionally with an `error` as a second result.
 - `Metadata` (optional): `*plugin.PluginMetadata`, shown by `apt ls` and `apt info`.
 
+At load time the plugin's `Name()` must match the .so file name: settings,
+panels and install/remove are all keyed by file name. A reply-to-file
+`apt i` install stages the file under the plugin's own module name, which
+satisfies this by construction.
+
 ## Lifecycle
 
 `New` → `Init` (register commands, settings and pages) → `Start` → … → `Stop`.

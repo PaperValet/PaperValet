@@ -54,6 +54,9 @@ func (p *Hello) Stop(context.Context) error  { return nil }
 - `New`：不带参数，返回任何实现了 `plugin.Plugin` 的值，第二个返回值可以是 `error`。
 - `Metadata`（可选）：`*plugin.PluginMetadata`，`apt ls` 和 `apt info` 会显示。
 
+加载时插件 `Name()` 必须和 .so 文件名一致：设置、面板、装卸都以文件名为键。
+用 `apt i` 回复文件安装时插件按自己的模块名落盘，天然满足这一条。
+
 ## 生命周期
 
 `New` → `Init`（注册命令、设置和页面）→ `Start` → … → `Stop`。

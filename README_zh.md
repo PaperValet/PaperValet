@@ -53,6 +53,9 @@ Docker、升级和常见问题见 **[安装指南](docs/installation_zh.md)**。
 .apt i -all      全部安装
 ```
 
+回复插件的 `.so` 文件发 `.apt i`（或直接把文件发给机器人）即可从文件安装，
+插件按它内部的模块名落盘。
+
 自己写插件看 [插件 SDK](docs/plugin-sdk_zh.md)。
 
 ## 开发

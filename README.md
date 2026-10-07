@@ -53,6 +53,10 @@ External plugins come from [PaperValet-Plugins](https://github.com/PaperValet/Pa
 .apt i -all      install everything
 ```
 
+Reply to a plugin `.so` file with `.apt i` (or send it to the companion
+bot) to install straight from the file; it lands under the plugin's own
+module name.
+
 To write one, see the [Plugin SDK](docs/plugin-sdk.md).
 
 ## Development
