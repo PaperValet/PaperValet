@@ -4,8 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/gotd/td/tg"
 
 	"github.com/TiaraBasori/PaperValet/internal/interfaces"
 	"github.com/TiaraBasori/PaperValet/internal/plugin/loader"
@@ -36,7 +41,7 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"\n" +
 			"**子命令**\n" +
 			"• `search` · `s`  [关键词]  搜索插件仓库，不带词列出全部\n" +
-			"• `install` · `i`  <名字…>  安装并立即启用\n" +
+			"• `install` · `i`  <名字…>  安装并立即启用；回复 .so 文件则从文件安装\n" +
 			"• `remove` · `rm`  <名字…>  停用并删除\n" +
 			"• `list` · `ls`  已安装的插件\n" +
 			"• `info`  <名字>  版本、作者、提供的命令\n" +
@@ -45,11 +50,13 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"**示例**\n" +
 			"• `apt s`\n" +
 			"• `apt i weather gt`\n" +
+			"• 回复 .so 文件发 `apt i`\n" +
 			"• `apt i -all`\n" +
 			"• `apt rm weather`\n" +
 			"\n" +
 			"**机制**\n" +
 			"• 安装即启用，卸载即删除，没有「装了但没启用」的状态\n" +
+			"• 回复文件安装时按插件内部的名字落盘，和文件叫什么无关\n" +
 			"• 插件清单实时从 PaperValet-Plugins 的 Release 拉取\n" +
 			"• 插件是 plugins/ 下的 .so 文件，启动时自动加载\n" +
 			"• 插件必须和主程序用同一版本 Go 编译，否则会提示版本不符，此时运行 `update`",
@@ -57,7 +64,7 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"\n" +
 			"**Subcommands**\n" +
 			"• `search` · `s`  [term]  search the repository; bare lists all\n" +
-			"• `install` · `i`  <name…>  install and enable\n" +
+			"• `install` · `i`  <name…>  install and enable; replying to a .so installs from the file\n" +
 			"• `remove` · `rm`  <name…>  disable and delete\n" +
 			"• `list` · `ls`  installed plugins\n" +
 			"• `info`  <name>  version, author, commands\n" +
@@ -66,11 +73,13 @@ func (p *AptPlugin) Init(_ context.Context, mgr plugin.Manager) error {
 			"**Examples**\n" +
 			"• `apt s`\n" +
 			"• `apt i weather gt`\n" +
+			"• Reply to a .so file with `apt i`\n" +
 			"• `apt i -all`\n" +
 			"• `apt rm weather`\n" +
 			"\n" +
 			"**How it works**\n" +
 			"• Installed means enabled, removed means deleted; there is no \"installed but off\"\n" +
+			"• A file install lands under the plugin's own name, whatever the file was called\n" +
 			"• The index is fetched live from the PaperValet-Plugins release\n" +
 			"• Plugins are .so files in plugins/, loaded on startup\n" +
 			"• Plugins must be built with the same Go version as the bot; on a mismatch run `update`",
@@ -100,6 +109,7 @@ func (p *AptPlugin) help(ctx *interfaces.CommandContext) error {
 	c.blank()
 	c.line(cmdRef(prefix+"apt s") + "  " + ctx.Tlocal("搜索仓库", "search"))
 	c.line(cmdRef(prefix+"apt i 名字") + "  " + ctx.Tlocal("安装", "install"))
+	c.line(cmdRef(prefix+"apt i") + "  " + ctx.Tlocal("回复 .so 文件安装", "reply to a .so file to install"))
 	c.line(cmdRef(prefix+"apt rm 名字") + "  " + ctx.Tlocal("卸载", "remove"))
 	c.line(cmdRef(prefix+"apt i -all") + "  " + ctx.Tlocal("全部安装", "install all"))
 	c.line(cmdRef(prefix+"apt rm -all") + "  " + ctx.Tlocal("全部卸载", "remove all"))
@@ -126,6 +136,9 @@ func (p *AptPlugin) handleApt(ctx *interfaces.CommandContext) error {
 		return p.search(ctx, args)
 	case "install":
 		if len(args) == 0 {
+			if ctx.Message != nil && ctx.Message.IsReply {
+				return p.installFromFile(ctx)
+			}
 			return need("apt i <name>")
 		}
 		if hasAllFlag(args) {
@@ -306,6 +319,89 @@ func (p *AptPlugin) install(ctx *interfaces.CommandContext, names []string) erro
 		rows = append(rows, okLine(name, strings.Join(refs, " ")))
 	}
 	return ctx.Edit(strings.Join(rows, "\n"))
+}
+
+// maxPluginFile caps the .so a chat install may download (the repo's
+// plugins are all well under 100 MB).
+const maxPluginFile = 100 << 20
+
+// installFromFile installs the .so document the command replies to. The
+// plugin lands under the module name recorded inside the file, whatever
+// the document was called.
+func (p *AptPlugin) installFromFile(ctx *interfaces.CommandContext) error {
+	msg, err := ctx.ReplyMessage()
+	if err != nil || msg.Media == nil {
+		return ctx.Edit(ctx.Tlocal(
+			"回复一个 .so 插件文件再发 `apt i`，或用 `apt i 名字` 从仓库安装",
+			"Reply to a plugin .so file with `apt i`, or install from the repository with `apt i <name>`"))
+	}
+	doc, ok := msg.Media.(*tg.MessageMediaDocument)
+	if !ok || doc.Document == nil {
+		return ctx.Edit(ctx.Tlocal("回复的不是文件", "The reply is not a file"))
+	}
+	d, ok := doc.Document.(*tg.Document)
+	if !ok {
+		return ctx.Edit(ctx.Tlocal("回复的不是文件", "The reply is not a file"))
+	}
+	if d.Size > maxPluginFile {
+		return ctx.Edit(ctx.Tlocal(
+			fmt.Sprintf("文件太大（%s），上限 %s", formatBytes(d.Size), formatBytes(maxPluginFile)),
+			fmt.Sprintf("File too large (%s), limit %s", formatBytes(d.Size), formatBytes(maxPluginFile))))
+	}
+	_ = ctx.Edit("⏳ " + ctx.Tlocal("下载插件文件…", "Downloading the plugin file…"))
+
+	ev := plugin.EventFromMessage(msg)
+	path, err := ctx.Downloader.DownloadMedia(ctx.Context(), ev)
+	if err != nil {
+		return ctx.Edit(errText(ctx.Tlocal("下载失败：", "Download failed: ") + esc(err.Error())))
+	}
+	defer os.Remove(path)
+
+	if err := p.loader.InstallFileAndLoad(ctx.Context(), path); err != nil {
+		if errors.Is(err, loader.ErrAlreadyInstalled) {
+			return ctx.Edit(skipLine(pluginNameOf(err, path), loadError(ctx, err)))
+		}
+		return ctx.Edit(failLine(filepath.Base(path), loadError(ctx, err)))
+	}
+
+	// The installed name comes from the file, not the document name.
+	name := p.lastInstalledName()
+	cmds := p.mgr.Commands().GetByPlugin(name)
+	var refs []string
+	for n := range cmds {
+		refs = append(refs, cmdRef(p.mgr.Commands().GetPrefix()+n))
+	}
+	sort.Strings(refs)
+	if len(refs) == 0 {
+		refs = append(refs, plugin.Code(name))
+	}
+	return ctx.Edit(okLine(name, strings.Join(refs, " ")))
+}
+
+// pluginNameOf digs the plugin name out of an "already installed" error,
+// falling back to the staged file's base name.
+func pluginNameOf(err error, path string) string {
+	var prefix = "plugin "
+	var suffix = ": already installed"
+	s := strings.TrimSuffix(err.Error(), suffix)
+	if after, ok := strings.CutPrefix(s, prefix); ok {
+		return after
+	}
+	return strings.TrimSuffix(filepath.Base(path), ".so")
+}
+
+// lastInstalledName returns the name of the newest external plugin; called
+// right after InstallFileAndLoad, that is the one just installed.
+func (p *AptPlugin) lastInstalledName() string {
+	loaded := p.loader.GetLoaded()
+	var newest string
+	var at time.Time
+	for n, lp := range loaded {
+		if newest == "" || lp.LoadedAt.After(at) {
+			newest, at = n, lp.LoadedAt
+		}
+	}
+	return newest
 }
 
 func (p *AptPlugin) remove(ctx *interfaces.CommandContext, names []string) error {
