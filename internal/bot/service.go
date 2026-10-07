@@ -55,8 +55,10 @@ type Service struct {
 	pages    map[string]*plugin.Page
 	catalog  Catalog
 	pending  *pending
-	readyCh  chan struct{}
-	busy     atomic.Bool // a plugin install/remove/reload is running
+	// pluginFiles maps a sent .so message id to its downloaded path.
+	pluginFiles map[int]string
+	readyCh     chan struct{}
+	busy        atomic.Bool // a plugin install/remove/reload is running
 }
 
 // pending is a typed answer the bot is waiting for.
@@ -80,12 +82,13 @@ func (p *pending) backData() string {
 // stays unavailable, but settings still work for plugins.
 func New(opt Options, reg *settings.Registry, i18nMgr *i18n.Manager) *Service {
 	s := &Service{
-		opt:      opt,
-		settings: reg,
-		i18n:     i18nMgr,
-		log:      logger.NamedLogger("bot"),
-		pages:    map[string]*plugin.Page{},
-		readyCh:  make(chan struct{}),
+		opt:         opt,
+		settings:    reg,
+		i18n:        i18nMgr,
+		log:         logger.NamedLogger("bot"),
+		pages:       map[string]*plugin.Page{},
+		pluginFiles: map[int]string{},
+		readyCh:     make(chan struct{}),
 	}
 	if opt.Token == "" {
 		return s

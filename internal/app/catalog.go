@@ -106,6 +106,10 @@ func (c *catalog) Install(ctx context.Context, name string) error {
 	return c.loader.InstallAndLoad(ctx, name)
 }
 
+func (c *catalog) InstallFile(ctx context.Context, path string) error {
+	return c.loader.InstallFileAndLoad(ctx, path)
+}
+
 func (c *catalog) Remove(ctx context.Context, name string) error {
 	if _, ok := c.mgr.GetInfo(name); ok && !c.loader.IsLoaded(name) {
 		return errBuiltin

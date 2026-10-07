@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gotd/td/tg"
+
 	"github.com/TiaraBasori/PaperValet/pkg/plugin"
 )
 
@@ -83,7 +85,21 @@ func (f *fakeCatalog) Reload(_ context.Context, name string) error {
 	return nil
 }
 
+func (f *fakeCatalog) InstallFile(_ context.Context, path string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, "if:"+path)
+	if strings.Contains(path, "bad") {
+		return errors.New("boom")
+	}
+	f.external["weather"] = PluginInfo{Name: "weather", Version: "1.0"}
+	return nil
+}
+
 func (f *fakeCatalog) Explain(err error) (string, string) {
+	if err == nil {
+		return "", ""
+	}
 	return "原因 " + err.Error(), err.Error()
 }
 
@@ -161,6 +177,67 @@ func TestMenuHasThreePanels(t *testing.T) {
 		if hasButton(g, d) {
 			t.Fatalf("manager shows a settings button %s", d)
 		}
+	}
+}
+
+// TestPluginFileFlow: a sent .so maps to a pending file; the confirm tap
+// installs it; an unknown message id says so.
+func TestPluginFileFlow(t *testing.T) {
+	s, f := newCatalogService(t)
+	ctx := context.Background()
+	delete(f.external, "weather")
+
+	// No file pending: the tap reports the download state.
+	v, notice, _ := s.dispatch(ctx, "y:if:77", target{})
+	if !strings.Contains(notice, "下完") && !strings.Contains(v.Text, "下完") {
+		t.Fatalf("no-file notice: %q %s", notice, v.Text)
+	}
+
+	// A downloaded file installs on confirm.
+	s.mu.Lock()
+	s.pluginFiles[77] = "/tmp/good.so"
+	s.mu.Unlock()
+	v, _, _ = s.dispatch(ctx, "y:if:77", target{})
+	if !strings.Contains(v.Text, "已安装") && !strings.Contains(v.Text, "Installed") {
+		t.Fatalf("install view: %s", v.Text)
+	}
+	if _, ok := f.external["weather"]; !ok {
+		t.Fatal("InstallFile not called")
+	}
+	s.mu.RLock()
+	_, still := s.pluginFiles[77]
+	s.mu.RUnlock()
+	if still {
+		t.Fatal("pending file not cleared after install")
+	}
+
+	// A failing install shows the reason and a retry.
+	s.mu.Lock()
+	s.pluginFiles[78] = "/tmp/bad.so"
+	s.mu.Unlock()
+	v, _, _ = s.dispatch(ctx, "y:if:78", target{})
+	if !strings.Contains(v.Text, "boom") || !hasButton(v, "y:if:78") {
+		t.Fatalf("failure view: %s %+v", v.Text, v.Buttons)
+	}
+}
+
+// TestIsSOName gates the receive handler on .so-looking documents.
+func TestIsSOName(t *testing.T) {
+	big := tg.Document{Size: 50 << 20}
+	so := tg.Document{Size: 50 << 20, Attributes: []tg.DocumentAttributeClass{
+		&tg.DocumentAttributeFilename{FileName: "Weather.SO"},
+	}}
+	txt := tg.Document{Size: 50 << 20, Attributes: []tg.DocumentAttributeClass{
+		&tg.DocumentAttributeFilename{FileName: "notes.txt"},
+	}}
+	tiny := tg.Document{Size: 4, Attributes: []tg.DocumentAttributeClass{
+		&tg.DocumentAttributeFilename{FileName: "x.so"},
+	}}
+	if isSOName(&big) || isSOName(&txt) || isSOName(&tiny) {
+		t.Fatal("misdetected")
+	}
+	if !isSOName(&so) {
+		t.Fatal("real .so rejected")
 	}
 }
 

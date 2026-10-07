@@ -48,7 +48,14 @@ func (s *Service) handle(ctx context.Context, u tg.UpdatesClass) error {
 			}
 			text := m.Message
 			if m.Media != nil {
-				// Captions are not answers; media gets the "send text" hint.
+				// A plugin .so from the owner is an install offer; other
+				// media is not an answer, it gets the "send text" hint.
+				if doc, ok := m.Media.(*tg.MessageMediaDocument); ok && doc.Document != nil {
+					if d, ok := doc.Document.(*tg.Document); ok && isSOName(d) {
+						go s.onPluginFile(pu.UserID, m.ID, d)
+						continue
+					}
+				}
 				text = ""
 			}
 			go s.onMessage(pu.UserID, m.ID, text)
@@ -57,6 +64,21 @@ func (s *Service) handle(ctx context.Context, u tg.UpdatesClass) error {
 		}
 	}
 	return nil
+}
+
+// isSOName reports whether the document looks like a plugin file:
+// named *.so and at least a megabyte.
+func isSOName(d *tg.Document) bool {
+	if d.Size < 1<<20 {
+		return false
+	}
+	name := ""
+	for _, attr := range d.Attributes {
+		if fn, ok := attr.(*tg.DocumentAttributeFilename); ok {
+			name = fn.FileName
+		}
+	}
+	return strings.HasSuffix(strings.ToLower(name), ".so")
 }
 
 func (s *Service) harvest(users []tg.UserClass) {
@@ -340,6 +362,13 @@ func (s *Service) dispatch(ctx context.Context, data string, at target) (*View, 
 		return s.confirmView(op, name), "", nil
 	case "y":
 		op, name, _ := strings.Cut(rest, ":")
+		if op == "if" {
+			msgID, err := strconv.Atoi(name)
+			if err != nil {
+				return s.menuView(), s.tl("按钮已过期", "That button is outdated"), nil
+			}
+			return s.installPluginFile(ctx, msgID)
+		}
 		return s.runOp(ctx, at, op, name)
 	case "e", "c", "r":
 		return s.settingTap(ctx, kind, rest, at)

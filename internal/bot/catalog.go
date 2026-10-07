@@ -39,6 +39,8 @@ type Catalog interface {
 	Externals() []PluginInfo
 	Repo(ctx context.Context, fresh bool) ([]RepoEntry, error)
 	Install(ctx context.Context, name string) error
+	// InstallFile installs an external plugin from a local .so path.
+	InstallFile(ctx context.Context, path string) error
 	Remove(ctx context.Context, name string) error
 	// Reload reloads a loaded plugin or retries a failed one.
 	Reload(ctx context.Context, name string) error
