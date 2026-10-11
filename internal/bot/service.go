@@ -40,13 +40,14 @@ type Options struct {
 
 // Service is the companion bot.
 type Service struct {
-	opt      Options
-	client   *telegram.Client
-	api      *tg.Client
-	peers    *peer.AccessHashManager
-	settings *settings.Registry
-	i18n     *i18n.Manager
-	log      plugin.Logger
+	opt       Options
+	client    *telegram.Client
+	api       *tg.Client
+	peers     *peer.AccessHashManager
+	peerStore *peer.Store
+	settings  *settings.Registry
+	i18n      *i18n.Manager
+	log       plugin.Logger
 
 	mu       sync.RWMutex
 	ready    bool
@@ -58,6 +59,7 @@ type Service struct {
 	// pluginFiles maps a sent .so message id to its downloaded path.
 	pluginFiles map[int]string
 	readyCh     chan struct{}
+	readyOnce   sync.Once   // readyCh closes once ever; a restarted bot must not close it again
 	busy        atomic.Bool // a plugin install/remove/reload is running
 }
 
@@ -95,7 +97,8 @@ func New(opt Options, reg *settings.Registry, i18nMgr *i18n.Manager) *Service {
 	}
 	s.client = NewClient(opt, telegram.UpdateHandlerFunc(s.handle))
 	s.api = s.client.API()
-	s.peers = peer.NewAccessHashManager(s.api, peer.NewStore(opt.PeersFile))
+	s.peerStore = peer.NewStore(opt.PeersFile)
+	s.peers = peer.NewAccessHashManager(s.api, s.peerStore)
 	return s
 }
 
@@ -108,6 +111,7 @@ func NewClient(opt Options, h telegram.UpdateHandler) *telegram.Client {
 		RetryInterval:  time.Second,
 		MaxRetries:     -1,
 		DialTimeout:    15 * time.Second,
+		OnSelfError:    SelfErrorHook(logger.NamedLogger("bot")),
 	})
 }
 
@@ -148,6 +152,17 @@ func (s *Service) SetOwner(id int64) {
 	s.mu.Lock()
 	s.ownerID = id
 	s.mu.Unlock()
+}
+
+// markReady records the logged-in state. readyCh closes exactly once: when
+// the app retries Run after a bot failure, closing the already-closed
+// channel would panic.
+func (s *Service) markReady(username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ready = true
+	s.username = username
+	s.readyOnce.Do(func() { close(s.readyCh) })
 }
 
 func (s *Service) owner() int64 {
@@ -203,22 +218,27 @@ func (s *Service) Run(ctx context.Context) error {
 	if !s.Enabled() {
 		return nil
 	}
-	err := s.client.Run(ctx, func(ctx context.Context) error {
-		self, err := Login(ctx, s.client, s.opt.Token)
+	// A gotd client refuses a second Run, so every start (including the
+	// app's restart backoff) gets a fresh client wired to the same handler
+	// and peer cache.
+	client := NewClient(s.opt, telegram.UpdateHandlerFunc(s.handle))
+	s.mu.Lock()
+	s.client = client
+	s.api = client.API()
+	s.peers = peer.NewAccessHashManager(s.api, s.peerStore)
+	s.mu.Unlock()
+	err := client.Run(ctx, func(ctx context.Context) error {
+		self, err := Login(ctx, client, s.opt.Token)
 		if err != nil {
 			return fmt.Errorf("bot login: %w", err)
 		}
-		// Ask for updates; a bot that never calls getState gets none.
-		if _, err := s.api.UpdatesGetState(ctx); err != nil {
-			s.log.Warn("get state", "error", err)
-		}
-		s.mu.Lock()
-		s.ready = true
-		s.username = self.Username
-		close(s.readyCh)
-		s.mu.Unlock()
+		s.markReady(self.Username)
 		s.log.Info("bot online", "username", self.Username)
 		s.syncCommands(ctx)
+		// Ask for updates; a bot that never calls getState gets none. One
+		// failed call must not leave the bot deaf until the next reconnect,
+		// so it retries in the background with backoff.
+		go subscribeUpdates(ctx, s.api, s.log, time.Sleep)
 		<-ctx.Done()
 		return ctx.Err()
 	})

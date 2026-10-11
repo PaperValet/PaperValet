@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -150,11 +151,38 @@ func NewTelegramClient(cfg *config.Config, h telegram.UpdateHandler) *telegram.C
 		RetryInterval:  time.Second,
 		MaxRetries:     -1,
 		DialTimeout:    15 * time.Second,
+		// A failed update subscription must reconnect instead of leaving
+		// the account online but deaf.
+		OnSelfError: bot.SelfErrorHook(logger.NamedLogger("app")),
 	})
 }
 
 // SetConfigPath tells the backup plugin which config file to include.
 func (a *App) SetConfigPath(path string) { a.configPath = path }
+
+// retryWhileAlive reruns a companion goroutine (the bot) while ctx is alive.
+// The bot's Run only returns on error or shutdown; without the retry a
+// single transient failure (login hiccup, callback error) took the bot
+// offline until the whole app restarted.
+func retryWhileAlive(ctx context.Context, log pkgplugin.Logger, sleep func(time.Duration), run func(context.Context) error) {
+	delay := 5 * time.Second
+	for {
+		err := run(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("companion bot stopped, restarting", "error", err)
+		}
+		sleep(delay)
+		if ctx.Err() != nil {
+			return
+		}
+		if delay < 5*time.Minute {
+			delay *= 2
+		}
+	}
+}
 
 func (a *App) registerBuiltins() error {
 	backup := builtin.NewBackup()
@@ -214,11 +242,27 @@ func (a *App) Run(ctx context.Context) error {
 
 	a.parser.Start()
 
-	// The bot runs beside the userbot; losing it never stops the userbot.
+	// The bot runs beside the userbot; losing it never stops the userbot,
+	// and a stopped bot restarts with backoff instead of staying offline
+	// until the next app restart.
 	botDone := make(chan struct{})
 	go func() {
 		defer close(botDone)
-		_ = a.bot.Run(ctx)
+		if !a.bot.Enabled() {
+			_ = a.bot.Run(ctx)
+			return
+		}
+		// The retry sleep must stay interruptible, or shutdown would wait
+		// out the full backoff before the bot goroutine exits.
+		sleep := func(d time.Duration) {
+			t := time.NewTimer(d)
+			defer t.Stop()
+			select {
+			case <-ctx.Done():
+			case <-t.C:
+			}
+		}
+		retryWhileAlive(ctx, a.logger, sleep, a.bot.Run)
 	}()
 	defer func() { <-botDone }()
 

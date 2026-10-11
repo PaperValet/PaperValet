@@ -37,6 +37,8 @@ scripts/               installers
 
 A second gotd client logs in with `telegram.bot_token` and runs beside the userbot; if it fails, the userbot keeps going. It answers only the owner. After login the userbot sends it `/start` once, because a bot cannot open a chat.
 
+Both clients self-heal their update subscription: gotd subscribes each new connection via a `Self()` call whose errors it swallows unless `OnSelfError` acts, so both clients drop the connection and resubscribe when that call fails, and the bot additionally retries `updates.getState` (a bot that never gets state never receives messages) and is restarted with backoff by the app after any failure. A failed update subscription previously left a client pinging and "online" while receiving nothing.
+
 The bot is the settings UI. Plugins declare options with `Host().Settings(spec)` (`internal/settings`, stored in `data/<plugin>/settings.json`) and the bot renders them as button panels under `/menu`, which has three panels: system settings and external plugins (only plugins with settings or a page, buttons named after the plugins), and the plugin manager, which lists installed and repository plugins together and installs, removes and reloads them; settings and management never share a screen (`internal/app/catalog.go` feeds them from the manager, registry and loader). Plugins can also add one page each and post messages through `Host().Bot(name)`; callback data is namespaced per plugin. Unloading a plugin removes its panel and page.
 
 Options are never commands. language and prefix have no command at all; sudo and log keep only their actions.
