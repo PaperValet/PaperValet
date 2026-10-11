@@ -98,7 +98,7 @@ func (p *RestartPlugin) handleRestart(ctx *interfaces.CommandContext) error {
 
 // FinishRestart edits the restart message after the process came back.
 // Called by the app once the client is authorized.
-func FinishRestart(ctx context.Context, api *tg.Client, resolve func(context.Context, int64) (tg.InputPeerClass, error)) {
+func FinishRestart(ctx context.Context, api restartAPI, resolve func(context.Context, int64) (tg.InputPeerClass, error)) {
 	data, err := os.ReadFile(restartMarker)
 	if err != nil {
 		return
@@ -117,5 +117,20 @@ func FinishRestart(ctx context.Context, api *tg.Client, resolve func(context.Con
 	if st.Lang == "en-US" {
 		text = fmt.Sprintf("✅ Restarted · %s", took)
 	}
-	_, _ = api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{Peer: peer, ID: st.MsgID, Message: text})
+	notifyRestartDone(ctx, api, peer, st.MsgID, text)
+}
+
+// restartAPI is the part of *tg.Client the restart notice needs.
+type restartAPI interface {
+	MessagesEditMessage(ctx context.Context, request *tg.MessagesEditMessageRequest) (tg.UpdatesClass, error)
+	MessagesSendMessage(ctx context.Context, request *tg.MessagesSendMessageRequest) (tg.UpdatesClass, error)
+}
+
+// notifyRestartDone turns the "restarting…" message into the completion
+// notice. If the edit fails (message deleted, chat flushed) the notice is
+// sent as a new message instead of leaving the spinner behind forever.
+func notifyRestartDone(ctx context.Context, api restartAPI, peer tg.InputPeerClass, msgID int, text string) {
+	if _, err := api.MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{Peer: peer, ID: msgID, Message: text}); err != nil {
+		_, _ = api.MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{Peer: peer, Message: text})
+	}
 }
