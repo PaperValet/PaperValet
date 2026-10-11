@@ -27,7 +27,7 @@ import (
 	"github.com/TiaraBasori/PaperValet/plugins/builtin"
 )
 
-const Version = "0.1.2"
+const Version = "0.1.3"
 
 // App is the top-level orchestrator.
 type App struct {
